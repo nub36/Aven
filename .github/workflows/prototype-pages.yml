@@ -1,0 +1,62 @@
+# Aven — публикация визуального UX-прототипа (/prototype) на GitHub Pages.
+#
+# Это ТОЛЬКО инфраструктура preview прототипа (UX/продуктовое проектирование).
+# Это НЕ production-деплой: Aven production пока не существует; технология
+# прототипа (статический HTML/CSS/JS) не является ADR и не влияет на выбор
+# production-стека (см. docs/DECISIONS.md, docs/PROJECT_PLAN.md).
+
+name: Prototype Pages
+
+on:
+  # Ручной запуск: Actions → Prototype Pages → Run workflow (выбрать ветку)
+  workflow_dispatch:
+
+  # Автоматическое обновление preview при изменениях прототипа.
+  # Ветки перечислены ЯВНО (main + текущая рабочая ветка сессии);
+  # предположений о main/master, которых нет в репозитории, не делается.
+  # Если основная ветка изменится — дополните/замените список ниже.
+  push:
+    branches:
+      - main
+      - arena/01a0d7ec-aven
+    paths:
+      - 'prototype/**'
+      - '.github/workflows/prototype-pages.yml'
+
+# Минимально необходимые права для официальных Pages actions.
+# actions: read требуется actions/deploy-pages@v5.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  actions: read
+
+# Одновременные деплои не нужны: новый запуск отменяет предыдущий
+concurrency:
+  group: prototype-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      # Публикуется ТОЛЬКО содержимое /prototype:
+      # index.html оказывается в корне сайта, поэтому проектный URL
+      # вида https://<username>.github.io/<repository>/ работает без вложенности.
+      - name: Upload prototype as Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: prototype
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
