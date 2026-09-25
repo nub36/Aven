@@ -136,9 +136,10 @@ class Metrics:
 
     def save(self):
         self.data["total_s"] = round(time.perf_counter() - self.t0, 1)
-        # сводка по голосам (тёплые вызовы, без первого)
+        # сводка по голосам (тёплые вызовы, без первого). t* — базовый набор, x* — расширенный (этап 2).
         for v in self.data["voices"].values():
-            warm = [p for pid, p in v["phrases"].items() if pid.startswith("t") and not p["first_call"]]
+            warm = [p for pid, p in v["phrases"].items()
+                    if (pid.startswith("t") or pid.startswith("x")) and not p["first_call"]]
             if warm:
                 v["summary"] = {
                     "median_synth_s": round(float(np.median([p["synth_s"] for p in warm])), 3),

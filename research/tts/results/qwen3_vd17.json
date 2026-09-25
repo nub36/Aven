@@ -153,6 +153,11 @@
           "rtf": 7.171,
           "first_call": false
         }
+      },
+      "summary": {
+        "median_synth_s": 18.518,
+        "median_rtf": 6.428,
+        "max_synth_s": 70.068
       }
     }
   },

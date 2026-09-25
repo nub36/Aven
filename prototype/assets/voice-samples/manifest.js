@@ -1805,13 +1805,13 @@ window.AvenVoiceSamples = {
    }
   },
   "env": {
-   "cpu": "AMD EPYC 7763 64-Core Processor",
+   "cpu": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
    "cores": 4,
    "ram_gb": 15.6,
    "gpu": "none",
-   "runner": "GitHub Actions 1000000241",
+   "runner": "GitHub Actions 1000000289",
    "python": "3.11.16"
   },
-  "model": "1.7B-VoiceDesign"
+  "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign"
  }
 };
