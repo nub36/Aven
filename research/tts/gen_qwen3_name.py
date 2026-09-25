@@ -74,10 +74,19 @@ def by_kind(kind: str) -> list[dict]:
     return [p for p in NAME_PHRASES if p["kind"] == kind]
 
 
+WARMED: set[str] = set()      # голоса, у которых уже был первый («холодный») вызов
+
+
 def gen(voice: str, synth, phrases: list[dict], **voice_info):
-    """Прогон списка фраз одним голосом. Ошибка фразы не роняет весь прогон."""
+    """Прогон списка фраз одним голосом. Ошибка фразы не роняет весь прогон.
+
+    first_call=True только у ПЕРВОГО клипа голоса: одна и та же модель может вызываться
+    несколькими группами (эталон → орфография → подсказка в промпте), и помечать холодным
+    первый клип каждой группы было бы неверно (исправлено после прогона run 36184248453,
+    где n01/n06 получили first_call ошибочно).
+    """
     m.voice(voice, **voice_info)
-    first = True
+    first = voice not in WARMED
     for p in phrases:
         pid = p["id"]
         try:
@@ -91,6 +100,7 @@ def gen(voice: str, synth, phrases: list[dict], **voice_info):
         m.phrase(voice, pid, dt, dur, first_call=first, speech=p["speech"],
                  kind=p["kind"], model=p.get("model", ""), f0_median_hz=f0)
         print(f"{ENGINE_DIR}/{voice}/{pid}: synth {dt:.2f}s audio {dur:.2f}s f0 {f0}", flush=True)
+        WARMED.add(voice)
         first = False
 
 

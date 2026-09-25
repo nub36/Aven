@@ -1,3 +1,0 @@
-# ВРЕМЕННЫЙ файл: движки для push-запуска workflow TTS Research (триггер снимается вместе с ним).
-# Ручной запуск (Actions → Run workflow / repository_dispatch) этот файл НЕ использует.
-qwen3-name

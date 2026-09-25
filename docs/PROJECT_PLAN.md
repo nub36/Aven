@@ -79,12 +79,14 @@ Result → UI
 | [FEATURES.md](FEATURES.md) | Возможности, разделы Web Aven, модули |
 | [COMMAND_ENGINE.md](COMMAND_ENGINE.md) | Движок команд, естественная речь без AI, пользовательские команды и словарь, confidence |
 | [VOICE.md](VOICE.md) | Голос: архитектура, настройки, ограничения платформ |
+| [TTS_RESEARCH.md](TTS_RESEARCH.md) | Исследование натурального голоса (этапы 1, 2, 2.1): движки, лицензии, метрики, GPU/latency, произношение «Авен» |
 | [AUTOMATION.md](AUTOMATION.md) | Automation Canvas, типы блоков, готовые автоматизации |
 | [DATA_MODEL.md](DATA_MODEL.md) | Память Aven, сущности, связи, пользовательские типы |
 | [OFFLINE_SYNC.md](OFFLINE_SYNC.md) | Офлайн/синхронизация — Future/Under Design |
 | [SECURITY.md](SECURITY.md) | Безопасность и приватность |
 | [ADMIN.md](ADMIN.md) | Полная спецификация админ-панели |
 | [UI_UX.md](UI_UX.md) | Главный интерфейс, разделы сайта, утро/вечер, UX-принципы |
+| [CHARACTER.md](CHARACTER.md) | Визуальный персонаж Aven — опциональный presentation-слой (ADR-014) |
 | [INTEGRATIONS.md](INTEGRATIONS.md) | Интеграции, внешние провайдеры |
 | [FUTURE.md](FUTURE.md) | Будущие платформы и возможности (mobile, desktop-agent и др.) |
 | [DECISIONS.md](DECISIONS.md) | Решения: Product Principles / Product Directions / ADR |

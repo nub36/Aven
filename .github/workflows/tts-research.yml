@@ -25,15 +25,6 @@ on:
   #     -f event_type=tts-research -f 'client_payload[engines]=qwen3-vd17'
   repository_dispatch:
     types: [tts-research]
-  # ВРЕМЕННЫЙ триггер (снимается сразу после прогона): GitHub App token в песочнице агента
-  # не может дёргать workflow_dispatch/repository_dispatch, а мини-прогон произношения нужно
-  # выполнить на CPU-раннере. Список движков для push-запуска — research/tts/ENGINES_PUSH
-  # (иначе push поднял бы весь набор этапа 1 из ENGINES).
-  push:
-    branches: [arena/01a0da18-aven]
-    paths:
-      - 'research/tts/**'
-      - '.github/workflows/tts-research.yml'
 
 permissions:
   contents: read
@@ -59,9 +50,6 @@ jobs:
           INPUT_ENGINES: ${{ github.event.inputs.engines || github.event.client_payload.engines }}
         run: |
           list="$INPUT_ENGINES"
-          if [ -z "$list" ] && [ "${{ github.event_name }}" = "push" ] && [ -s research/tts/ENGINES_PUSH ]; then
-            list="$(grep -v '^#' research/tts/ENGINES_PUSH | tr -d ' \n')"
-          fi
           [ -z "$list" ] && list="$(grep -v '^#' research/tts/ENGINES | tr -d ' \n')"
           json=$(python3 -c "import json,sys;print(json.dumps([e.strip() for e in sys.argv[1].split(',') if e.strip()]))" "$list")
           echo "engines=$json" >> "$GITHUB_OUTPUT"

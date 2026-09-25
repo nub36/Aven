@@ -114,6 +114,14 @@ if "qwen3/vd17-design/n00.wav" not in got:
 if not met.get("meta", {}).get("hint_prompt", "").startswith(met["meta"]["design_prompt"][:20]):
     ok = False
     print("hint_prompt не содержит design_prompt")
+# first_call — ровно один на голос (холодный старт), а не по одному на группу фраз
+for v, dd in voices.items():
+    fc = [pid for pid, mm in dd["phrases"].items() if mm["first_call"]]
+    if len(fc) != 1:
+        ok = False
+        print(f"У {v} first_call у {fc} — должен быть ровно один")
+    else:
+        print(f"{v}: first_call = {fc[0]}")
 # summary считается и для n-фраз
 for v, d in voices.items():
     if d["phrases"] and "summary" not in d and len(d["phrases"]) > 1:

@@ -35,6 +35,7 @@ prototype/
 ├── index.html          — оболочка (sidebar + topbar + рабочая область + плавающий Aven)
 ├── voice-lab.html      — A/B-сравнение голосов исследования TTS (этап 1)
 ├── voice-lab-vd17.html — расширенный сценарный тест фаворита vd17-design (этап 2)
+├── voice-lab-name.html — произношение «Aven / Авен»: мини-прогон способов (этап 2.1)
 ├── css/style.css       — единый дизайн, light/dark темы
 ├── css/character.css   — персонаж, плавающий виджет, демо-команды (опц. слой)
 ├── assets/
@@ -43,9 +44,10 @@ prototype/
 │   └── character/
 │       ├── master/female-aven-reference.jpg — FINAL 2D MASTER (с фоном; не перезаписывать)
 │       └── web/female-aven-transparent.png  — FINAL Female Aven, RGBA (hero, Assistant)
-│   └── voice-samples/  — компактный набор MP3 исследования TTS (193 файла, вариант Б) + manifest.js
+│   └── voice-samples/  — компактный набор MP3 исследования TTS (232 файла) + manifest.js
 │                         (генерирует research/tts/collect.py по политике candidates.json → publish;
-                         193 — базовый набор T1–T10, +21 — расширенный тест vd17-design, этап 2)
+                         193 — базовый набор T1–T10 (вариант Б), +21 — расширенный тест vd17-design (этап 2),
+                         +18 — мини-прогон произношения «Авен» (этап 2.1))
 └── js/
     ├── data.js         — демо-данные (явно тестовые) + settings.character / voice.stt
     ├── state.js        — состояние (JS memory + localStorage, ключ aven-proto-v1)
@@ -77,6 +79,14 @@ prototype/
 (строится `research/tts/collect.py` из `research/tts/phrases_vd17.json`); если образцы ещё не
 сгенерированы, страница честно говорит об этом. Это кандидат, а не обязательный голос Aven:
 `speechSynthesis` остаётся движком по умолчанию.
+
+`voice-lab-name.html` — **мини-прогон способов произношения «Авен»** (этап 2.1): 18 вариантов,
+сгруппированных по способу (эталон VoiceDesign · перебор орфографии · подсказка в промпте · клоны
+0.6B-Base и 1.7B-Base), сравнение шести вариантов одной фразы подряд, ★ за каждый вариант,
+кнопка «Системный голос», побуквенная метрика имени `name_lwer` и таблица «кто как говорит «Авен»»
+по всем предыдущим прогонам. Данные — `assets/voice-samples/manifest.js` → `name` (строит
+`research/tts/collect.py` из `research/tts/phrases_name.json`); если образцов ещё нет, страница
+честно об этом говорит, а метрики по прежним клипам показывает всё равно. Итоги — docs/TTS_RESEARCH.md §16.
 
 ## Персонаж и голос (опциональный слой, без AI)
 
