@@ -1,5 +1,5 @@
 /* Aven — Visual Prototype. Presence: единая точка ОТОБРАЖЕНИЯ состояния Aven
-   (idle / listening / thinking / speaking / waiting / success / important).
+   (idle / listening / thinking / preparing / speaking / waiting / success / important).
    Это НЕ второй state engine: состояние выводится из существующих подсистем —
    TTS (voice.js), STT (voice.js), демо state machine (flows.js), Assistant.
    Здесь только честная презентация состояния текстом + классами для glow/wave.
@@ -9,6 +9,7 @@ window.AvenPresence = (function () {
     idle: 'Готова',
     listening: 'Слушаю…',
     thinking: 'Думаю…',
+    preparing: 'Готовлю речь…',
     speaking: 'Говорю…',
     waiting: 'Жду ответа…',
     success: 'Готово',

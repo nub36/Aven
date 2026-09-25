@@ -49,10 +49,14 @@ def main(out_dirs):
             d = json.loads(mf.read_text(encoding="utf-8"))
             metrics[d["engine"]] = d
             shutil.copy(mf, RESULTS / mf.name)
+        for lf in (od / "logs").glob("*"):
+            (RESULTS / "logs").mkdir(parents=True, exist_ok=True)
+            lines = lf.read_text(encoding="utf-8", errors="replace").splitlines()
+            (RESULTS / "logs" / lf.name).write_text("\n".join(lines[-400:]) + "\n", encoding="utf-8")
     for od in map(Path, out_dirs):
         for wav in sorted(od.glob("*/*/*.wav")):
             engine, voice, pid = wav.parent.parent.name, wav.parent.name, wav.stem
-            if engine == "metrics":
+            if engine in ("metrics", "logs"):
                 continue
             to_mp3(wav, DST / engine / voice / f"{pid}.mp3")
             key = f"{engine}/{voice}"
@@ -77,8 +81,12 @@ def main(out_dirs):
             if pid not in v["phrases"]:
                 v["phrases"].append(pid)
                 v["phrases"].sort()
-    for v in voices.values():
+    asr = {}
+    if (RESULTS / "asr.json").exists():
+        asr = json.loads((RESULTS / "asr.json").read_text(encoding="utf-8")).get("voices", {})
+    for k, v in voices.items():
         v["catalogueOnly"] = len(v["phrases"]) < len(PHR["phrases"])
+        v["asrWer"] = asr.get(k, {}).get("mean_wer")
     payload = {
         "_note": "Сгенерировано research/tts/collect.py. Исследовательские образцы TTS — не production.",
         "phrases": {p["id"]: {"text": p["text"], "speech": p["speech"]} for p in PHR["phrases"]},

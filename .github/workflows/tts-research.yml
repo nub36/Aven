@@ -12,6 +12,11 @@ name: TTS Research
 
 on:
   workflow_dispatch:
+    inputs:
+      engines:
+        description: 'Движки через запятую (пусто — из research/tts/ENGINES)'
+        required: false
+        default: ''
   push:
     branches:
       - arena/01a0d94f-aven
@@ -19,6 +24,7 @@ on:
       - 'research/tts/gen_*.py'
       - 'research/tts/common.py'
       - 'research/tts/phrases.json'
+      - 'research/tts/ENGINES'
       - '.github/workflows/tts-research.yml'
 
 permissions:
@@ -34,13 +40,30 @@ env:
   TTS_THREADS: '4'
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      engines: ${{ steps.p.outputs.engines }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: p
+        env:
+          INPUT_ENGINES: ${{ github.event.inputs.engines }}
+        run: |
+          list="$INPUT_ENGINES"
+          [ -z "$list" ] && list="$(grep -v '^#' research/tts/ENGINES | tr -d ' \n')"
+          json=$(python3 -c "import json,sys;print(json.dumps([e.strip() for e in sys.argv[1].split(',') if e.strip()]))" "$list")
+          echo "engines=$json" >> "$GITHUB_OUTPUT"
+          echo "engines: $json"
+
   generate:
+    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
-        engine: [piper, silero, vosk, supertonic, qwen3, chatterbox, espeak]
+        engine: ${{ fromJSON(needs.plan.outputs.engines) }}
     defaults:
       run:
         working-directory: research/tts
@@ -85,8 +108,12 @@ jobs:
 
       - name: Generate (${{ matrix.engine }})
         continue-on-error: true
+        shell: bash
         run: |
-          case "${{ matrix.engine }}" in
+          mkdir -p out/logs
+          lscpu | head -20 > out/logs/${{ matrix.engine }}.lscpu.txt || true
+          rc=0
+          ( case "${{ matrix.engine }}" in
             piper) python gen_piper.py models/piper ;;
             silero) python gen_silero.py ;;
             vosk) python gen_vosk.py vosk-model-tts-ru-0.10-multi ;;
@@ -94,8 +121,18 @@ jobs:
             qwen3) python gen_qwen3.py ;;
             chatterbox) python gen_chatterbox.py ;;
             espeak) python gen_cli.py espeak ;;
-          esac
+          esac ) 2>&1 | tee out/logs/${{ matrix.engine }}.log || rc=$?
+          # Логи Actions недоступны из песочницы агента → ошибки дублируем аннотациями и в артефакт
+          python - <<'PY'
+          import glob, json
+          for f in glob.glob("out/metrics/*.json"):
+              d = json.load(open(f, encoding="utf-8"))
+              for e in d.get("errors", [])[:10]:
+                  print(f"::warning title={d['engine']}::{e[:900]}")
+          PY
+          if [ $rc -ne 0 ]; then echo "::warning title=${{ matrix.engine }} exit $rc::$(tail -c 1500 out/logs/${{ matrix.engine }}.log | tr '\n' ' ')"; fi
           ls -R out | head -100 || true
+          exit $rc
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -106,8 +143,8 @@ jobs:
           retention-days: 14
 
   collect:
-    needs: generate
-    if: always()
+    needs: [plan, generate]
+    if: always() && needs.plan.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -128,6 +165,14 @@ jobs:
           ls artifacts
           python research/tts/collect.py artifacts/*
           du -sh prototype/assets/voice-samples
+      - name: ASR round-trip (разборчивость, faster-whisper small)
+        continue-on-error: true
+        run: |
+          pip install -q faster-whisper
+          engines=$(ls -d artifacts/*/*/ 2>/dev/null | xargs -n1 basename | grep -v -e '^metrics$' -e '^logs$' | sort -u | tr '\n' ' ')
+          echo "engines: $engines"
+          python research/tts/asr_eval.py $engines
+          python research/tts/collect.py artifacts/none
       - name: Commit results to branch
         run: |
           git config user.name "github-actions[bot]"

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aven — сравнение голосов (исследование TTS)</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body { padding: 20px; max-width: 1180px; margin: 0 auto; }
+    .lab-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .lab-head h1 { margin: 0; font-size: 1.4rem; }
+    .lab-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 16px; }
+    .lab-phrase { font-size: 1.05rem; font-weight: 600; margin: 4px 0 2px; }
+    .lab-speech { font-size: .82rem; color: var(--muted); margin-bottom: 12px; }
+    .lab-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+    .lab-card { padding: 14px; border-radius: 14px; }
+    .lab-card h3 { margin: 0 0 4px; font-size: 1rem; display: flex; gap: 6px; align-items: center; justify-content: space-between; }
+    .lab-card .sub { font-size: .78rem; color: var(--muted); min-height: 2.4em; }
+    .lab-card .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+    .lab-card.playing { outline: 2px solid var(--accent); }
+    .lab-card audio { width: 100%; height: 34px; margin-top: 8px; }
+    .stars button { background: none; border: 0; font-size: 1.15rem; cursor: pointer; color: var(--muted); padding: 0 1px; }
+    .stars button.on { color: #e6a700; }
+    .lab-letter { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; }
+    .pill.lic-yes { background: rgba(40,170,90,.15); color: var(--ok); }
+    .pill.lic-unclear { background: rgba(230,160,0,.15); color: var(--warn); }
+    .pill.lic-no { background: rgba(220,60,60,.13); color: var(--danger); }
+    .lab-section { margin: 26px 0 8px; font-size: 1.05rem; }
+    .muted { color: var(--muted); font-size: .84rem; }
+    textarea { width: 100%; min-height: 90px; font-family: inherit; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="lab-head">
+    <div>
+      <h1>Сравнение голосов Aven · исследование TTS</h1>
+      <div class="muted">Одинаковые фразы, разные бесплатные / self-hosted движки. Это образцы для выбора на слух, не production. Подробности — docs/TTS_RESEARCH.md.</div>
+    </div>
+    <a class="btn" href="index.html#/settings">← Прототип</a>
+  </div>
+
+  <div class="card">
+    <div class="lab-bar">
+      <label>Фраза: <select id="phrase"></select></label>
+      <button class="btn small" id="prev">◀</button><button class="btn small" id="next">▶</button>
+      <label><input type="checkbox" id="blind"> Слепое сравнение (скрыть названия, перемешать)</label>
+      <label><input type="checkbox" id="showRef" checked> Показывать эталоны и голоса с неясной/NC-лицензией</label>
+      <button class="btn small" id="stopAll">■ Стоп</button>
+    </div>
+    <div class="lab-phrase" id="ptext"></div>
+    <div class="lab-speech">Текст для синтеза: <span id="pspeech"></span></div>
+    <div class="muted" id="envinfo"></div>
+  </div>
+
+  <h2 class="lab-section">Полный набор фраз T1–T10</h2>
+  <div class="lab-grid" id="grid"></div>
+
+  <h2 class="lab-section">Каталог (только T1 — тембр остальных голосов движка)</h2>
+  <div class="lab-grid" id="cat"></div>
+
+  <h2 class="lab-section">Мои оценки</h2>
+  <div class="card">
+    <div class="muted">Оценки хранятся только в этом браузере (localStorage). Кнопка ниже копирует их текстом — можно вставить в сообщение агенту.</div>
+    <textarea id="notes" readonly></textarea>
+    <div class="row" style="margin-top:8px"><button class="btn" id="copy">Скопировать оценки</button> <button class="btn" id="reveal">Показать, кто есть кто</button></div>
+  </div>
+
+  <script src="js/tts/normalize.js"></script>
+  <script src="assets/voice-samples/manifest.js"></script>
+  <script>
+  (function () {
+    'use strict';
+    var M = window.AvenVoiceSamples || { phrases: {}, voices: {} };
+    var LS = 'aven-voice-lab-v1';
+    var st = JSON.parse(localStorage.getItem(LS) || '{}');
+    st.ratings = st.ratings || {}; st.seed = st.seed || Math.floor(Math.random() * 1e9);
+    var save = function () { localStorage.setItem(LS, JSON.stringify(st)); };
+    var $ = function (id) { return document.getElementById(id); };
+    var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+    var pids = Object.keys(M.phrases);
+    pids.forEach(function (id) { var o = document.createElement('option'); o.value = id; o.textContent = id.toUpperCase() + ' · ' + M.phrases[id].text.slice(0, 60); $('phrase').appendChild(o); });
+    var SYSTEM = { key: 'system/browser', title: 'Системный голос браузера (speechSynthesis)', engineTitle: 'Системный голос (как сейчас)', license: 'зависит от ОС/браузера', commercial: 'yes', status: 'current', phrases: pids, system: true };
+
+    function rng(seed) { return function () { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }; }
+    function shuffled(arr) { var r = rng(st.seed), a = arr.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(r() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+    function letter(i) { return i < 26 ? String.fromCharCode(65 + i) : 'Z' + (i - 25); }
+    function licClass(c) { return c === 'yes' ? 'lic-yes' : (c === 'no' ? 'lic-no' : 'lic-unclear'); }
+    function licText(c) { return c === 'yes' ? 'коммерция: да' : (c === 'no' ? 'некоммерческая' : (c === 'per-voice' ? 'по голосам' : 'лицензия не ясна')); }
+    function fmt(x, d) { return x == null ? '—' : Number(x).toFixed(d == null ? 2 : d); }
+
+    function list(catalogue) {
+      var showRef = $('showRef').checked;
+      var arr = Object.keys(M.voices).map(function (k) { var v = M.voices[k]; v.key = k; return v; })
+        .filter(function (v) { return !!v.catalogueOnly === catalogue; })
+        .filter(function (v) { return showRef || v.commercial === 'yes'; });
+      if (!catalogue) arr.push(SYSTEM);
+      return $('blind').checked ? shuffled(arr) : arr.sort(function (a, b) { return (a.status === 'shortlist' ? 0 : 1) - (b.status === 'shortlist' ? 0 : 1) || a.key.localeCompare(b.key); });
+    }
+
+    var labels = {};
+    function card(v, i, pid) {
+      var blind = $('blind').checked;
+      var lab = blind ? letter(i) : '';
+      labels[v.key] = lab;
+      var has = v.phrases.indexOf(pid) >= 0;
+      var sm = v.summary || {};
+      var r = st.ratings[v.key] || 0;
+      var stars = '<span class="stars" data-k="' + esc(v.key) + '">' + [1, 2, 3, 4, 5].map(function (n) { return '<button data-n="' + n + '" class="' + (n <= r ? 'on' : '') + '">★</button>'; }).join('') + '</span>';
+      var head = blind ? '<span class="lab-letter">' + lab + '</span>' : '<span>' + esc(v.engineTitle || v.key) + '</span>';
+      var sub = blind ? 'голос ' + lab : esc(v.voice || '') + (v.class ? ' · ' + esc(v.class) : '');
+      var meta = blind || v.system ? '' :
+        '<div class="row"><span class="pill ' + licClass(v.commercial) + '" title="' + esc(v.license) + '">' + licText(v.commercial) + '</span>' +
+        (v.status ? '<span class="pill">' + esc(v.status) + '</span>' : '') + '</div>' +
+        '<div class="muted" style="margin-top:6px">Лицензия: ' + esc(v.license) + '<br>Синтез фразы: медиана ' + fmt(sm.median_synth_s) + ' с · RTF ' + fmt(sm.median_rtf) +
+        (v.probe ? ' · «Готово.» ' + fmt(v.probe.synth_s) + ' с' : '') + (v.f0 ? ' · F0 ≈ ' + Math.round(v.f0) + ' Гц' : '') + '</div>';
+      var player = v.system
+        ? '<div class="row"><button class="btn small primary" data-sys="1">▶ Произнести системным голосом</button></div>'
+        : (has ? '<audio controls preload="none" src="assets/voice-samples/' + esc(v.key) + '/' + pid + '.mp3"></audio>' : '<div class="muted" style="margin-top:8px">Для этой фразы образца нет (только T1).</div>');
+      return '<div class="card lab-card" data-key="' + esc(v.key) + '"><h3>' + head + stars + '</h3><div class="sub">' + sub + '</div>' + player + meta + '</div>';
+    }
+
+    function render() {
+      var pid = $('phrase').value || pids[0];
+      var p = M.phrases[pid] || { text: '', speech: '' };
+      $('ptext').textContent = p.text; $('pspeech').textContent = p.speech;
+      var full = list(false), cat = list(true);
+      $('grid').innerHTML = full.map(function (v, i) { return card(v, i, pid); }).join('') || '<div class="muted">Образцов пока нет.</div>';
+      $('cat').innerHTML = cat.map(function (v, i) { return card(v, full.length + i, 't01'); }).join('') || '<div class="muted">—</div>';
+      var envs = {}; Object.keys(M.voices).forEach(function (k) { var e = M.voices[k].env || {}; if (e.cpu) envs[e.cpu + ' · ' + e.cores + ' ядер · ' + e.ram_gb + ' ГБ RAM · без GPU'] = 1; });
+      $('envinfo').textContent = 'Скорость измерена на: ' + (Object.keys(envs).join(' | ') || '—') + '. RTF < 1 — быстрее реального времени.';
+      notes();
+    }
+
+    function notes(reveal) {
+      var lines = ['Оценки голосов Aven (' + new Date().toISOString().slice(0, 10) + '):'];
+      Object.keys(st.ratings).sort(function (a, b) { return st.ratings[b] - st.ratings[a]; }).forEach(function (k) {
+        lines.push('★' + st.ratings[k] + '  ' + k + (labels[k] && $('blind').checked && !reveal ? '' : ''));
+      });
+      if (reveal) Object.keys(labels).forEach(function (k) { if (labels[k]) lines.push(labels[k] + ' = ' + k); });
+      $('notes').value = lines.join('\n');
+    }
+
+    document.addEventListener('play', function (e) {
+      document.querySelectorAll('audio').forEach(function (a) { if (a !== e.target) a.pause(); });
+      if (window.speechSynthesis) speechSynthesis.cancel();
+      document.querySelectorAll('.lab-card').forEach(function (c) { c.classList.toggle('playing', c.contains(e.target)); });
+    }, true);
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest('.stars button');
+      if (b) { var k = b.parentElement.dataset.k; st.ratings[k] = +b.dataset.n; save(); render(); return; }
+      if (e.target.closest('[data-sys]')) {
+        document.querySelectorAll('audio').forEach(function (a) { a.pause(); });
+        if (!window.speechSynthesis) { alert('speechSynthesis недоступен в этом браузере'); return; }
+        speechSynthesis.cancel();
+        var p = M.phrases[$('phrase').value];
+        var u = new SpeechSynthesisUtterance(window.AvenSpeechText ? window.AvenSpeechText.normalize(p.text) : p.speech);
+        u.lang = 'ru-RU';
+        var v = speechSynthesis.getVoices().filter(function (x) { return /^ru/i.test(x.lang); });
+        if (v.length) u.voice = v.find(function (x) { return x.localService; }) || v[0];
+        speechSynthesis.speak(u);
+      }
+    });
+    $('phrase').onchange = render;
+    $('blind').onchange = function () { if ($('blind').checked) { st.seed = Math.floor(Math.random() * 1e9); save(); } render(); };
+    $('showRef').onchange = render;
+    $('prev').onclick = function () { var i = pids.indexOf($('phrase').value); $('phrase').value = pids[(i - 1 + pids.length) % pids.length]; render(); };
+    $('next').onclick = function () { var i = pids.indexOf($('phrase').value); $('phrase').value = pids[(i + 1) % pids.length]; render(); };
+    $('stopAll').onclick = function () { document.querySelectorAll('audio').forEach(function (a) { a.pause(); }); if (window.speechSynthesis) speechSynthesis.cancel(); };
+    $('copy').onclick = function () { $('notes').select(); try { navigator.clipboard.writeText($('notes').value); } catch (e) { document.execCommand('copy'); } };
+    $('reveal').onclick = function () { notes(true); };
+    render();
+  })();
+  </script>
+</body>
+</html>

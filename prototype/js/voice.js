@@ -1,4 +1,4 @@
-/* Aven — Visual Prototype. Голос: TTS через browser speechSynthesis и
+/* Aven — Visual Prototype. Голос: TTS (System speechSynthesis / Natural-эксперимент) и
    экспериментальный STT через SpeechRecognition. Честная поддержка возможностей
    браузера: при недоступности — всегда текстовый fallback (ADR-003/ADR-010).
    Не production. */
@@ -12,46 +12,36 @@ window.AvenVoice = (function () {
   };
 
   /* ---------- TTS ----------
-     opts: { btn } — кнопка с классом playing;
-           { charProfile } — применить демо-профиль персонажа (если включено). */
+     Маршрутизация через window.AvenTTS (js/tts/providers.js): System (speechSynthesis —
+     всегда доступный бесплатный fallback) или Natural (эксперимент, docs/TTS_RESEARCH.md).
+     Экранный текст не меняется — в синтез уходит AvenSpeechText.normalize(text).
+     opts: { charProfile } — демо-профиль персонажа (высота/темп системного голоса).
+     Повторное нажатие на играющую кнопку или Esc — остановить речь. */
   function speak(text, btn, opts) {
     opts = opts || {};
     const voice = (s().settings && s().settings.voice) || { enabled: true };
     if (voice.enabled === false) { window.Aven && window.Aven.toast('Голосовые ответы выключены в настройках (демо)'); return false; }
-    if (!support.tts) { window.Aven && window.Aven.ttsToast(); pulse(btn); return false; }
-    try {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'ru-RU';
-      u.rate = voice.rate != null ? voice.rate : 1;
-      u.pitch = voice.pitch != null ? voice.pitch : 1;
-      u.volume = voice.volume != null ? voice.volume : 1;
-      if (opts.charProfile && window.AvenChar) {
-        const p = window.AvenChar.voiceProfile();
-        if (p) { if (voice.pitch == null || voice.pitch === 1) u.pitch = p.pitch; if (voice.rate == null || voice.rate === 1) u.rate = p.rate; }
-      }
-      const voices = window.speechSynthesis.getVoices() || [];
-      const chosen = voices.find((v) => v.voiceURI === voice.voiceURI) || voices.find((v) => (v.lang || '').toLowerCase().startsWith('ru'));
-      if (chosen) u.voice = chosen;
-      /* presence: speaking ровно пока speechSynthesis говорит (честно) */
-      const P = () => window.AvenPresence;
-      if (btn) btn.classList.add('playing');
-      u.onstart = () => { if (btn) btn.classList.add('playing'); if (P()) P().set('speaking'); };
-      u.onend = () => { if (btn) btn.classList.remove('playing'); if (P()) P().set('idle'); };
-      u.onerror = () => { if (btn) btn.classList.remove('playing'); if (P()) P().set('idle'); };
-      window.speechSynthesis.speak(u);
-      return true;
-    } catch (e) {
-      window.Aven && window.Aven.ttsToast();
-      pulse(btn);
-      return false;
+    const T = window.AvenTTS;
+    if (btn && btn.classList.contains('playing') && T && T.isSpeaking()) { T.stop(); return false; }
+    const engine = voice.engine || 'system';
+    if (engine === 'system' && !support.tts) { window.Aven && window.Aven.ttsToast(); pulse(btn); return false; }
+    let rate, pitch;
+    if (opts.charProfile && window.AvenChar) {
+      const p = window.AvenChar.voiceProfile();
+      if (p) { if (voice.pitch == null || voice.pitch === 1) pitch = p.pitch; if (voice.rate == null || voice.rate === 1) rate = p.rate; }
     }
+    if (!T) { window.Aven && window.Aven.ttsToast(); pulse(btn); return false; }
+    T.speak(text, { btn, rate, pitch, onStart: opts.onStart, onEnd: opts.onEnd });
+    return true;
     function pulse(b) {
       if (!b) return;
       b.classList.add('playing');
       setTimeout(() => b.classList.remove('playing'), 900);
     }
   }
+
+  function stop() { if (window.AvenTTS) window.AvenTTS.stop(); }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && window.AvenTTS && window.AvenTTS.isSpeaking()) stop(); });
 
   /* ---------- экспериментальный STT ----------
      createRecognizer({ lang, interim, onStart, onInterim, onFinal, onEnd, onError })
@@ -97,5 +87,5 @@ window.AvenVoice = (function () {
     return api;
   }
 
-  return { support, speak, createRecognizer };
+  return { support, speak, stop, createRecognizer };
 })();

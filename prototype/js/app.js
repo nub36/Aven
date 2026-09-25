@@ -100,6 +100,7 @@
       return;
     }
     if (el.tagName === 'INPUT') return; // инпуты без действий не трогаем
+    if (el.tagName === 'SELECT') return; // выпадающие списки — по событию change (ниже), не по клику при открытии
     const raw = el.dataset.action;
     const name = raw.split(':')[0];
     if (A.actions[name]) {
@@ -111,7 +112,7 @@
   /* тогглы-переключатели (switch) и чекбоксы действий */
   document.addEventListener('change', (e) => {
     const el = e.target.closest('[data-action]');
-    if (!el || el.tagName !== 'INPUT') return;
+    if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'SELECT')) return;
     const raw = el.dataset.action;
     if (raw === 'toggle-task') return; // уже обработан кликом
     const name = raw.split(':')[0];
