@@ -23,6 +23,17 @@ HERE = Path(__file__).resolve().parent
 DATA = json.loads((HERE / "phrases.json").read_text(encoding="utf-8"))
 PHRASES = DATA["phrases"]
 PROBE = DATA["latency_probe"]
+# Расширенный сценарный набор (этап 2, только для фаворита vd17-design).
+# Базовый phrases.json НЕ меняется — иначе теряется сравнимость движков этапа 1.
+EXT = json.loads((HERE / "phrases_vd17.json").read_text(encoding="utf-8"))
+EXT_PHRASES = EXT["phrases"]
+# ЕДИНЫЙ описательный промпт для 1.7B-VoiceDesign: от него зависит тембр «vd17-design».
+# Менять нельзя — иначе это будет другой голос. Один источник для gen_qwen3.py и gen_qwen3_vd17.py.
+DESIGN_PROMPT = (
+    "A young adult Russian woman, about 27 years old. Calm, friendly and confident voice, "
+    "warm but not overly emotional. Natural conversational Russian with clear diction, "
+    "like a helpful personal assistant. Not a news anchor, not childish, not cartoonish."
+)
 OUT = Path(os.environ.get("TTS_OUT", HERE / "out"))
 
 

@@ -15,17 +15,13 @@ import time
 import numpy as np
 import torch
 
-from common import Metrics, run_voice, PHRASES, write_wav, OUT
+from common import Metrics, run_voice, PHRASES, write_wav, OUT, DESIGN_PROMPT
 
 torch.set_num_threads(int(os.environ.get("TTS_THREADS", "4")))
 torch.manual_seed(0)
 LANG = "Russian"
 T01 = [p for p in PHRASES if p["id"] == "t01"]
-DESIGN = (
-    "A young adult Russian woman, about 27 years old. Calm, friendly and confident voice, "
-    "warm but not overly emotional. Natural conversational Russian with clear diction, "
-    "like a helpful personal assistant. Not a news anchor, not childish, not cartoonish."
-)
+DESIGN = DESIGN_PROMPT
 
 m = Metrics("qwen3", license="Apache-2.0 (code+weights)", device="cpu", dtype="float32", design_prompt=DESIGN)
 try:

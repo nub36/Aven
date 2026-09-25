@@ -1,3 +1,6 @@
 # Движки по умолчанию для РУЧНОГО запуска workflow TTS Research (через запятую).
 # Поле engines в Run workflow переопределяет этот список.
+#   qwen3       — базовый набор T1–T10 всеми моделями Qwen3 (этап 1)
+#   qwen3-vd17  — РАСШИРЕННЫЙ сценарный тест только для vd17-design (этап 2, phrases_vd17.json);
+#                 отдельный engine, чтобы не удлинять каждый полный прогон этапа 1
 piper,silero,vosk,supertonic,qwen3,chatterbox,espeak

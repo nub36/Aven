@@ -7,6 +7,10 @@
   (node prototype/js/tts/normalize.js) → WER относительно текста для синтеза (phrases.json → speech).
 Это НЕ оценка естественности: метрика ловит проглоченные/искажённые слова и числа, а не «роботность».
 Одинаковый ASR для всех голосов → сравнение относительное.
+
+Этап 2 (2026-09-25): в референс добавлен расширенный набор phrases_vd17.json (xNN). Сырая гипотеза
+(поле hyp) нужна не только для WER, но и как объективная проверка произношения названия: слышит ли
+ASR «Авен», «Авин» или «Эйвен» в четырёх вариантах нормализации.
 """
 import json
 import re
@@ -19,6 +23,8 @@ REPO = HERE.parent.parent
 SAMPLES = REPO / "prototype" / "assets" / "voice-samples"
 OUTF = HERE / "results" / "asr.json"
 PHR = {p["id"]: p for p in json.loads((HERE / "phrases.json").read_text(encoding="utf-8"))["phrases"]}
+# Расширенный сценарный набор (vd17-design) — те же правила подсчёта.
+PHR.update({p["id"]: p for p in json.loads((HERE / "phrases_vd17.json").read_text(encoding="utf-8"))["phrases"]})
 
 
 def words(t: str) -> list[str]:
@@ -50,7 +56,7 @@ def main(engines):
     res = json.loads(OUTF.read_text(encoding="utf-8")) if OUTF.exists() else {"model": "", "clips": {}}
     clips = res["clips"]
     todo = []
-    for f in sorted(SAMPLES.glob("*/*/t*.mp3")):
+    for f in sorted(SAMPLES.glob("*/*/*.mp3")):
         key = f"{f.parent.parent.name}/{f.parent.name}/{f.stem}"
         if f.stem in PHR and (f.parent.parent.name in engines or key not in clips):
             todo.append((key, f))

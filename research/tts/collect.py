@@ -27,8 +27,9 @@ RESULTS = HERE / "results"
 FFMPEG = os.environ.get("FFMPEG", "ffmpeg")
 CAND = json.loads((HERE / "candidates.json").read_text(encoding="utf-8"))
 PHR = json.loads((HERE / "phrases.json").read_text(encoding="utf-8"))
+EXT = json.loads((HERE / "phrases_vd17.json").read_text(encoding="utf-8"))
 PUBLISH = {k: v for k, v in CAND.get("publish", {}).items() if not k.startswith("_")}
-ALL_PIDS = [p["id"] for p in PHR["phrases"]]
+ALL_PIDS = [p["id"] for p in PHR["phrases"]] + [p["id"] for p in EXT["phrases"]]
 
 
 def allowed(engine: str, voice: str, pid: str) -> bool:
@@ -73,6 +74,67 @@ def prune():
     return removed
 
 
+def extended_payload() -> dict:
+    """Расширенный сценарный тест фаворита (research/tts/phrases_vd17.json) — для prototype/voice-lab-vd17.html.
+
+    Берутся только реально существующие MP3: если прогон ещё не делался, страница честно
+    показывает «образцов пока нет». Метрики ищутся по голосу во всех results/*.json
+    (метрики расширенного прогона пишутся в results/qwen3_vd17.json).
+    """
+    engine, voice = EXT["engine"], EXT["voice"]
+    out = {
+        "engine": engine,
+        "voice": voice,
+        "title": f"{CAND['engines'].get(engine, {}).get('title', engine)} · {voice}",
+        "groups": EXT["groups"],
+        "phrases": {},
+        "metrics": {},
+        "asr": {},
+        "env": None,
+        "model": None,
+    }
+    p_by_id = {p["id"]: p for p in EXT["phrases"]}
+    for pid in sorted(p_by_id):
+        p = p_by_id[pid]
+        if not (DST / engine / voice / f"{pid}.mp3").exists():
+            continue
+        out["phrases"][pid] = {
+            "text": p["text"],
+            "speech": p["speech"],
+            "kind": p["kind"],
+            "note": p.get("note", ""),
+        }
+    # метрики синтеза (из любого results/*.json, где есть этот голос и xNN-фразы)
+    for mf in RESULTS.glob("*.json"):
+        try:
+            d = json.loads(mf.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            continue
+        v = (d.get("voices") or {}).get(voice)
+        if not v:
+            continue
+        for pid, mm in (v.get("phrases") or {}).items():
+            if pid.startswith("x"):
+                out["metrics"][pid] = {
+                    "synth_s": mm.get("synth_s"),
+                    "audio_s": mm.get("audio_s"),
+                    "rtf": mm.get("rtf"),
+                    "first_call": mm.get("first_call", False),
+                }
+        if out["metrics"]:
+            out["env"] = d.get("env")
+            out["model"] = (v.get("info") or {}).get("model")
+    # разборчивость (ASR round-trip) — сырая гипотеза Whisper важна для проверки «Авен»
+    asrf = RESULTS / "asr.json"
+    if asrf.exists():
+        clips = json.loads(asrf.read_text(encoding="utf-8")).get("clips", {})
+        for pid in out["phrases"]:
+            c = clips.get(f"{engine}/{voice}/{pid}")
+            if c:
+                out["asr"][pid] = {"hyp": c.get("hyp", ""), "wer": c.get("wer")}
+    return out
+
+
 def build_manifest():
     metrics = {}
     for mf in RESULTS.glob("*.json"):
@@ -115,6 +177,7 @@ def build_manifest():
                  "Состав — candidates.json → publish; полные метрики всех движков — research/tts/results.",
         "phrases": {p["id"]: {"text": p["text"], "speech": p["speech"]} for p in PHR["phrases"]},
         "voices": dict(sorted(voices.items())),
+        "extended": extended_payload(),
     }
     DST.mkdir(parents=True, exist_ok=True)
     (DST / "manifest.js").write_text(
