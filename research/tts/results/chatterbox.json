@@ -1,0 +1,20 @@
+{
+  "engine": "chatterbox",
+  "env": {
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "cores": 4,
+    "ram_gb": 15.6,
+    "gpu": "none",
+    "runner": "GitHub Actions 1000000239",
+    "python": "3.11.16"
+  },
+  "meta": {
+    "license": "MIT (code+weights)",
+    "device": "cpu"
+  },
+  "voices": {},
+  "errors": [
+    "chatterbox: RuntimeError: Attempting to deserialize object on a CUDA device but torch.cuda.is_available() is False. If you are running on a CPU-only machine, please use torch.load with map_location=torch.device('cpu') to map your storages to the CPU."
+  ],
+  "total_s": 30.3
+}

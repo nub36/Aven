@@ -1,0 +1,420 @@
+{
+  "engine": "supertonic",
+  "env": {
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "cores": 4,
+    "ram_gb": 15.6,
+    "gpu": "none",
+    "runner": "GitHub Actions 1000000243",
+    "python": "3.11.16"
+  },
+  "meta": {
+    "package": "supertonic (MIT code)",
+    "model": "supertonic-3 (OpenRAIL-M weights)",
+    "steps": 8
+  },
+  "voices": {
+    "F1": {
+      "info": {
+        "load_s": 6.62,
+        "sample_rate": 44100,
+        "f0_median_hz": 185.3
+      },
+      "phrases": {
+        "t01": {
+          "synth_s": 2.671,
+          "audio_s": 6.339,
+          "rtf": 0.421,
+          "first_call": true
+        },
+        "t02": {
+          "synth_s": 2.729,
+          "audio_s": 6.548,
+          "rtf": 0.417,
+          "first_call": false
+        },
+        "t03": {
+          "synth_s": 2.255,
+          "audio_s": 4.946,
+          "rtf": 0.456,
+          "first_call": false
+        },
+        "t04": {
+          "synth_s": 2.621,
+          "audio_s": 6.06,
+          "rtf": 0.432,
+          "first_call": false
+        },
+        "t05": {
+          "synth_s": 1.385,
+          "audio_s": 2.786,
+          "rtf": 0.497,
+          "first_call": false
+        },
+        "t06": {
+          "synth_s": 2.263,
+          "audio_s": 4.807,
+          "rtf": 0.471,
+          "first_call": false
+        },
+        "t07": {
+          "synth_s": 2.397,
+          "audio_s": 5.433,
+          "rtf": 0.441,
+          "first_call": false
+        },
+        "t08": {
+          "synth_s": 2.269,
+          "audio_s": 4.667,
+          "rtf": 0.486,
+          "first_call": false
+        },
+        "t09": {
+          "synth_s": 1.779,
+          "audio_s": 3.553,
+          "rtf": 0.501,
+          "first_call": false
+        },
+        "t10": {
+          "synth_s": 2.421,
+          "audio_s": 5.155,
+          "rtf": 0.47,
+          "first_call": false
+        },
+        "probe": {
+          "synth_s": 0.957,
+          "audio_s": 1.393,
+          "rtf": 0.687,
+          "first_call": false
+        }
+      },
+      "summary": {
+        "median_synth_s": 2.269,
+        "median_rtf": 0.47,
+        "max_synth_s": 2.729
+      }
+    },
+    "F2": {
+      "info": {
+        "load_s": 6.62,
+        "sample_rate": 44100,
+        "f0_median_hz": 198.6
+      },
+      "phrases": {
+        "t01": {
+          "synth_s": 2.671,
+          "audio_s": 5.921,
+          "rtf": 0.451,
+          "first_call": true
+        },
+        "t02": {
+          "synth_s": 2.561,
+          "audio_s": 6.13,
+          "rtf": 0.418,
+          "first_call": false
+        },
+        "t03": {
+          "synth_s": 2.246,
+          "audio_s": 4.598,
+          "rtf": 0.488,
+          "first_call": false
+        },
+        "t04": {
+          "synth_s": 2.646,
+          "audio_s": 5.642,
+          "rtf": 0.469,
+          "first_call": false
+        },
+        "t05": {
+          "synth_s": 1.397,
+          "audio_s": 2.647,
+          "rtf": 0.528,
+          "first_call": false
+        },
+        "t06": {
+          "synth_s": 2.242,
+          "audio_s": 4.528,
+          "rtf": 0.495,
+          "first_call": false
+        },
+        "t07": {
+          "synth_s": 2.373,
+          "audio_s": 5.085,
+          "rtf": 0.467,
+          "first_call": false
+        },
+        "t08": {
+          "synth_s": 1.928,
+          "audio_s": 4.389,
+          "rtf": 0.439,
+          "first_call": false
+        },
+        "t09": {
+          "synth_s": 1.551,
+          "audio_s": 3.344,
+          "rtf": 0.464,
+          "first_call": false
+        },
+        "t10": {
+          "synth_s": 2.267,
+          "audio_s": 4.807,
+          "rtf": 0.472,
+          "first_call": false
+        },
+        "probe": {
+          "synth_s": 1.036,
+          "audio_s": 1.324,
+          "rtf": 0.783,
+          "first_call": false
+        }
+      },
+      "summary": {
+        "median_synth_s": 2.246,
+        "median_rtf": 0.469,
+        "max_synth_s": 2.646
+      }
+    },
+    "F3": {
+      "info": {
+        "load_s": 6.62,
+        "sample_rate": 44100,
+        "f0_median_hz": 183.8
+      },
+      "phrases": {
+        "t01": {
+          "synth_s": 2.751,
+          "audio_s": 6.548,
+          "rtf": 0.42,
+          "first_call": true
+        },
+        "t02": {
+          "synth_s": 2.969,
+          "audio_s": 6.757,
+          "rtf": 0.439,
+          "first_call": false
+        },
+        "t03": {
+          "synth_s": 2.364,
+          "audio_s": 5.085,
+          "rtf": 0.465,
+          "first_call": false
+        },
+        "t04": {
+          "synth_s": 2.739,
+          "audio_s": 6.269,
+          "rtf": 0.437,
+          "first_call": false
+        },
+        "t05": {
+          "synth_s": 1.465,
+          "audio_s": 2.856,
+          "rtf": 0.513,
+          "first_call": false
+        },
+        "t06": {
+          "synth_s": 2.267,
+          "audio_s": 4.946,
+          "rtf": 0.458,
+          "first_call": false
+        },
+        "t07": {
+          "synth_s": 2.615,
+          "audio_s": 5.642,
+          "rtf": 0.463,
+          "first_call": false
+        },
+        "t08": {
+          "synth_s": 2.252,
+          "audio_s": 4.807,
+          "rtf": 0.469,
+          "first_call": false
+        },
+        "t09": {
+          "synth_s": 1.768,
+          "audio_s": 3.692,
+          "rtf": 0.479,
+          "first_call": false
+        },
+        "t10": {
+          "synth_s": 2.349,
+          "audio_s": 5.294,
+          "rtf": 0.444,
+          "first_call": false
+        },
+        "probe": {
+          "synth_s": 0.953,
+          "audio_s": 1.463,
+          "rtf": 0.651,
+          "first_call": false
+        }
+      },
+      "summary": {
+        "median_synth_s": 2.349,
+        "median_rtf": 0.463,
+        "max_synth_s": 2.969
+      }
+    },
+    "F4": {
+      "info": {
+        "load_s": 6.62,
+        "sample_rate": 44100,
+        "f0_median_hz": 207.0
+      },
+      "phrases": {
+        "t01": {
+          "synth_s": 2.386,
+          "audio_s": 5.433,
+          "rtf": 0.439,
+          "first_call": true
+        },
+        "t02": {
+          "synth_s": 2.335,
+          "audio_s": 5.573,
+          "rtf": 0.419,
+          "first_call": false
+        },
+        "t03": {
+          "synth_s": 1.92,
+          "audio_s": 4.249,
+          "rtf": 0.452,
+          "first_call": false
+        },
+        "t04": {
+          "synth_s": 2.382,
+          "audio_s": 5.155,
+          "rtf": 0.462,
+          "first_call": false
+        },
+        "t05": {
+          "synth_s": 1.372,
+          "audio_s": 2.508,
+          "rtf": 0.547,
+          "first_call": false
+        },
+        "t06": {
+          "synth_s": 1.907,
+          "audio_s": 4.11,
+          "rtf": 0.464,
+          "first_call": false
+        },
+        "t07": {
+          "synth_s": 2.238,
+          "audio_s": 4.667,
+          "rtf": 0.48,
+          "first_call": false
+        },
+        "t08": {
+          "synth_s": 1.888,
+          "audio_s": 4.04,
+          "rtf": 0.467,
+          "first_call": false
+        },
+        "t09": {
+          "synth_s": 1.508,
+          "audio_s": 3.065,
+          "rtf": 0.492,
+          "first_call": false
+        },
+        "t10": {
+          "synth_s": 1.924,
+          "audio_s": 4.458,
+          "rtf": 0.432,
+          "first_call": false
+        },
+        "probe": {
+          "synth_s": 0.94,
+          "audio_s": 1.254,
+          "rtf": 0.749,
+          "first_call": false
+        }
+      },
+      "summary": {
+        "median_synth_s": 1.92,
+        "median_rtf": 0.464,
+        "max_synth_s": 2.382
+      }
+    },
+    "F5": {
+      "info": {
+        "load_s": 6.62,
+        "sample_rate": 44100,
+        "f0_median_hz": 165.2
+      },
+      "phrases": {
+        "t01": {
+          "synth_s": 2.59,
+          "audio_s": 6.13,
+          "rtf": 0.423,
+          "first_call": true
+        },
+        "t02": {
+          "synth_s": 2.694,
+          "audio_s": 6.339,
+          "rtf": 0.425,
+          "first_call": false
+        },
+        "t03": {
+          "synth_s": 2.257,
+          "audio_s": 4.807,
+          "rtf": 0.47,
+          "first_call": false
+        },
+        "t04": {
+          "synth_s": 2.628,
+          "audio_s": 5.851,
+          "rtf": 0.449,
+          "first_call": false
+        },
+        "t05": {
+          "synth_s": 1.4,
+          "audio_s": 2.717,
+          "rtf": 0.515,
+          "first_call": false
+        },
+        "t06": {
+          "synth_s": 2.262,
+          "audio_s": 4.667,
+          "rtf": 0.485,
+          "first_call": false
+        },
+        "t07": {
+          "synth_s": 2.43,
+          "audio_s": 5.294,
+          "rtf": 0.459,
+          "first_call": false
+        },
+        "t08": {
+          "synth_s": 2.224,
+          "audio_s": 4.528,
+          "rtf": 0.491,
+          "first_call": false
+        },
+        "t09": {
+          "synth_s": 1.76,
+          "audio_s": 3.413,
+          "rtf": 0.516,
+          "first_call": false
+        },
+        "t10": {
+          "synth_s": 2.227,
+          "audio_s": 5.016,
+          "rtf": 0.444,
+          "first_call": false
+        },
+        "probe": {
+          "synth_s": 0.955,
+          "audio_s": 1.324,
+          "rtf": 0.722,
+          "first_call": false
+        }
+      },
+      "summary": {
+        "median_synth_s": 2.257,
+        "median_rtf": 0.47,
+        "max_synth_s": 2.694
+      }
+    }
+  },
+  "errors": [],
+  "total_s": 122.7
+}

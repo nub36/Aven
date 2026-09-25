@@ -1,0 +1,100 @@
+{
+  "engine": "piper",
+  "env": {
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "cores": 4,
+    "ram_gb": 15.6,
+    "gpu": "none",
+    "runner": "GitHub Actions 1000000244",
+    "python": "3.11.16"
+  },
+  "meta": {
+    "package": "piper-tts (GPL-3.0)",
+    "model": "ru_RU-irina-medium (dataset license: Unknown)"
+  },
+  "voices": {
+    "irina-medium": {
+      "info": {
+        "load_s": 1.03,
+        "model_mb": 63.2,
+        "sample_rate": 22050,
+        "f0_median_hz": 165.8
+      },
+      "phrases": {
+        "t01": {
+          "synth_s": 0.34,
+          "audio_s": 5.178,
+          "rtf": 0.066,
+          "first_call": true
+        },
+        "t02": {
+          "synth_s": 0.345,
+          "audio_s": 5.573,
+          "rtf": 0.062,
+          "first_call": false
+        },
+        "t03": {
+          "synth_s": 0.21,
+          "audio_s": 3.355,
+          "rtf": 0.063,
+          "first_call": false
+        },
+        "t04": {
+          "synth_s": 0.331,
+          "audio_s": 5.422,
+          "rtf": 0.061,
+          "first_call": false
+        },
+        "t05": {
+          "synth_s": 0.153,
+          "audio_s": 2.461,
+          "rtf": 0.062,
+          "first_call": false
+        },
+        "t06": {
+          "synth_s": 0.247,
+          "audio_s": 3.913,
+          "rtf": 0.063,
+          "first_call": false
+        },
+        "t07": {
+          "synth_s": 0.34,
+          "audio_s": 5.422,
+          "rtf": 0.063,
+          "first_call": false
+        },
+        "t08": {
+          "synth_s": 0.423,
+          "audio_s": 4.156,
+          "rtf": 0.102,
+          "first_call": false
+        },
+        "t09": {
+          "synth_s": 0.189,
+          "audio_s": 2.74,
+          "rtf": 0.069,
+          "first_call": false
+        },
+        "t10": {
+          "synth_s": 0.305,
+          "audio_s": 4.598,
+          "rtf": 0.066,
+          "first_call": false
+        },
+        "probe": {
+          "synth_s": 0.092,
+          "audio_s": 1.022,
+          "rtf": 0.09,
+          "first_call": false
+        }
+      },
+      "summary": {
+        "median_synth_s": 0.305,
+        "median_rtf": 0.063,
+        "max_synth_s": 0.423
+      }
+    }
+  },
+  "errors": [],
+  "total_s": 4.1
+}
