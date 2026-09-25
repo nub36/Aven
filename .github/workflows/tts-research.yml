@@ -1,0 +1,142 @@
+# Aven — ИССЛЕДОВАНИЕ TTS (не production, не деплой).
+#
+# Генерирует ОДИНАКОВЫЕ тестовые фразы (research/tts/phrases.json) разными
+# бесплатными/self-hosted TTS-движками на обычном CPU-раннере GitHub (без GPU),
+# замеряет скорость и коммитит MP3-образцы + метрики обратно в ветку:
+#   prototype/assets/voice-samples/**  (прослушивание: prototype/voice-lab.html)
+#   research/tts/results/*.json
+# Платные API и ключи не используются. Репозиторий публичный → минуты Actions бесплатны.
+# См. docs/TTS_RESEARCH.md.
+
+name: TTS Research
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - arena/01a0d94f-aven
+    paths:
+      - 'research/tts/gen_*.py'
+      - 'research/tts/common.py'
+      - 'research/tts/phrases.json'
+      - '.github/workflows/tts-research.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tts-research-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+  HF_HUB_DISABLE_PROGRESS_BARS: '1'
+  TTS_THREADS: '4'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [piper, silero, vosk, supertonic, qwen3, chatterbox, espeak]
+    defaults:
+      run:
+        working-directory: research/tts
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install (${{ matrix.engine }})
+        run: |
+          set -x
+          python -m pip install -U pip wheel
+          case "${{ matrix.engine }}" in
+            piper)
+              pip install piper-tts numpy
+              mkdir -p models/piper
+              base=https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium
+              curl -sSfL -o models/piper/ru_RU-irina-medium.onnx "$base/ru_RU-irina-medium.onnx"
+              curl -sSfL -o models/piper/ru_RU-irina-medium.onnx.json "$base/ru_RU-irina-medium.onnx.json"
+              curl -sSfL -o models/piper/MODEL_CARD "$base/MODEL_CARD" && cat models/piper/MODEL_CARD
+              sha256sum models/piper/*.onnx ;;
+            silero)
+              pip install torch --index-url https://download.pytorch.org/whl/cpu
+              pip install numpy silero-stress ;;
+            vosk)
+              pip install vosk-tts numpy
+              curl -sSfL https://alphacephei.com/vosk/models/model-list.json | python -c "import json,sys;[print(m) for m in json.load(sys.stdin) if 'tts' in m.get('name','')]" || true ;;
+            supertonic)
+              pip install supertonic numpy ;;
+            qwen3)
+              pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+              sudo apt-get update -qq && sudo apt-get install -y -qq sox >/dev/null || true
+              pip install qwen-tts numpy soundfile ;;
+            chatterbox)
+              pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+              pip install chatterbox-tts numpy ;;
+            espeak)
+              sudo apt-get update -qq && sudo apt-get install -y -qq espeak-ng
+              pip install numpy ;;
+          esac
+
+      - name: Generate (${{ matrix.engine }})
+        continue-on-error: true
+        run: |
+          case "${{ matrix.engine }}" in
+            piper) python gen_piper.py models/piper ;;
+            silero) python gen_silero.py ;;
+            vosk) python gen_vosk.py vosk-model-tts-ru-0.10-multi ;;
+            supertonic) python gen_supertonic.py ;;
+            qwen3) python gen_qwen3.py ;;
+            chatterbox) python gen_chatterbox.py ;;
+            espeak) python gen_cli.py espeak ;;
+          esac
+          ls -R out | head -100 || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tts-${{ matrix.engine }}
+          path: research/tts/out
+          if-no-files-found: warn
+          retention-days: 14
+
+  collect:
+    needs: generate
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tts-*
+          path: artifacts
+      - name: Collect → prototype/assets/voice-samples
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
+          ls artifacts
+          python research/tts/collect.py artifacts/*
+          du -sh prototype/assets/voice-samples
+      - name: Commit results to branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add prototype/assets/voice-samples research/tts/results
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git commit -m "research(tts): образцы голосов и метрики (TTS Research run ${{ github.run_id }})"
+          for i in 1 2 3 4 5; do
+            git pull --rebase -X theirs origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            sleep 10
+          done
+          exit 1

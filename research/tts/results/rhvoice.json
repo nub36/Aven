@@ -1,0 +1,335 @@
+{
+  "engine": "rhvoice",
+  "env": {
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+    "cores": 2,
+    "ram_gb": 3.8,
+    "gpu": "none",
+    "runner": "e2b.local",
+    "python": "3.11.2"
+  },
+  "meta": {
+    "license": "core LGPL-2.1+/GPL; voices vary",
+    "exe": "/tmp/rhv/local/bin/RHVoice-test"
+  },
+  "voices": {
+    "elena": {
+      "info": {
+        "voice_license": "GPL-3.0",
+        "f0_median_hz": 200.0
+      },
+      "phrases": {
+        "t01": {
+          "synth_s": 0.231,
+          "audio_s": 4.34,
+          "rtf": 0.053,
+          "first_call": true
+        },
+        "t02": {
+          "synth_s": 0.267,
+          "audio_s": 4.775,
+          "rtf": 0.056,
+          "first_call": false
+        },
+        "t03": {
+          "synth_s": 0.261,
+          "audio_s": 3.41,
+          "rtf": 0.076,
+          "first_call": false
+        },
+        "t04": {
+          "synth_s": 0.251,
+          "audio_s": 4.515,
+          "rtf": 0.056,
+          "first_call": false
+        },
+        "t05": {
+          "synth_s": 0.157,
+          "audio_s": 2.06,
+          "rtf": 0.076,
+          "first_call": false
+        },
+        "t06": {
+          "synth_s": 0.304,
+          "audio_s": 3.325,
+          "rtf": 0.092,
+          "first_call": false
+        },
+        "t07": {
+          "synth_s": 0.343,
+          "audio_s": 4.005,
+          "rtf": 0.086,
+          "first_call": false
+        },
+        "t08": {
+          "synth_s": 0.285,
+          "audio_s": 3.405,
+          "rtf": 0.084,
+          "first_call": false
+        },
+        "t09": {
+          "synth_s": 0.21,
+          "audio_s": 2.4,
+          "rtf": 0.088,
+          "first_call": false
+        },
+        "t10": {
+          "synth_s": 0.194,
+          "audio_s": 3.51,
+          "rtf": 0.055,
+          "first_call": false
+        },
+        "probe": {
+          "synth_s": 0.123,
+          "audio_s": 0.595,
+          "rtf": 0.207,
+          "first_call": false
+        }
+      },
+      "summary": {
+        "median_synth_s": 0.261,
+        "median_rtf": 0.076,
+        "max_synth_s": 0.343
+      }
+    },
+    "dasha-rus": {
+      "info": {
+        "voice_license": "CC BY-SA 4.0",
+        "f0_median_hz": 218.2
+      },
+      "phrases": {
+        "t01": {
+          "synth_s": 0.253,
+          "audio_s": 4.86,
+          "rtf": 0.052,
+          "first_call": true
+        },
+        "t02": {
+          "synth_s": 0.354,
+          "audio_s": 5.065,
+          "rtf": 0.07,
+          "first_call": false
+        },
+        "t03": {
+          "synth_s": 0.21,
+          "audio_s": 3.75,
+          "rtf": 0.056,
+          "first_call": false
+        },
+        "t04": {
+          "synth_s": 0.231,
+          "audio_s": 4.84,
+          "rtf": 0.048,
+          "first_call": false
+        },
+        "t05": {
+          "synth_s": 0.155,
+          "audio_s": 2.215,
+          "rtf": 0.07,
+          "first_call": false
+        },
+        "t06": {
+          "synth_s": 0.19,
+          "audio_s": 3.635,
+          "rtf": 0.052,
+          "first_call": false
+        },
+        "t07": {
+          "synth_s": 0.213,
+          "audio_s": 4.46,
+          "rtf": 0.048,
+          "first_call": false
+        },
+        "t08": {
+          "synth_s": 0.197,
+          "audio_s": 3.87,
+          "rtf": 0.051,
+          "first_call": false
+        },
+        "t09": {
+          "synth_s": 0.171,
+          "audio_s": 2.615,
+          "rtf": 0.066,
+          "first_call": false
+        },
+        "t10": {
+          "synth_s": 0.226,
+          "audio_s": 3.98,
+          "rtf": 0.057,
+          "first_call": false
+        },
+        "probe": {
+          "synth_s": 0.113,
+          "audio_s": 0.74,
+          "rtf": 0.152,
+          "first_call": false
+        }
+      },
+      "summary": {
+        "median_synth_s": 0.21,
+        "median_rtf": 0.056,
+        "max_synth_s": 0.354
+      }
+    },
+    "anna": {
+      "info": {
+        "voice_license": "not stated",
+        "f0_median_hz": 215.3
+      },
+      "phrases": {
+        "t01": {
+          "synth_s": 0.215,
+          "audio_s": 4.29,
+          "rtf": 0.05,
+          "first_call": true
+        },
+        "t02": {
+          "synth_s": 0.246,
+          "audio_s": 4.635,
+          "rtf": 0.053,
+          "first_call": false
+        },
+        "t03": {
+          "synth_s": 0.189,
+          "audio_s": 3.35,
+          "rtf": 0.056,
+          "first_call": false
+        },
+        "t04": {
+          "synth_s": 0.221,
+          "audio_s": 4.42,
+          "rtf": 0.05,
+          "first_call": false
+        },
+        "t05": {
+          "synth_s": 0.154,
+          "audio_s": 2.035,
+          "rtf": 0.076,
+          "first_call": false
+        },
+        "t06": {
+          "synth_s": 0.202,
+          "audio_s": 3.135,
+          "rtf": 0.064,
+          "first_call": false
+        },
+        "t07": {
+          "synth_s": 0.208,
+          "audio_s": 3.78,
+          "rtf": 0.055,
+          "first_call": false
+        },
+        "t08": {
+          "synth_s": 0.201,
+          "audio_s": 3.36,
+          "rtf": 0.06,
+          "first_call": false
+        },
+        "t09": {
+          "synth_s": 0.167,
+          "audio_s": 2.315,
+          "rtf": 0.072,
+          "first_call": false
+        },
+        "t10": {
+          "synth_s": 0.199,
+          "audio_s": 3.365,
+          "rtf": 0.059,
+          "first_call": false
+        },
+        "probe": {
+          "synth_s": 0.115,
+          "audio_s": 0.595,
+          "rtf": 0.193,
+          "first_call": false
+        }
+      },
+      "summary": {
+        "median_synth_s": 0.201,
+        "median_rtf": 0.059,
+        "max_synth_s": 0.246
+      }
+    },
+    "irina": {
+      "info": {
+        "voice_license": "not stated",
+        "f0_median_hz": 169.0
+      },
+      "phrases": {
+        "t01": {
+          "synth_s": 0.373,
+          "audio_s": 5.38,
+          "rtf": 0.069,
+          "first_call": true
+        },
+        "t02": {
+          "synth_s": 0.393,
+          "audio_s": 5.7,
+          "rtf": 0.069,
+          "first_call": false
+        },
+        "t03": {
+          "synth_s": 0.338,
+          "audio_s": 3.87,
+          "rtf": 0.087,
+          "first_call": false
+        },
+        "t04": {
+          "synth_s": 0.341,
+          "audio_s": 5.385,
+          "rtf": 0.063,
+          "first_call": false
+        },
+        "t05": {
+          "synth_s": 0.268,
+          "audio_s": 2.395,
+          "rtf": 0.112,
+          "first_call": false
+        },
+        "t06": {
+          "synth_s": 0.34,
+          "audio_s": 3.805,
+          "rtf": 0.089,
+          "first_call": false
+        },
+        "t07": {
+          "synth_s": 0.366,
+          "audio_s": 5.08,
+          "rtf": 0.072,
+          "first_call": false
+        },
+        "t08": {
+          "synth_s": 0.322,
+          "audio_s": 4.485,
+          "rtf": 0.072,
+          "first_call": false
+        },
+        "t09": {
+          "synth_s": 0.289,
+          "audio_s": 2.715,
+          "rtf": 0.107,
+          "first_call": false
+        },
+        "t10": {
+          "synth_s": 0.317,
+          "audio_s": 4.36,
+          "rtf": 0.073,
+          "first_call": false
+        },
+        "probe": {
+          "synth_s": 0.367,
+          "audio_s": 0.84,
+          "rtf": 0.437,
+          "first_call": false
+        }
+      },
+      "summary": {
+        "median_synth_s": 0.338,
+        "median_rtf": 0.073,
+        "max_synth_s": 0.393
+      }
+    }
+  },
+  "errors": [],
+  "total_s": 11.1
+}

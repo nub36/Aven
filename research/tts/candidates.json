@@ -1,0 +1,101 @@
+{
+  "_comment": "Метаданные кандидатов для страницы прослушивания и docs/TTS_RESEARCH.md. commercial: yes | no | unclear. status: shortlist | reference | baseline | not-for-product.",
+  "engines": {
+    "silero_cis_mit": {
+      "title": "Silero v5 CIS base (ru_*) + silero-stress",
+      "class": "B — лёгкий нейросетевой, self-hosted CPU",
+      "url": "https://github.com/snakers4/silero-models",
+      "license_code": "MIT",
+      "license_weights": "MIT (LICENSE_CIS) — только base cis-модели",
+      "commercial": "yes",
+      "status": "shortlist",
+      "notes": "Русские голоса носителей языков СНГ (возможен лёгкий акцент). Ударения — silero-stress (MIT). Требует PyTorch."
+    },
+    "silero_v5_ru": {
+      "title": "Silero v5_5_ru (baya / kseniya / xenia)",
+      "class": "B — лёгкий нейросетевой, self-hosted CPU",
+      "url": "https://github.com/snakers4/silero-models",
+      "license_code": "CC BY-NC-SA 4.0",
+      "license_weights": "CC BY-NC-SA 4.0 (некоммерческая); коммерция — отдельная лицензия Silero",
+      "commercial": "no",
+      "status": "reference",
+      "notes": "Эталон качества русского среди лёгких моделей. Для продукта — только после покупки лицензии (решение владельца)."
+    },
+    "piper": {
+      "title": "Piper ru_RU-irina-medium",
+      "class": "B/D — лёгкий VITS (ONNX), CPU и браузер (WASM)",
+      "url": "https://huggingface.co/rhasspy/piper-voices/tree/main/ru/ru_RU/irina/medium",
+      "license_code": "GPL-3.0 (piper1-gpl) / MIT (архивный rhasspy/piper)",
+      "license_weights": "Unknown (MODEL_CARD: датасет RHVoice Irina, License: Unknown)",
+      "commercial": "unclear",
+      "status": "not-for-product",
+      "notes": "Единственный русский женский голос Piper; лицензия данных не указана → не использовать без выяснения."
+    },
+    "supertonic": {
+      "title": "Supertonic 3 (F1–F5)",
+      "class": "D — ONNX, CPU / браузер WebGPU/WASM",
+      "url": "https://huggingface.co/Supertone/supertonic-3",
+      "license_code": "MIT (примеры кода)",
+      "license_weights": "OpenRAIL-M (коммерция разрешена, есть use-based ограничения)",
+      "commercial": "yes",
+      "status": "shortlist",
+      "notes": "Очень быстрый, работает в браузере. Код-репозиторий архивирован 2026-09-09. Голоса — не носители русского."
+    },
+    "qwen3": {
+      "title": "Qwen3-TTS (0.6B / 1.7B)",
+      "class": "C — крупный нейросетевой, желательно GPU",
+      "url": "https://github.com/QwenLM/Qwen3-TTS",
+      "license_code": "Apache-2.0",
+      "license_weights": "Apache-2.0",
+      "commercial": "yes",
+      "status": "shortlist",
+      "notes": "Voice Design (голос по описанию) + клонирование. На CPU медленно; для диалога нужен GPU."
+    },
+    "chatterbox": {
+      "title": "Chatterbox Multilingual (голос по умолчанию)",
+      "class": "C — крупный нейросетевой, желательно GPU",
+      "url": "https://github.com/resemble-ai/chatterbox",
+      "license_code": "MIT",
+      "license_weights": "MIT",
+      "commercial": "yes",
+      "status": "shortlist",
+      "notes": "Встроенный водяной знак PerTh. Нужен референс-голос с согласием диктора для «своего» тембра."
+    },
+    "vosk": {
+      "title": "Vosk TTS ru multi",
+      "class": "B — лёгкий VITS+BERT, CPU",
+      "url": "https://github.com/alphacep/vosk-tts",
+      "license_code": "Apache-2.0",
+      "license_weights": "не опубликована явно (голоса Irina/Tiflocomp, Natasha/SOVA и др.)",
+      "commercial": "unclear",
+      "status": "not-for-product",
+      "notes": "Хороший русский; лицензия весов не ясна → только прослушивание, в продукт — после письменного подтверждения."
+    },
+    "rhvoice": {
+      "title": "RHVoice (параметрический HTS)",
+      "class": "B — очень лёгкий, CPU, офлайн",
+      "url": "https://github.com/RHVoice/RHVoice",
+      "license_code": "LGPL-2.1+ / GPL",
+      "license_weights": "по голосам: elena GPL-3.0; dasha-rus CC BY-SA 4.0; anna/irina — не указана",
+      "commercial": "per-voice",
+      "status": "baseline",
+      "notes": "Мгновенный, но звучит синтетически (уровень экранных чтецов)."
+    },
+    "espeak": {
+      "title": "eSpeak NG (формантный)",
+      "class": "A — ориентир «роботизированного» системного TTS",
+      "url": "https://github.com/espeak-ng/espeak-ng",
+      "license_code": "GPL-3.0",
+      "license_weights": "—",
+      "commercial": "yes",
+      "status": "baseline",
+      "notes": "Так звучит speechSynthesis на многих Linux. Не кандидат — эталон «как не надо»."
+    }
+  },
+  "voice_license": {
+    "rhvoice/elena": ["GPL-3.0", "yes"],
+    "rhvoice/dasha-rus": ["CC BY-SA 4.0", "yes"],
+    "rhvoice/anna": ["не указана", "unclear"],
+    "rhvoice/irina": ["не указана", "unclear"]
+  }
+}
