@@ -13,6 +13,13 @@
 
 ## [Unreleased]
 
+### 2026-09-25 (VII) — Female Aven интегрирована в hero Главной (прототип, не release)
+
+- **Добавлено (прототип):** hero Главной с FINAL Female Aven: слева приветствие, состояние текстом (Готова/Слушаю…/Думаю…/Говорю…/Жду ответа…/Готово/Важное событие), «Чем помочь?», поле команды с 🎤 и отправкой, строка последнего ответа, ближайшее событие; справа — прозрачный bust без рамки и фона, glow/waveform/круги — CSS, низ бюста мягко растворяется; клик по персонажу — фокус команды, повторно — suggestions.
+- **Добавлено (прототип):** состояния выводятся из существующих подсистем (TTS/STT/flows) через `js/presence.js` — без второго state engine; speaking → glow + waveform; listening → свой glow + индикатор; character Off → hero во всю ширину; reduced motion отключает анимации; Assistant использует тот же asset в шапке.
+- **Проверено:** headless-скриншоты desktop light/dark, mobile light/dark, speaking, listening, character off (`review/hero-integration/`) + интеракционные тесты кликов/состояний — PASS.
+- **Статус:** UX-прототип; не production; 3D/Male/AI не добавлялись; внешность не менялась.
+
 ### 2026-09-25 (VI) — FINAL 2D MASTER Female Aven утверждена; прозрачная версия готова (не release)
 
 - **Утверждено владельцем (UX/art decision, не ADR):** FINAL FEMALE AVEN = reference face + HAIR A + COLOR B + MAKEUP B; dark minimal одежда; бюст. Внешность не перегенерируется без прямого указания владельца.

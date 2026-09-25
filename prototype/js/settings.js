@@ -314,6 +314,7 @@
       S.save();
       A.toast(el.checked ? 'Включено (демо)' : 'Выключено (демо)');
       if (/^settings\.modules\./.test(el.dataset.path) || /^settings\.homeCards\./.test(el.dataset.path)) A.applyEnv();
+      if (/^settings\.character\./.test(el.dataset.path)) A.render(); // hero перестраивается под character on/off
     },
     'set-slider': (el) => {
       setByPath(s(), el.dataset.path, parseFloat(el.value));

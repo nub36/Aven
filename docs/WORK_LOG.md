@@ -6,6 +6,39 @@
 
 ---
 
+## 2026-09-25 — XII. Интеграция FINAL Female Aven в hero Главной (UX prototype)
+
+- **Дата:** 2026-09-25
+- **Задача:** Одобрение владельца preview получено; интегрировать transparent asset в hero Главной по спецификации (hero-зоны, состояния, speaking/listening, клик, событие, light/dark, mobile, a11y, settings, Assistant), проверить скриншотами, commit+push+PR.
+
+### Что конкретно сделано
+
+- Новый hero Главной (`pages1.js`): grid «top / interact / char»; слева приветствие + подпись Aven + состояние текстом + «Чем помочь?» + cmdbar (input/🎤/→) + suggestions (скрыты по умолчанию) + строка последнего ответа + компактное ближайшее событие («Следующее: Стоматолог · 10:00 · через 1 ч 24 мин») + ссылка Assistant; справа Female Aven (`assets/character/web/female-aven-transparent.png`) без рамки/фона: CSS glow (темо-зависимый), декоративные круги, voice waveform, mask-fade низа бюста; mobile-порядок: приветствие/статус → персонаж → команда → событие.
+- `js/presence.js` (новый): отображение состояний idle/listening/thinking/speaking/waiting/success/important текстом (role=status aria-live) + data-state для glow/wave; НЕ второй state engine — состояние выводится из существующих подсистем: voice.js (TTS onstart/onend/onerror → speaking/idle), STT onStart/onEnd/onError → listening/idle (home + assistant), flows (start/next → waiting, done → success/important flash), assistant send → thinking.
+- Поведение: клик по персонажу → фокус в поле команды; повторный клик → suggestions; chip → заполняет поле. STT в поле Главной (home-mic) с interim-текстом и честным fallback-тостом при недоступности. Character Off → hero во всю ширину (без пустоты); settings set-toggle по путям character перерисовывает страницу. Reduced motion: glow/wave-анимации отключены (статичные бары).
+- Assistant: шапка использует тот же transparent asset (`.char-bust`, круг с radial-подложкой); маленькие аватары и floating не менялись (компактность — по спецификации).
+- CSS: новая hero-система в `style.css` (grid areas, glow-переменные light/dark, wave/rings/mask, адаптив 860px); `.char-bust` в `character.css`.
+- Проверки: headless Chromium (puppeteer-core + @sparticuz/chromium, libs al2023 вручную — CDN весов/браузеров заблокирован прокси, venv/shotkit вне репозитория): скриншоты desktop light/dark, mobile light/dark, speaking, listening, character off → `review/hero-integration/*.jpg`; интеракционные тесты (sugg hidden, фокус после 1-го клика, sugg после 2-го, chip fill, presence speaking→wave flex→idle, img loaded+alt) — все PASS; `node --check` по всем js.
+- Документация: `prototype/README.md` (дерево + hero-раздел), `docs/CHARACTER.md` §7.2, `docs/CHANGELOG.md` (VII), настоящая запись.
+- Commit + push в `arena/01a0d8a6-aven`; PR #3 обновлён (merge НЕ делал).
+
+### Что проверено
+
+- Скриншоты визуально: персонаж внутри интерфейса (не «вставленное фото»), края чистые на light/dark, лицо читается, команда не перекрыта; mobile-порядок корректен; character off — полная ширина; speaking — текст «Говорю…» + waveform + glow.
+- Примечание: в headless-скриншотах emoji-глифы (🎤 и др.) отображаются «квадратами» — в окружении нет emoji-шрифта; в реальных браузерах глифы штатные (код не менялся).
+
+### Что НЕ сделано (осознанно)
+
+- 3D, Male, AI, новый Command Engine, новые лица/причёски/цвета/макияж, новый ADR — нет.
+- Merge PR не выполнялся (по инструкции владельца).
+
+### Что рекомендуется делать следующим
+
+1. Владелец смотрит PR #3 / Pages preview и скриншоты; при правках hero — итерация.
+2. После принятия hero — отдельный этап: pipeline настоящей 3D-модели по чек-листу.
+
+---
+
 ## 2026-09-25 — XI. FINAL 2D MASTER Female: прозрачность + preview (интеграция ожидает)
 
 - **Дата:** 2026-09-25

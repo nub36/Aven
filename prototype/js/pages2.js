@@ -246,7 +246,9 @@
       <div class="a-inner">
         <div class="a-top"><button class="btn" data-action="assistant-exit">← Выйти из Assistant</button></div>
         <div class="a-logo">
-          <div class="char-wrap">${window.AvenChar ? window.AvenChar.avatar('s52') : '<div class="logo-mark mark">A</div>'}</div>
+          <div class="char-wrap">${(window.AvenChar && !window.AvenChar.isOff() && window.AvenChar.current().id === 'female')
+            ? `<img class="char-bust" src="assets/character/web/female-aven-transparent.png" alt="${A.esc(window.AvenChar.current().label)} — виртуальный помощник">`
+            : (window.AvenChar ? window.AvenChar.avatar('s52') : '<div class="logo-mark mark">A</div>')}</div>
           <h1>${window.AvenChar && !window.AvenChar.isOff() ? A.esc(window.AvenChar.display()) : 'Aven'}</h1>
           ${window.AvenChar && !window.AvenChar.isOff() ? `<div class="char-name">${A.esc(window.AvenChar.current().label)} · персонаж-оформление</div>` : ''}
           <p>Что сделать?</p>
@@ -298,6 +300,7 @@
 
   function pushAven(text, speak) {
     A._chat.push({ who: 'aven', text: text });
+    A._lastReply = text; // для строки статуса на Главной
     renderChat();
     if (speak && s().settings.voice.alwaysVoice) A.speak(text, null);
   }
@@ -331,15 +334,23 @@
     if (!t) return;
     A._chat.push({ who: 'user', text: t });
     renderChat();
+    const P = window.AvenPresence;
+    if (P) P.set('thinking');
     setTimeout(() => {
-      let out;
+      let out; let kind = null;
       if (window.AvenFlows && window.AvenFlows.isActive()) {
         const r = window.AvenFlows.advance(t);
         out = r ? r.text : replyFor(t);
+        kind = r ? r.kind : null;
       } else {
         out = routeCommand(t);
       }
       pushAven(out, true);
+      if (P) {
+        if (kind === 'done') { if (/ВАЖНОЕ/.test(out)) P.flash('important', 4200); else P.flash('success', 2600); }
+        else if (kind === 'next') P.set('waiting');
+        else P.set('idle'); // если TTS заговорит — voice.js сам переведёт в speaking
+      }
     }, 300);
   };
 
@@ -476,7 +487,12 @@
 
     'flow-start': (el) => {
       const r = window.AvenFlows.start(el.dataset.id);
-      if (r) { A._chat.push({ who: 'aven', text: 'Начинаю демо-сценарий «' + r.flow.title + '». ' + r.question }); renderChat(); }
+      if (r) {
+        A._chat.push({ who: 'aven', text: 'Начинаю демо-сценарий «' + r.flow.title + '». ' + r.question });
+        A._lastReply = r.question;
+        renderChat();
+        if (window.AvenPresence) window.AvenPresence.set('waiting'); // сценарий ждёт ответа пользователя
+      }
     },
 
     'mic-stt': () => {
@@ -487,12 +503,13 @@
       if (A._stt && A._stt.active) { A._stt.stop(); A._stt = null; renderChat(); return; }
       const inp = document.getElementById('chat-input');
       A._stt = window.AvenVoice.createRecognizer({
-        onStart: () => { if (inp) inp.placeholder = 'Слушаю… (экспериментальный STT)'; renderChat(); },
+        onStart: () => { if (inp) inp.placeholder = 'Слушаю… (экспериментальный STT)'; if (window.AvenPresence) window.AvenPresence.set('listening'); renderChat(); },
         onInterim: (t) => { if (inp) inp.value = t; },
         onFinal: (t) => { if (inp) inp.value = t; if (s().settings.voice.stt && s().settings.voice.stt.autoSend) { A._assistantSend(t); inp.value = ''; } },
-        onEnd: () => { A._stt = null; if (inp) inp.placeholder = 'Напишите команду… (демо)'; renderChat(); },
+        onEnd: () => { A._stt = null; if (inp) inp.placeholder = 'Напишите команду… (демо)'; if (window.AvenPresence) window.AvenPresence.set('idle'); renderChat(); },
         onError: (err) => {
           A._stt = null;
+          if (window.AvenPresence) window.AvenPresence.set('idle');
           if (inp) inp.placeholder = 'Напишите команду… (демо)';
           const map = { 'not-allowed': 'Нет доступа к микрофону', 'no-speech': 'Речь не распознана', 'audio-capture': 'Микрофон не найден' };
           A.toast((map[err] || 'Ошибка распознавания') + ' (экспериментально)');

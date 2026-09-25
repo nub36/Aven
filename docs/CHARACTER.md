@@ -117,11 +117,18 @@ Aven может иметь **вымышленный визуальный обр�
 
 ### 7.2 Статус интеграции
 
-- Preview показаны владельцу; **интеграция на Главную — после его одобрения** (не выполнена).
-- План интеграции (после одобрения): Desktop — слева приветствие + «Что сделать?», справа
-  Female Aven без собственного прямоугольного фона; за ней CSS background сайта
-  (soft radial indigo/violet glow); персонаж визуально ВНУТРИ интерфейса, не «вставленная
-  фотография»; нарисованного background персонаж не содержит.
+- Preview одобрены владельцем (2026-09-25): «Прозрачную FINAL FEMALE AVEN принимаю».
+- **Интегрировано в UX-прототип (2026-09-25):** hero Главной — слева приветствие,
+  состояние Aven текстом, «Чем помочь?», поле команды + 🎤 + отправить, строка последнего
+  ответа, ближайшее событие; справа Female Aven (transparent asset) без рамки и
+  прямоугольного фона; glow/круги/waveform — CSS; низ бюста растворяется у границы hero.
+  Клик по персонажу — фокус в поле команды, повторный — suggestions. Assistant использует
+  тот же asset в шапке (`.char-bust`). Состояния (idle/listening/thinking/speaking/waiting/
+  success/important) выводятся из существующих подсистем через `js/presence.js`
+  (НЕ второй state engine). Character Off → hero во всю ширину; reduced motion отключает
+  glow/wave. Скриншоты проверки (desktop light/dark, mobile light/dark, speaking, listening,
+  character off): `review/hero-integration/`.
+- Внешность НЕ перегенерировалась; master не изменён; Male/3D/AI не добавлялись.
 - История подборов (этапы 0–3): `review/3d-character-concepts/` (face → hair → color →
   makeup; все этапы identity-locked от master reference).
 

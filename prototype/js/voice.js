@@ -33,7 +33,12 @@ window.AvenVoice = (function () {
       const voices = window.speechSynthesis.getVoices() || [];
       const chosen = voices.find((v) => v.voiceURI === voice.voiceURI) || voices.find((v) => (v.lang || '').toLowerCase().startsWith('ru'));
       if (chosen) u.voice = chosen;
-      if (btn) { btn.classList.add('playing'); u.onend = () => btn.classList.remove('playing'); u.onerror = () => btn.classList.remove('playing'); }
+      /* presence: speaking ровно пока speechSynthesis говорит (честно) */
+      const P = () => window.AvenPresence;
+      if (btn) btn.classList.add('playing');
+      u.onstart = () => { if (btn) btn.classList.add('playing'); if (P()) P().set('speaking'); };
+      u.onend = () => { if (btn) btn.classList.remove('playing'); if (P()) P().set('idle'); };
+      u.onerror = () => { if (btn) btn.classList.remove('playing'); if (P()) P().set('idle'); };
       window.speechSynthesis.speak(u);
       return true;
     } catch (e) {

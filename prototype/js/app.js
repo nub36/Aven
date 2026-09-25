@@ -78,6 +78,7 @@
       return;
     }
     main.innerHTML = out.html;
+    if (window.AvenPresence) { try { window.AvenPresence.apply(); } catch (e) { /* демо */ } }
     document.getElementById('sidebar').innerHTML = buildSidebar(cur);
     document.getElementById('page-title').textContent = TITLES[cur] || 'Aven';
     document.getElementById('theme-btn').textContent = S.s().settings.theme === 'dark' ? '☀️' : '🌙';

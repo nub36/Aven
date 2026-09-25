@@ -9,28 +9,48 @@
     const st = s();
     const cards = st.settings.homeCards;
     const todayTasks = st.tasks.filter((t) => t.date === 'today' && !t.done);
+    const charOn = !!(window.AvenChar && !window.AvenChar.isOff() && window.AvenChar.current().id === 'female');
+    const last = A._lastReply ? A.esc(A._lastReply) : 'Напишите команду — или нажмите на Aven справа.';
     const html = `
-    <div class="hero">
-      <div>
+    <div class="hero ${charOn ? '' : 'no-char'}" data-state="idle">
+      <div class="hero-top">
         <h1>${A.esc(A.greeting())}, ${A.esc(st.profile.greeting)}</h1>
-        <div class="date">${A.esc(cap(A.todayFull()))} · демо-данные</div>
+        <div class="hero-sign">Aven · ваш помощник · ${A.esc(cap(A.todayFull()))} · демо-данные</div>
+        <div class="hero-state-row"><span class="aven-state" role="status" aria-live="polite" data-state="idle">● Готова</span></div>
       </div>
-      <button class="btn" data-action="go-assistant">🤖 Открыть Assistant</button>
-    </div>
 
-    <div class="cmdbar">
-      <input type="text" id="home-cmd" placeholder="Что сделать? Например: «Запиши 850 рублей на продукты» (демо)">
-      <button class="icon-btn mic" data-action="mic-demo" title="Голосовой ввод">🎤</button>
-      <button class="btn primary go" data-action="home-cmd-send" title="Отправить">→</button>
-    </div>
-
-    <div class="next-event">
-      <div class="when">10:00</div>
-      <div>
-        <div style="font-weight:700">Стоматолог</div>
-        <div class="sub" style="color:var(--muted);font-size:.85rem">ближайшее важное событие</div>
+      <div class="hero-interact">
+        <div class="hero-ask">Чем помочь?</div>
+        <div class="cmdbar">
+          <input type="text" id="home-cmd" placeholder="Что сделать? Например: «Запиши 850 рублей на продукты» (демо)">
+          <button class="icon-btn mic" data-action="home-mic" title="Голосовой ввод (экспериментально)">🎤</button>
+          <button class="btn primary go" data-action="home-cmd-send" title="Отправить">→</button>
+        </div>
+        <div class="hero-sugg" id="hero-sugg" hidden>
+          <button class="btn small" data-action="home-sugg" data-q="Что сегодня?">Что сегодня?</button>
+          <button class="btn small" data-action="home-sugg" data-q="Заправился">⚡ Заправился</button>
+          <button class="btn small" data-action="home-sugg" data-q="Важное событие">⚡ Важное событие</button>
+          <button class="btn small" data-action="home-sugg" data-q="Мои расходы">Мои расходы</button>
+        </div>
+        <div class="hero-last" id="hero-last">${last}</div>
+        <div class="hero-next">
+          <span aria-hidden="true">📅</span>
+          <span>Следующее: <b>Стоматолог</b> · 10:00</span>
+          <span class="pill accent">через 1 ч 24 мин</span>
+        </div>
+        <div class="hero-links"><button class="btn small" data-action="go-assistant">Открыть Assistant →</button></div>
       </div>
-      <span class="pill accent in">через 1 ч 24 мин</span>
+
+      ${charOn ? `
+      <div class="hero-char" id="hero-char" data-action="hero-char-click" role="button" tabindex="0"
+           aria-label="Aven — нажмите, чтобы перейти к полю команды" title="Aven: клик — фокус на поле команды">
+        <span class="hc-glow" aria-hidden="true"></span>
+        <span class="hc-ring r1" aria-hidden="true"></span>
+        <span class="hc-ring r2" aria-hidden="true"></span>
+        <img class="hc-img" src="assets/character/web/female-aven-transparent.png"
+             alt="Aven — Female Aven, виртуальный помощник: голова, шея и плечи">
+        <span class="hc-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      </div>` : ''}
     </div>
 
     <div class="home-grid">
@@ -82,8 +102,18 @@
         <div class="s" style="color:var(--muted);font-size:.82rem;margin-top:10px">Действия открывают демо-формы; данные сохраняются локально.</div>
       </div>` : ''}
     </div>`;
-    return { html };
+    return { html, mount };
   };
+
+  /* монтаж hero: клавиатура персонажа + suggestions-поведение */
+  function mount(main) {
+    const char = main.querySelector('#hero-char');
+    if (char) {
+      char.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.Aven.actions['hero-char-click'](); }
+      });
+    }
+  }
 
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -278,8 +308,43 @@
   /* ================= действия ================= */
   const confirmDelete = 'Демо: элемент будет удалён только локально в прототипе. Удалить?';
 
+  /* экспериментальный STT в поле Главной: state → listening, interim-текст в поле */
+  function homeMic() {
+    const inp = document.getElementById('home-cmd');
+    const PH = 'Что сделать? Например: «Запиши 850 рублей на продукты» (демо)';
+    if (!window.AvenVoice || !window.AvenVoice.support.stt) { A.micToast(); return; }
+    if (A._homeStt && A._homeStt.active) { A._homeStt.stop(); A._homeStt = null; return; }
+    const P = window.AvenPresence;
+    A._homeStt = window.AvenVoice.createRecognizer({
+      onStart: () => { if (P) P.set('listening'); if (inp) inp.placeholder = 'Слушаю… (экспериментальный STT)'; },
+      onInterim: (t) => { if (inp) inp.value = t; },
+      onFinal: (t) => { if (inp) inp.value = t; },
+      onEnd: () => { A._homeStt = null; if (P) P.set('idle'); if (inp) inp.placeholder = PH; },
+      onError: (err) => {
+        A._homeStt = null; if (P) P.set('idle'); if (inp) inp.placeholder = PH;
+        const map = { 'not-allowed': 'Нет доступа к микрофону', 'no-speech': 'Речь не распознана', 'audio-capture': 'Микрофон не найден' };
+        A.toast((map[err] || 'Ошибка распознавания') + ' (экспериментально)');
+      }
+    });
+    if (A._homeStt) A._homeStt.start(); else A.micToast();
+  }
+
   A.register({
-    'mic-demo': () => A.micToast(),
+    'mic-demo': () => homeMic(),
+    'home-mic': () => homeMic(),
+
+    /* клик по Female Aven: фокус в поле команды; если уже в фокусе — suggestions */
+    'hero-char-click': () => {
+      const inp = document.getElementById('home-cmd');
+      const sugg = document.getElementById('hero-sugg');
+      if (!inp) return;
+      if (document.activeElement === inp) { if (sugg) sugg.hidden = !sugg.hidden; }
+      else { inp.focus(); }
+    },
+    'home-sugg': (el) => {
+      const inp = document.getElementById('home-cmd');
+      if (inp && el.dataset.q) { inp.value = el.dataset.q; inp.focus(); }
+    },
 
     'home-cmd-send': (el) => {
       const inp = document.getElementById('home-cmd');
