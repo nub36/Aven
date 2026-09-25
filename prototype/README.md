@@ -36,16 +36,21 @@ prototype/
 ├── css/style.css       — единый дизайн, light/dark темы
 ├── css/character.css   — персонаж, плавающий виджет, демо-команды (опц. слой)
 ├── assets/
-│   ├── aven-female.png — вымышленный персонаж «Ава» (Female)
-│   └── aven-male.png   — вымышленный персонаж «Авен» (Male)
+│   ├── aven-female.png — вымышленный персонаж «Ава» (Female, компактные аватары)
+│   ├── aven-male.png   — вымышленный персонаж «Авен» (Male)
+│   └── character/
+│       ├── master/female-aven-reference.jpg — FINAL 2D MASTER (с фоном; не перезаписывать)
+│       └── web/female-aven-transparent.png  — FINAL Female Aven, RGBA (hero, Assistant)
 └── js/
     ├── data.js         — демо-данные (явно тестовые) + settings.character / voice.stt
     ├── state.js        — состояние (JS memory + localStorage, ключ aven-proto-v1)
     ├── ui.js           — модальные окна, тосты, форматирование
     ├── character.js    — персонаж: реестр Female/Male, аватар, плавающий Aven (опц. слой)
+    ├── presence.js     — отображение состояния Aven (idle/listening/thinking/speaking/
+    │                     waiting/success/important): текст + классы glow/wave; НЕ state engine
     ├── voice.js        — TTS speechSynthesis + экспериментальный STT SpeechRecognition
     ├── flows.js        — демо state machine: многошаговая заправка, важное событие
-    ├── pages1.js       — Главная, День, Календарь, Задачи, Заметки
+    ├── pages1.js       — Главная (hero с Female Aven), День, Календарь, Задачи, Заметки
     ├── pages2.js       — Финансы, Авто, Покупки, Автоматизации, Assistant (+персонаж/STT)
     ├── tools.js        — Инструменты (часть функций реально работает)
     ├── settings.js     — Настройки и Профиль (+категория «Персонаж»)
@@ -56,6 +61,16 @@ prototype/
 
 ## Персонаж и голос (опциональный слой, без AI)
 
+- **Hero Главной с Female Aven (FINAL 2D master):** слева приветствие + состояние
+  (● Готова / Слушаю… / Думаю… / Говорю… / Жду ответа… / Готово / Важное событие) +
+  «Чем помочь?» + поле команды + 🎤 + отправить + строка последнего ответа + ближайшее
+  событие; справа — прозрачный bust `assets/character/web/female-aven-transparent.png`
+  **без рамки и прямоугольного фона**: glow / декоративные круги / voice waveform рисует
+  CSS под персонажем (не часть PNG); низ бюста мягко растворяется у границы hero (mask).
+  Клик по персонажу — фокус в поле команды; повторный клик — suggestions. Состояния
+  выводятся из существующих подсистем (TTS onstart/onend, STT, flows) через `presence.js` —
+  второго state engine нет. Character Off → hero во всю ширину. Reduced motion отключает
+  glow/wave-анимации. Скриншоты проверки: `../review/hero-integration/`.
 - **Персонаж** (вымышленные «Ава»/«Авен») — только оформление: аватар в Assistant, плавающая кнопка, приветствия. Включается/выключается в «Настройки → Персонаж»; при выключении — нейтральный логотип «A», функции не меняются ([docs/CHARACTER.md](../docs/CHARACTER.md), ADR-014).
 - **Голос:** озвучка ответов через браузерный `speechSynthesis`; голосовой ввод — экспериментальный `SpeechRecognition` (🎤). Честный статус поддержки — в «Настройки → Голос»; при недоступности — всегда текст.
 - **Демо-команды (state machine, без AI):** «⚡ Заправился» и «⚡ Важное событие» — многошаговые сценарии с валидацией и подтверждением; «Отмена» ничего не записывает.

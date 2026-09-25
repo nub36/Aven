@@ -71,6 +71,17 @@ html.reduce-motion .float-btn { animation: none; }
 .float-pop .fp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .float-pop .fp-status { margin-top: 10px; color: var(--muted); font-size: .76rem; display: flex; gap: 8px; flex-wrap: wrap; }
 
+/* ---------- FINAL Female bust (transparent asset) в шапке Assistant ---------- */
+.char-bust {
+  width: 88px;
+  height: 88px;
+  object-fit: cover;
+  object-position: 50% 10%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%, var(--accent-soft), transparent 78%);
+  display: inline-block;
+}
+
 /* ---------- ассистент: персонаж в шапке и сообщениях ---------- */
 .assistant .a-logo .char-wrap { position: relative; display: inline-block; }
 .assistant .a-logo .char-name { color: var(--accent); font-size: .85rem; font-weight: 600; margin-top: 6px; }

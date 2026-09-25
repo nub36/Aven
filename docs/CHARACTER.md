@@ -54,3 +54,81 @@ Aven может иметь **вымышленный визуальный обр�
 - Нужен ли выбор/кастомизация персонажа в production (или фиксированный бренд-образ)?
 - Юридическая чистота и лицензирование финальных ассетов (в прототипе — сгенерированные иллюстрации).
 - Анимация/мимика персонажа (в прототипе — только «парение» и пульс индикаторов).
+
+## 6. 3D-направление: бюст, visual concepts (этап review)
+
+> Решение владельца от 2026-09-25; зафиксировано как [ADR-015](DECISIONS.md) (Proposed).
+
+### 6.1 Новая визуальная цель
+
+- 3D Aven — **бюст**: голова + полная шея + немного плеч + верхняя часть груди; нижний край
+  кадра немного ниже ключиц («виртуальный собеседник при видеозвонке»). Не до пояса, не полное тело.
+- Стиль: premium realistic / semi-realistic digital human; clean, premium, calm, modern,
+  slightly futuristic, НЕ sci-fi; без cartoon/anime/plastic doll/uncanny/robot/fantasy/sexualized.
+- Одежда: минималистичная верхняя часть; цвета dark navy / indigo / graphite с небольшими
+  violet-blue акцентами; без логотипов сторонних брендов.
+- **Сначала только Female.** Male 3D — позже, в том же стиле, после утверждения Female владельцем.
+
+### 6.2 Текущий этап: visual concepts (НЕ 3D-модели)
+
+- Кандидаты: `review/3d-character-concepts/` — `female-A.jpg`, `female-B.jpg`,
+  `female-C.jpg`, `female-D.jpg` + README с описаниями и чек-листом требований.
+- **Это только visual concepts, НЕ готовые 3D models.** PNG/JPG не являются rigged-моделью:
+  нет геометрии, rig, blendshapes, visemes; в WebGL они не используются.
+- Все кандидаты: одна композиция (бюст), одинаковые освещение и стиль, фронт/небольшой 3/4,
+  взгляд на пользователя; различаются лицо, причёска, детали одежды.
+- **Решение ждёт владельца.** Победитель не выбран; интеграция в основной интерфейс и
+  замена текущего персонажа прототипа запрещены до явного «Выбираю вариант X».
+- После утверждения внешности отдельно решается pipeline настоящей модели: custom 3D /
+  character creator / commissioned model / licensed base / другой; требования (GLB/GLTF,
+  rig head/neck/eyes/jaw, blendshapes incl. blinkLeft/blinkRight/jawOpen, visemes
+  REST/A/E/I/O/U/M-B-P/F-V с mapping, hair cards, realtime-бюджет, PBR, лицензионная
+  проверка) — в `review/3d-character-concepts/README.md`.
+
+### 6.3 Честный статус предыдущего 3D-прототипа
+
+- Коммит предыдущего 3D-прототипа (`ddd1c31`: процедурная Three.js-голова, states, blink,
+  visemes, event bus, fallback) **не был push в GitHub и отсутствует в репозитории**;
+  3D-кода в репозитории нет; работа невосстановима (проверено 2026-09-25, WORK_LOG запись VII).
+- Процедурная голова, если будет пересоздана, — только **Developer/Test Model**
+  (Developer Settings → «Use Test 3D Model») для проверки состояний/blink/visemes/lip-sync/
+  event bus/fallback. Пользователю как основной 3D Aven она не предлагается.
+- Существующие 2D-аватары прототипа (`prototype/assets/aven-*.png`) остаются текущим
+  Presentation Layer прототипа до отдельных решений владельца; 3D-направление прототип пока не меняет.
+
+## 7. FINAL 2D MASTER Female Aven (утверждено владельцем 2026-09-25)
+
+> Это UX/art decision владельца, **НЕ новый ADR**. Внешность не перегенерировать без
+> прямого указания владельца.
+
+### 7.1 Утверждённый reference
+
+- Face: reference face (раунд 1, вариант D) → **HAIR A** (прямые ~до плеч) → **COLOR B**
+  (dark chocolate brown) → **MAKEUP B** (Soft Professional).
+- Одежда: dark minimal (charcoal mock-neck с violet-blue zip-деталью); композиция: бюст
+  (head + full neck + shoulders).
+- Source master с фоном: `prototype/assets/character/master/female-aven-reference.jpg`
+  (не перезаписывать). Прозрачная производная для web:
+  `prototype/assets/character/web/female-aven-transparent.png` (RGBA 741×700).
+- Pipeline прозрачности, QC краёв и preview — `prototype/assets/character/README.md` и
+  `review/3d-character-concepts/final/` (preview A белый / B почти чёрный / C фон Главной
+  light / D dark theme; qc-sheet краёв). Без синей/белой каймы и halo; внешность не
+  регенерировалась — фон удалён у утверждённого изображения.
+
+### 7.2 Статус интеграции
+
+- Preview одобрены владельцем (2026-09-25): «Прозрачную FINAL FEMALE AVEN принимаю».
+- **Интегрировано в UX-прототип (2026-09-25):** hero Главной — слева приветствие,
+  состояние Aven текстом, «Чем помочь?», поле команды + 🎤 + отправить, строка последнего
+  ответа, ближайшее событие; справа Female Aven (transparent asset) без рамки и
+  прямоугольного фона; glow/круги/waveform — CSS; низ бюста растворяется у границы hero.
+  Клик по персонажу — фокус в поле команды, повторный — suggestions. Assistant использует
+  тот же asset в шапке (`.char-bust`). Состояния (idle/listening/thinking/speaking/waiting/
+  success/important) выводятся из существующих подсистем через `js/presence.js`
+  (НЕ второй state engine). Character Off → hero во всю ширину; reduced motion отключает
+  glow/wave. Скриншоты проверки (desktop light/dark, mobile light/dark, speaking, listening,
+  character off): `review/hero-integration/`.
+- Внешность НЕ перегенерировалась; master не изменён; Male/3D/AI не добавлялись.
+- История подборов (этапы 0–3): `review/3d-character-concepts/` (face → hair → color →
+  makeup; все этапы identity-locked от master reference).
+
