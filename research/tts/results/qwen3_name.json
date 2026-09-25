@@ -1,0 +1,274 @@
+{
+  "engine": "qwen3_name",
+  "env": {
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "cores": 4,
+    "ram_gb": 15.6,
+    "gpu": "none",
+    "runner": "GitHub Actions 1000000312",
+    "python": "3.11.16"
+  },
+  "meta": {
+    "license": "Apache-2.0 (code+weights)",
+    "device": "cpu",
+    "dtype": "float32",
+    "engine_dir": "qwen3",
+    "purpose": "мини-прогон способов произношения «Авен» (этап 2.1)",
+    "design_prompt": "A young adult Russian woman, about 27 years old. Calm, friendly and confident voice, warm but not overly emotional. Natural conversational Russian with clear diction, like a helpful personal assistant. Not a news anchor, not childish, not cartoonish.",
+    "hint_prompt": "A young adult Russian woman, about 27 years old. Calm, friendly and confident voice, warm but not overly emotional. Natural conversational Russian with clear diction, like a helpful personal assistant. Not a news anchor, not childish, not cartoonish. Pronounce the assistant's name «Авен» with the stress on the FIRST syllable, as «А-вен» ([ˈa.vʲɪn]); never as «Айвен» (Iven) and never with the stress on the second syllable.",
+    "name_target": "Авен",
+    "phrases": [
+      "n00",
+      "n01",
+      "n02",
+      "n03",
+      "n04",
+      "n05",
+      "n06",
+      "n07",
+      "n10",
+      "n11",
+      "n12",
+      "n13",
+      "n20",
+      "n21",
+      "n22",
+      "n23",
+      "n24",
+      "n25"
+    ]
+  },
+  "voices": {
+    "vd17-design": {
+      "info": {
+        "load_s": 20.27,
+        "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+        "name_run": true,
+        "instruct": "hint"
+      },
+      "phrases": {
+        "n00": {
+          "synth_s": 45.792,
+          "audio_s": 5.2,
+          "rtf": 8.806,
+          "first_call": true,
+          "speech": "Здравствуйте. Я Авен, ваш персональный помощник. Чем могу помочь?",
+          "kind": "reference",
+          "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "f0_median_hz": 235.3
+        },
+        "n01": {
+          "synth_s": 13.001,
+          "audio_s": 1.36,
+          "rtf": 9.56,
+          "first_call": true,
+          "speech": "Авен слушает вас.",
+          "kind": "spelling",
+          "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "f0_median_hz": 303.8
+        },
+        "n02": {
+          "synth_s": 20.278,
+          "audio_s": 2.24,
+          "rtf": 9.053,
+          "first_call": false,
+          "speech": "Авин слушает вас.",
+          "kind": "spelling",
+          "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "f0_median_hz": 258.1
+        },
+        "n03": {
+          "synth_s": 12.423,
+          "audio_s": 1.28,
+          "rtf": 9.705,
+          "first_call": false,
+          "speech": "А-вен слушает вас.",
+          "kind": "spelling",
+          "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "f0_median_hz": 292.7
+        },
+        "n04": {
+          "synth_s": 15.114,
+          "audio_s": 1.6,
+          "rtf": 9.446,
+          "first_call": false,
+          "speech": "Меня зовут Авен.",
+          "kind": "spelling",
+          "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "f0_median_hz": 238.8
+        },
+        "n05": {
+          "synth_s": 20.041,
+          "audio_s": 2.32,
+          "rtf": 8.638,
+          "first_call": false,
+          "speech": "Это Авен. Авен слушает вас.",
+          "kind": "spelling",
+          "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "f0_median_hz": 260.9
+        },
+        "n06": {
+          "synth_s": 12.296,
+          "audio_s": 1.2,
+          "rtf": 10.247,
+          "first_call": true,
+          "speech": "Авен слушает вас.",
+          "kind": "prompt",
+          "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "f0_median_hz": 255.3
+        },
+        "n07": {
+          "synth_s": 41.982,
+          "audio_s": 4.96,
+          "rtf": 8.464,
+          "first_call": false,
+          "speech": "Здравствуйте. Я Авен, ваш персональный помощник. Чем могу помочь?",
+          "kind": "prompt",
+          "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+          "f0_median_hz": 258.1
+        }
+      },
+      "summary": {
+        "median_synth_s": 20.041,
+        "median_rtf": 9.053,
+        "max_synth_s": 41.982
+      }
+    },
+    "base06-clone": {
+      "info": {
+        "model": "Qwen3-TTS-12Hz-0.6B-Base (clone of n00)",
+        "name_run": true,
+        "load_s": 11.74,
+        "clone_prompt_s": 0.39,
+        "ref_clip": "qwen3/vd17-design/n00",
+        "ref_text": "Здравствуйте. Я Авен, ваш персональный помощник. Чем могу помочь?"
+      },
+      "phrases": {
+        "n10": {
+          "synth_s": 14.354,
+          "audio_s": 1.92,
+          "rtf": 7.476,
+          "first_call": true,
+          "speech": "Авен слушает вас.",
+          "kind": "clone06",
+          "model": "Qwen3-TTS-12Hz-0.6B-Base (voice clone of n00)",
+          "f0_median_hz": 196.7
+        },
+        "n11": {
+          "synth_s": 33.427,
+          "audio_s": 5.2,
+          "rtf": 6.428,
+          "first_call": false,
+          "speech": "Здравствуйте. Я Авен, ваш персональный помощник. Чем могу помочь?",
+          "kind": "clone06",
+          "model": "Qwen3-TTS-12Hz-0.6B-Base (voice clone of n00)",
+          "f0_median_hz": 248.7
+        },
+        "n12": {
+          "synth_s": 8.649,
+          "audio_s": 0.88,
+          "rtf": 9.828,
+          "first_call": false,
+          "speech": "Слушаю.",
+          "kind": "clone06",
+          "model": "Qwen3-TTS-12Hz-0.6B-Base (voice clone of n00)",
+          "f0_median_hz": 320.0
+        },
+        "n13": {
+          "synth_s": 10.346,
+          "audio_s": 1.2,
+          "rtf": 8.621,
+          "first_call": false,
+          "speech": "Готово.",
+          "kind": "clone06",
+          "model": "Qwen3-TTS-12Hz-0.6B-Base (voice clone of n00)",
+          "f0_median_hz": 222.2
+        }
+      },
+      "summary": {
+        "median_synth_s": 10.346,
+        "median_rtf": 8.621,
+        "max_synth_s": 33.427
+      }
+    },
+    "base17-clone": {
+      "info": {
+        "model": "Qwen3-TTS-12Hz-1.7B-Base (clone of n00)",
+        "name_run": true,
+        "load_s": 20.73,
+        "clone_prompt_s": 0.44,
+        "ref_clip": "qwen3/vd17-design/n00",
+        "ref_text": "Здравствуйте. Я Авен, ваш персональный помощник. Чем могу помочь?"
+      },
+      "phrases": {
+        "n20": {
+          "synth_s": 18.994,
+          "audio_s": 1.92,
+          "rtf": 9.893,
+          "first_call": true,
+          "speech": "Авен слушает вас.",
+          "kind": "clone17",
+          "model": "Qwen3-TTS-12Hz-1.7B-Base (voice clone of n00)",
+          "f0_median_hz": 240.0
+        },
+        "n21": {
+          "synth_s": 49.809,
+          "audio_s": 5.84,
+          "rtf": 8.529,
+          "first_call": false,
+          "speech": "Здравствуйте. Я Авен, ваш персональный помощник. Чем могу помочь?",
+          "kind": "clone17",
+          "model": "Qwen3-TTS-12Hz-1.7B-Base (voice clone of n00)",
+          "f0_median_hz": 247.4
+        },
+        "n22": {
+          "synth_s": 14.923,
+          "audio_s": 1.36,
+          "rtf": 10.972,
+          "first_call": false,
+          "speech": "Слушаю.",
+          "kind": "clone17",
+          "model": "Qwen3-TTS-12Hz-1.7B-Base (voice clone of n00)",
+          "f0_median_hz": 203.4
+        },
+        "n23": {
+          "synth_s": 12.445,
+          "audio_s": 1.04,
+          "rtf": 11.966,
+          "first_call": false,
+          "speech": "Готово.",
+          "kind": "clone17",
+          "model": "Qwen3-TTS-12Hz-1.7B-Base (voice clone of n00)",
+          "f0_median_hz": 201.7
+        },
+        "n24": {
+          "synth_s": 30.593,
+          "audio_s": 3.44,
+          "rtf": 8.893,
+          "first_call": false,
+          "speech": "Сегодня вы потратили двенадцать тысяч восемьсот пятьдесят рублей.",
+          "kind": "clone17",
+          "model": "Qwen3-TTS-12Hz-1.7B-Base (voice clone of n00)",
+          "f0_median_hz": 218.2
+        },
+        "n25": {
+          "synth_s": 38.094,
+          "audio_s": 4.48,
+          "rtf": 8.503,
+          "first_call": false,
+          "speech": "На пробеге ста двадцати тысячах километров напомню проверить ГРМ.",
+          "kind": "clone17",
+          "model": "Qwen3-TTS-12Hz-1.7B-Base (voice clone of n00)",
+          "f0_median_hz": 228.6
+        }
+      },
+      "summary": {
+        "median_synth_s": 30.593,
+        "median_rtf": 8.893,
+        "max_synth_s": 49.809
+      }
+    }
+  },
+  "errors": [],
+  "total_s": 471.5
+}

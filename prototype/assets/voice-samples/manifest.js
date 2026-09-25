@@ -224,6 +224,10 @@ window.AvenVoiceSamples = {
    "engine": "qwen3",
    "voice": "base06-clone",
    "phrases": [
+    "n10",
+    "n11",
+    "n12",
+    "n13",
     "t01",
     "t02",
     "t03",
@@ -262,7 +266,7 @@ window.AvenVoiceSamples = {
     "runner": "GitHub Actions 1000000241",
     "python": "3.11.16"
    },
-   "asrWer": 0.008,
+   "asrWer": 0.029,
    "phraseSets": {
     "base": [
      "t01",
@@ -277,12 +281,64 @@ window.AvenVoiceSamples = {
      "t10"
     ],
     "extended": [],
-    "name": []
+    "name": [
+     "n10",
+     "n11",
+     "n12",
+     "n13"
+    ]
    },
    "phraseSet": "full",
    "catalogueOnly": false,
    "nameTestOnly": false,
-   "sampleNote": "образцы T1–T10"
+   "sampleNote": "образцы T1–T10 + мини-прогон имени N"
+  },
+  "qwen3/base17-clone": {
+   "engine": "qwen3",
+   "voice": "base17-clone",
+   "phrases": [
+    "n20",
+    "n21",
+    "n22",
+    "n23",
+    "n24",
+    "n25"
+   ],
+   "title": "Qwen3-TTS (0.6B / 1.7B) · base17-clone",
+   "engineTitle": "Qwen3-TTS (0.6B / 1.7B)",
+   "class": "C — крупный нейросетевой, желательно GPU",
+   "license": "Apache-2.0",
+   "commercial": "yes",
+   "status": "shortlist",
+   "f0": null,
+   "summary": null,
+   "probe": null,
+   "loadS": null,
+   "env": {
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "cores": 4,
+    "ram_gb": 15.6,
+    "gpu": "none",
+    "runner": "GitHub Actions 1000000241",
+    "python": "3.11.16"
+   },
+   "asrWer": 0.13,
+   "phraseSets": {
+    "base": [],
+    "extended": [],
+    "name": [
+     "n20",
+     "n21",
+     "n22",
+     "n23",
+     "n24",
+     "n25"
+    ]
+   },
+   "phraseSet": "name",
+   "catalogueOnly": false,
+   "nameTestOnly": true,
+   "sampleNote": "только мини-прогон имени N"
   },
   "qwen3/cv06-ono_anna": {
    "engine": "qwen3",
@@ -490,6 +546,14 @@ window.AvenVoiceSamples = {
    "engine": "qwen3",
    "voice": "vd17-design",
    "phrases": [
+    "n00",
+    "n01",
+    "n02",
+    "n03",
+    "n04",
+    "n05",
+    "n06",
+    "n07",
     "t01",
     "x00",
     "x01",
@@ -531,7 +595,7 @@ window.AvenVoiceSamples = {
     "runner": "GitHub Actions 1000000241",
     "python": "3.11.16"
    },
-   "asrWer": 0.285,
+   "asrWer": 0.265,
    "phraseSets": {
     "base": [
      "t01"
@@ -559,12 +623,21 @@ window.AvenVoiceSamples = {
      "x19",
      "x20"
     ],
-    "name": []
+    "name": [
+     "n00",
+     "n01",
+     "n02",
+     "n03",
+     "n04",
+     "n05",
+     "n06",
+     "n07"
+    ]
    },
    "phraseSet": "extended",
    "catalogueOnly": false,
    "nameTestOnly": false,
-   "sampleNote": "T1 + расширенный набор X"
+   "sampleNote": "T1 + расширенный набор X + мини-прогон имени N"
   },
   "rhvoice/dasha-rus": {
    "engine": "rhvoice",
@@ -2326,7 +2399,7 @@ window.AvenVoiceSamples = {
    },
    "x19": {
     "hyp": "Айф, слушает вас.",
-    "wer": 0.5,
+    "wer": 0.333,
     "lwer": 0.214,
     "name": {
      "letters": "айф",
@@ -2346,14 +2419,14 @@ window.AvenVoiceSamples = {
    }
   },
   "env": {
-   "cpu": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
+   "cpu": "AMD EPYC 7763 64-Core Processor",
    "cores": 4,
    "ram_gb": 15.6,
    "gpu": "none",
-   "runner": "GitHub Actions 1000000289",
+   "runner": "GitHub Actions 1000000241",
    "python": "3.11.16"
   },
-  "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+  "model": "1.7B-VoiceDesign"
  },
  "name": {
   "engine": "qwen3",
@@ -2387,10 +2460,518 @@ window.AvenVoiceSamples = {
     "note": "Официально рекомендуемый разработчиком пайплайн «VoiceDesign → Base clone»: та же размерность 1.7B, что у фаворита, но голос берётся из эталонного клипа и не пересоздаётся на каждый вызов."
    }
   ],
-  "phrases": {},
-  "metrics": {},
-  "asr": {},
-  "env": null,
+  "phrases": {
+   "n00": {
+    "text": "Здравствуйте. Я Aven, ваш персональный помощник. Чем могу помочь?",
+    "speech": "Здравствуйте. Я Авен, ваш персональный помощник. Чем могу помочь?",
+    "target": "Здравствуйте. Я Авен, ваш персональный помощник. Чем могу помочь?",
+    "kind": "reference",
+    "voice": "vd17-design",
+    "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+    "instruct": "",
+    "note": "Эталонный клип (первый вызов после загрузки модели, seed 0) — из него создаётся voice_clone_prompt для клонов n10–n13 и n20–n25. В этапе 1 такой же клип (t01) Whisper расслышал как «Я Аван»."
+   },
+   "n01": {
+    "text": "Aven слушает вас.",
+    "speech": "Авен слушает вас.",
+    "target": "Авен слушает вас.",
+    "kind": "spelling",
+    "voice": "vd17-design",
+    "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+    "instruct": "",
+    "note": "Контроль: текущий словарь произношения (Aven → Авен), тот же текст, что у x18 этапа 2, но в этом же прогоне — чтобы сравнивать варианты между собой в одинаковых условиях."
+   },
+   "n02": {
+    "text": "Aven слушает вас.",
+    "speech": "Авин слушает вас.",
+    "target": "Авен слушает вас.",
+    "kind": "spelling",
+    "voice": "vd17-design",
+    "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+    "instruct": "",
+    "note": "Фонетическая запись целевого звука: «Авен» с ударением на первый слог в русской речи звучит как [ˈavʲɪn], то есть на письме «Авин». Если модель читает «Авин» как [ˈavʲɪn] — это самый простой рабочий способ без смены голоса."
+   },
+   "n03": {
+    "text": "Aven слушает вас.",
+    "speech": "А-вен слушает вас.",
+    "target": "Авен слушает вас.",
+    "kind": "spelling",
+    "voice": "vd17-design",
+    "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+    "instruct": "",
+    "note": "Дефис: подсказка модели разделить слоги «а-бен», а не читать слово как «А вен» (на это жаловался ASR в x18)."
+   },
+   "n04": {
+    "text": "Меня зовут Aven.",
+    "speech": "Меня зовут Авен.",
+    "target": "Меня зовут Авен.",
+    "kind": "spelling",
+    "voice": "vd17-design",
+    "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+    "instruct": "",
+    "note": "Другой контекст: в представлении «меня зовут …» модели обычно проще поставить правильное ударение, чем в начале реплики."
+   },
+   "n05": {
+    "text": "Это Aven. Aven слушает вас.",
+    "speech": "Это Авен. Авен слушает вас.",
+    "target": "Это Авен. Авен слушает вас.",
+    "kind": "spelling",
+    "voice": "vd17-design",
+    "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+    "instruct": "",
+    "note": "Прайминг повтором: имя произносится дважды, второе вхождение может «подтянуться» к первому. Ожидаемые буквы имени — оба вхождения."
+   },
+   "n06": {
+    "text": "Aven слушает вас.",
+    "speech": "Авен слушает вас.",
+    "target": "Авен слушает вас.",
+    "kind": "prompt",
+    "voice": "vd17-design",
+    "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+    "instruct": "hint",
+    "note": "Способ 2: к DESIGN_PROMPT добавлена явная подсказка о произношении имени. Внимание: промпт описания голоса влияет и на тембр — вариант нельзя просто подставить вместо ★5-эталона, его нужно переслушать."
+   },
+   "n07": {
+    "text": "Здравствуйте. Я Aven, ваш персональный помощник. Чем могу помочь?",
+    "speech": "Здравствуйте. Я Авен, ваш персональный помощник. Чем могу помочь?",
+    "target": "Здравствуйте. Я Авен, ваш персональный помощник. Чем могу помочь?",
+    "kind": "prompt",
+    "voice": "vd17-design",
+    "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+    "instruct": "hint",
+    "note": "Та же подсказка в промпте, но на длинной фразе (текст T1) — проверяем, держится ли исправление вне короткой реплики и не поехал ли тембр."
+   },
+   "n10": {
+    "text": "Aven слушает вас.",
+    "speech": "Авен слушает вас.",
+    "target": "Авен слушает вас.",
+    "kind": "clone06",
+    "voice": "base06-clone",
+    "model": "Qwen3-TTS-12Hz-0.6B-Base (voice clone of n00)",
+    "instruct": "",
+    "note": "Клон 0.6B-Base по эталону n00 (create_voice_clone_prompt). В этапе 1 у этого голоса на T1 Whisper услышал ровно «Я Авен»."
+   },
+   "n11": {
+    "text": "Здравствуйте. Я Aven, ваш персональный помощник. Чем могу помочь?",
+    "speech": "Здравствуйте. Я Авен, ваш персональный помощник. Чем могу помочь?",
+    "target": "Здравствуйте. Я Авен, ваш персональный помощник. Чем могу помочь?",
+    "kind": "clone06",
+    "voice": "base06-clone",
+    "model": "Qwen3-TTS-12Hz-0.6B-Base (voice clone of n00)",
+    "instruct": "",
+    "note": "Тот же клон, текст T1 — прямое сравнение с опубликованным qwen3/base06-clone/t01 (другой вызов: проверяем повторяемость, а не один удачный клип)."
+   },
+   "n12": {
+    "text": "Слушаю.",
+    "speech": "Слушаю.",
+    "target": "Слушаю.",
+    "kind": "clone06",
+    "voice": "base06-clone",
+    "model": "Qwen3-TTS-12Hz-0.6B-Base (voice clone of n00)",
+    "instruct": "",
+    "note": "Сверхкороткая реплика: у VoiceDesign x03 «Слушаю.» ASR не узнал вовсе («А, слушай!»). Проверяем, лучше ли она у клона."
+   },
+   "n13": {
+    "text": "Готово.",
+    "speech": "Готово.",
+    "target": "Готово.",
+    "kind": "clone06",
+    "voice": "base06-clone",
+    "model": "Qwen3-TTS-12Hz-0.6B-Base (voice clone of n00)",
+    "instruct": "",
+    "note": "Вторая сверхкороткая реплика (у VoiceDesign x02 распозналась без ошибок) — контроль качества коротких ответов клона."
+   },
+   "n20": {
+    "text": "Aven слушает вас.",
+    "speech": "Авен слушает вас.",
+    "target": "Авен слушает вас.",
+    "kind": "clone17",
+    "voice": "base17-clone",
+    "model": "Qwen3-TTS-12Hz-1.7B-Base (voice clone of n00)",
+    "instruct": "",
+    "note": "Клон 1.7B-Base по тому же эталону n00 — официально рекомендуемый разработчиком пайплайн «спроектировать голос один раз, дальше генерировать клоном». Та же размерность (1.7B), что у фаворита владельца."
+   },
+   "n21": {
+    "text": "Здравствуйте. Я Aven, ваш персональный помощник. Чем могу помочь?",
+    "speech": "Здравствуйте. Я Авен, ваш персональный помощник. Чем могу помочь?",
+    "target": "Здравствуйте. Я Авен, ваш персональный помощник. Чем могу помочь?",
+    "kind": "clone17",
+    "voice": "base17-clone",
+    "model": "Qwen3-TTS-12Hz-1.7B-Base (voice clone of n00)",
+    "instruct": "",
+    "note": "Текст T1 клоном 1.7B: сравнивается с n00 (тот же текст, но сам VoiceDesign) и с n11 (0.6B)."
+   },
+   "n22": {
+    "text": "Слушаю.",
+    "speech": "Слушаю.",
+    "target": "Слушаю.",
+    "kind": "clone17",
+    "voice": "base17-clone",
+    "model": "Qwen3-TTS-12Hz-1.7B-Base (voice clone of n00)",
+    "instruct": "",
+    "note": "Сверхкороткая реплика у клона 1.7B (сравнить с x03 VoiceDesign и n12 клона 0.6B)."
+   },
+   "n23": {
+    "text": "Готово.",
+    "speech": "Готово.",
+    "target": "Готово.",
+    "kind": "clone17",
+    "voice": "base17-clone",
+    "model": "Qwen3-TTS-12Hz-1.7B-Base (voice clone of n00)",
+    "instruct": "",
+    "note": "Короткий ответ у клона 1.7B (сравнить с x02 VoiceDesign — 0% WER — и n13)."
+   },
+   "n24": {
+    "text": "Сегодня вы потратили 12 850 рублей.",
+    "speech": "Сегодня вы потратили двенадцать тысяч восемьсот пятьдесят рублей.",
+    "target": "Сегодня вы потратили двенадцать тысяч восемьсот пятьдесят рублей.",
+    "kind": "clone17",
+    "voice": "base17-clone",
+    "model": "Qwen3-TTS-12Hz-1.7B-Base (voice clone of n00)",
+    "instruct": "",
+    "note": "Числа у клона 1.7B: тот же текст, что x07 (у VoiceDesign — 0% WER). Клон не должен терять разборчивость чисел."
+   },
+   "n25": {
+    "text": "На пробеге 120 000 километров напомню проверить ГРМ.",
+    "speech": "На пробеге ста двадцати тысячах километров напомню проверить ГРМ.",
+    "target": "На пробеге ста двадцати тысячах километров напомню проверить ГРМ.",
+    "kind": "clone17",
+    "voice": "base17-clone",
+    "model": "Qwen3-TTS-12Hz-1.7B-Base (voice clone of n00)",
+    "instruct": "",
+    "note": "Аббревиатура и косвенный падеж числительного у клона 1.7B (тот же текст, что x13)."
+   }
+  },
+  "metrics": {
+   "n00": {
+    "voice": "vd17-design",
+    "synth_s": 45.792,
+    "audio_s": 5.2,
+    "rtf": 8.806,
+    "first_call": true,
+    "f0_median_hz": 235.3
+   },
+   "n01": {
+    "voice": "vd17-design",
+    "synth_s": 13.001,
+    "audio_s": 1.36,
+    "rtf": 9.56,
+    "first_call": true,
+    "f0_median_hz": 303.8
+   },
+   "n02": {
+    "voice": "vd17-design",
+    "synth_s": 20.278,
+    "audio_s": 2.24,
+    "rtf": 9.053,
+    "first_call": false,
+    "f0_median_hz": 258.1
+   },
+   "n03": {
+    "voice": "vd17-design",
+    "synth_s": 12.423,
+    "audio_s": 1.28,
+    "rtf": 9.705,
+    "first_call": false,
+    "f0_median_hz": 292.7
+   },
+   "n04": {
+    "voice": "vd17-design",
+    "synth_s": 15.114,
+    "audio_s": 1.6,
+    "rtf": 9.446,
+    "first_call": false,
+    "f0_median_hz": 238.8
+   },
+   "n05": {
+    "voice": "vd17-design",
+    "synth_s": 20.041,
+    "audio_s": 2.32,
+    "rtf": 8.638,
+    "first_call": false,
+    "f0_median_hz": 260.9
+   },
+   "n06": {
+    "voice": "vd17-design",
+    "synth_s": 12.296,
+    "audio_s": 1.2,
+    "rtf": 10.247,
+    "first_call": true,
+    "f0_median_hz": 255.3
+   },
+   "n07": {
+    "voice": "vd17-design",
+    "synth_s": 41.982,
+    "audio_s": 4.96,
+    "rtf": 8.464,
+    "first_call": false,
+    "f0_median_hz": 258.1
+   },
+   "n10": {
+    "voice": "base06-clone",
+    "synth_s": 14.354,
+    "audio_s": 1.92,
+    "rtf": 7.476,
+    "first_call": true,
+    "f0_median_hz": 196.7
+   },
+   "n11": {
+    "voice": "base06-clone",
+    "synth_s": 33.427,
+    "audio_s": 5.2,
+    "rtf": 6.428,
+    "first_call": false,
+    "f0_median_hz": 248.7
+   },
+   "n12": {
+    "voice": "base06-clone",
+    "synth_s": 8.649,
+    "audio_s": 0.88,
+    "rtf": 9.828,
+    "first_call": false,
+    "f0_median_hz": 320.0
+   },
+   "n13": {
+    "voice": "base06-clone",
+    "synth_s": 10.346,
+    "audio_s": 1.2,
+    "rtf": 8.621,
+    "first_call": false,
+    "f0_median_hz": 222.2
+   },
+   "n20": {
+    "voice": "base17-clone",
+    "synth_s": 18.994,
+    "audio_s": 1.92,
+    "rtf": 9.893,
+    "first_call": true,
+    "f0_median_hz": 240.0
+   },
+   "n21": {
+    "voice": "base17-clone",
+    "synth_s": 49.809,
+    "audio_s": 5.84,
+    "rtf": 8.529,
+    "first_call": false,
+    "f0_median_hz": 247.4
+   },
+   "n22": {
+    "voice": "base17-clone",
+    "synth_s": 14.923,
+    "audio_s": 1.36,
+    "rtf": 10.972,
+    "first_call": false,
+    "f0_median_hz": 203.4
+   },
+   "n23": {
+    "voice": "base17-clone",
+    "synth_s": 12.445,
+    "audio_s": 1.04,
+    "rtf": 11.966,
+    "first_call": false,
+    "f0_median_hz": 201.7
+   },
+   "n24": {
+    "voice": "base17-clone",
+    "synth_s": 30.593,
+    "audio_s": 3.44,
+    "rtf": 8.893,
+    "first_call": false,
+    "f0_median_hz": 218.2
+   },
+   "n25": {
+    "voice": "base17-clone",
+    "synth_s": 38.094,
+    "audio_s": 4.48,
+    "rtf": 8.503,
+    "first_call": false,
+    "f0_median_hz": 228.6
+   }
+  },
+  "asr": {
+   "n00": {
+    "hyp": "Здравствуйте! Я Вен. Ваш персональный помощник. Чем могу помочь?",
+    "wer": 0.111,
+    "twer": 0.111,
+    "lwer": 0.019,
+    "name": {
+     "letters": "вен",
+     "target": "авен",
+     "lwer": 0.25
+    }
+   },
+   "n01": {
+    "hyp": "А вен слушает вас.",
+    "wer": 0.667,
+    "twer": 0.667,
+    "lwer": 0.0,
+    "name": {
+     "letters": "авен",
+     "target": "авен",
+     "lwer": 0.0
+    }
+   },
+   "n02": {
+    "hyp": "Арин слушает вас.",
+    "wer": 0.333,
+    "twer": 0.333,
+    "lwer": 0.143,
+    "name": {
+     "letters": "арин",
+     "target": "авен",
+     "lwer": 0.5
+    }
+   },
+   "n03": {
+    "hyp": "А вен слушает вас.",
+    "wer": 0.0,
+    "twer": 0.667,
+    "lwer": 0.0,
+    "name": {
+     "letters": "авен",
+     "target": "авен",
+     "lwer": 0.0
+    }
+   },
+   "n04": {
+    "hyp": "Меня зовут Авен.",
+    "wer": 0.0,
+    "twer": 0.0,
+    "lwer": 0.0,
+    "name": {
+     "letters": "авен",
+     "target": "авен",
+     "lwer": 0.0
+    }
+   },
+   "n05": {
+    "hyp": "Это Авин. Авин слушает вас.",
+    "wer": 0.4,
+    "twer": 0.4,
+    "lwer": 0.095,
+    "name": {
+     "letters": "авинавин",
+     "target": "авенавен",
+     "lwer": 0.25
+    }
+   },
+   "n06": {
+    "hyp": "Афин слушает вас.",
+    "wer": 0.333,
+    "twer": 0.333,
+    "lwer": 0.143,
+    "name": {
+     "letters": "афин",
+     "target": "авен",
+     "lwer": 0.5
+    }
+   },
+   "n07": {
+    "hyp": "Здравствуйте! Я Авен, ваш персональный помощник. Чем могу помочь?",
+    "wer": 0.0,
+    "twer": 0.0,
+    "lwer": 0.0,
+    "name": {
+     "letters": "авен",
+     "target": "авен",
+     "lwer": 0.0
+    }
+   },
+   "n10": {
+    "hyp": "Авин слушает вас.",
+    "wer": 0.333,
+    "twer": 0.333,
+    "lwer": 0.071,
+    "name": {
+     "letters": "авин",
+     "target": "авен",
+     "lwer": 0.25
+    }
+   },
+   "n11": {
+    "hyp": "Здравствуйте, я Авен. Ваш персональный помощник. Чем могу помочь?",
+    "wer": 0.0,
+    "twer": 0.0,
+    "lwer": 0.0,
+    "name": {
+     "letters": "авен",
+     "target": "авен",
+     "lwer": 0.0
+    }
+   },
+   "n12": {
+    "hyp": "Слушаю.",
+    "wer": 0.0,
+    "twer": 0.0,
+    "lwer": 0.0,
+    "name": null
+   },
+   "n13": {
+    "hyp": "Готово!",
+    "wer": 0.0,
+    "twer": 0.0,
+    "lwer": 0.0,
+    "name": null
+   },
+   "n20": {
+    "hyp": "Авент слушает вас.",
+    "wer": 0.333,
+    "twer": 0.333,
+    "lwer": 0.071,
+    "name": {
+     "letters": "авент",
+     "target": "авен",
+     "lwer": 0.25
+    }
+   },
+   "n21": {
+    "hyp": "Здравствуйте! Я Овен, ваш персональный помощник. Чем могу помочь?",
+    "wer": 0.111,
+    "twer": 0.111,
+    "lwer": 0.019,
+    "name": {
+     "letters": "овен",
+     "target": "авен",
+     "lwer": 0.25
+    }
+   },
+   "n22": {
+    "hyp": "Слушаю.",
+    "wer": 0.0,
+    "twer": 0.0,
+    "lwer": 0.0,
+    "name": null
+   },
+   "n23": {
+    "hyp": "Готово!",
+    "wer": 0.0,
+    "twer": 0.0,
+    "lwer": 0.0,
+    "name": null
+   },
+   "n24": {
+    "hyp": "Сегодня вы потратили 12 850 рублей.",
+    "wer": 0.0,
+    "twer": 0.0,
+    "lwer": 0.0,
+    "name": null
+   },
+   "n25": {
+    "hyp": "На пробеге 120 тысяч километров напомню проверить ГРМ.",
+    "wer": 0.333,
+    "twer": 0.333,
+    "lwer": 0.071,
+    "name": null
+   }
+  },
+  "env": {
+   "cpu": "AMD EPYC 7763 64-Core Processor",
+   "cores": 4,
+   "ram_gb": 15.6,
+   "gpu": "none",
+   "runner": "GitHub Actions 1000000312",
+   "python": "3.11.16"
+  },
   "namePronunciation": {
    "chatterbox/clone-silero-karina": {
     "mean_name_lwer": 0.25,
@@ -2413,9 +2994,14 @@ window.AvenVoiceSamples = {
     "exact": 0
    },
    "qwen3/base06-clone": {
-    "mean_name_lwer": 0.0,
-    "n": 1,
-    "exact": 1
+    "mean_name_lwer": 0.083,
+    "n": 3,
+    "exact": 2
+   },
+   "qwen3/base17-clone": {
+    "mean_name_lwer": 0.25,
+    "n": 2,
+    "exact": 0
    },
    "qwen3/cv06-ono_anna": {
     "mean_name_lwer": 0.25,
@@ -2438,9 +3024,9 @@ window.AvenVoiceSamples = {
     "exact": 0
    },
    "qwen3/vd17-design": {
-    "mean_name_lwer": 0.292,
-    "n": 6,
-    "exact": 1
+    "mean_name_lwer": 0.232,
+    "n": 14,
+    "exact": 5
    },
    "rhvoice/anna": {
     "mean_name_lwer": 0.25,
