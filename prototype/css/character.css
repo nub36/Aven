@@ -1,0 +1,101 @@
+/* Aven — Visual Prototype. Персонаж (Female/Male) и голосовой UX: опциональный Presentation Layer.
+   Только для UX/продуктового проектирования. Не production. */
+
+/* ---------- аватар персонажа (изображение) ---------- */
+.char-img {
+  border-radius: 50%;
+  object-fit: cover;
+  background: linear-gradient(135deg, #6a5df0, #4a7cf0);
+  box-shadow: 0 2px 10px rgba(90, 95, 216, .25);
+  display: inline-block;
+  flex: 0 0 auto;
+}
+.char-img.s24 { width: 26px; height: 26px; }
+.char-img.s32 { width: 34px; height: 34px; }
+.char-img.s52 { width: 56px; height: 56px; }
+
+/* ---------- плавающий Aven ---------- */
+.aven-float {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+body.assistant-mode .aven-float { display: none; }
+
+.float-btn {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  border: none; cursor: pointer;
+  padding: 0;
+  position: relative;
+  transition: transform .2s ease;
+}
+.float-btn img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.float-btn img.char-img, .float-btn .logo-mark { width: 100%; height: 100%; border-radius: 50%; font-size: 1.4rem; }
+.float-btn:hover { transform: translateY(-2px) scale(1.03); }
+.float-btn .float-dot {
+  position: absolute; right: 2px; bottom: 2px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--ok);
+  border: 2px solid var(--panel);
+}
+.float-btn.listen .float-dot { background: var(--danger); animation: aven-pulse 1s infinite; }
+@keyframes aven-pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.25); opacity: .7; } }
+
+/* мягкое «парение» персонажа; отключается reduce-motion */
+.float-btn { animation: aven-bob 4s ease-in-out infinite; }
+html.reduce-motion .float-btn { animation: none; }
+@keyframes aven-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.float-btn:hover { animation-play-state: paused; }
+
+/* пузырь-приветствие и popover */
+.float-pop {
+  width: 300px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg);
+  padding: 16px;
+  animation: aven-pop .18s ease;
+}
+@keyframes aven-pop { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.float-pop .fp-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.float-pop .fp-name { font-weight: 700; font-size: 1.02rem; }
+.float-pop .fp-tag { color: var(--muted); font-size: .82rem; }
+.float-pop .fp-body { color: var(--text); font-size: .9rem; line-height: 1.5; }
+.float-pop .fp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.float-pop .fp-status { margin-top: 10px; color: var(--muted); font-size: .76rem; display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- ассистент: персонаж в шапке и сообщениях ---------- */
+.assistant .a-logo .char-wrap { position: relative; display: inline-block; }
+.assistant .a-logo .char-name { color: var(--accent); font-size: .85rem; font-weight: 600; margin-top: 6px; }
+
+.msg.aven .msg-row { display: flex; align-items: flex-end; gap: 10px; }
+.msg .bubble-avatar { flex: 0 0 auto; }
+
+/* демо-команды (state machine) */
+.demo-cmds { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; padding: 4px 0; }
+.demo-cmds .dc-label { width: 100%; text-align: center; color: var(--muted); font-size: .74rem; letter-spacing: .4px; text-transform: uppercase; }
+
+/* индикатор прослушивания в чате */
+.stt-status {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 999px; padding: 6px 14px;
+  color: var(--muted); font-size: .85rem;
+  box-shadow: var(--shadow);
+}
+.stt-status .rec { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); animation: aven-pulse 1s infinite; }
+html.reduce-motion .stt-status .rec { animation: none; }
+
+@media (max-width: 860px) {
+  .aven-float { right: 14px; bottom: 14px; }
+  .float-btn { width: 56px; height: 56px; }
+  .float-pop { width: calc(100vw - 40px); max-width: 320px; }
+}

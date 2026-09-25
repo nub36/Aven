@@ -83,6 +83,7 @@
     document.getElementById('theme-btn').textContent = S.s().settings.theme === 'dark' ? '☀️' : '🌙';
     document.body.classList.toggle('assistant-mode', cur === 'assistant');
     if (out.mount) { try { out.mount(main); } catch (e) { console.error(e); } }
+    if (window.AvenChar) { try { window.AvenChar.mountFloat(); } catch (e) { console.error(e); } }
     window.scrollTo(0, 0);
   };
 
@@ -138,4 +139,5 @@
   A.applyEnv();
   if (!location.hash) location.hash = '#/home';
   A.render();
+  if (window.AvenChar) window.AvenChar.showGreeting();
 })();
