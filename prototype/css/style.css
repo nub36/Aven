@@ -306,6 +306,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: .92rem; }
 .aven-state[data-state="listening"] { color: var(--ok); }
 .aven-state[data-state="thinking"] { color: var(--accent); }
 .aven-state[data-state="speaking"] { color: var(--accent); }
+.aven-state[data-state="preparing"] { color: var(--accent); animation: aven-prep 1.2s ease-in-out infinite; }
+@keyframes aven-prep { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+html.reduce-motion .aven-state[data-state="preparing"] { animation: none; }
 .aven-state[data-state="waiting"] { color: var(--warn); }
 .aven-state[data-state="success"] { color: var(--ok); }
 .aven-state[data-state="important"] { color: var(--danger); }
@@ -583,3 +586,13 @@ html[data-theme="dark"] .cal-ev { color: var(--accent-strong); }
   .cols-2, .cols-3, .home-grid, .shop-grid, .tools-grid, .cols-4 { grid-template-columns: 1fr; }
   .content { padding: 16px; }
 }
+
+/* ---- Голос: движок речи / приватность / нормализация (TTS research, эксперимент) ---- */
+.tts-note { font-size: .82rem; color: var(--muted); padding: 8px 4px; line-height: 1.45; }
+.tts-note b { color: var(--text); }
+.tts-priv { display: flex; gap: 8px; align-items: flex-start; font-size: .84rem; padding: 10px 12px; border-radius: 10px; background: var(--surface-2, rgba(127,127,127,.08)); margin: 6px 0; }
+.tts-priv.warn { background: rgba(230, 160, 0, .12); }
+.tts-norm { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem; white-space: pre-wrap; color: var(--muted); margin-top: 6px; }
+.pill.lic-yes { background: rgba(40, 170, 90, .15); color: var(--ok); }
+.pill.lic-unclear { background: rgba(230, 160, 0, .15); color: var(--warn); }
+.pill.lic-no { background: rgba(220, 60, 60, .13); color: var(--danger); }

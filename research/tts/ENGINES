@@ -1,0 +1,3 @@
+# Движки по умолчанию для РУЧНОГО запуска workflow TTS Research (через запятую).
+# Поле engines в Run workflow переопределяет этот список.
+piper,silero,vosk,supertonic,qwen3,chatterbox,espeak

@@ -6,6 +6,79 @@
 
 ---
 
+## 2026-09-25 — XIV. PR #4: очистка TTS-образцов (вариант Б), workflow только вручную
+
+- **Дата:** 2026-09-25
+- **Задача:** по решению владельца (вариант Б) убрать из PR #4 лишние исследовательские MP3, сохранить удобный voice-lab, документацию и воспроизводимость; убрать автозапуск workflow; не выбирать голос/архитектуру.
+
+### Что конкретно сделано
+
+- Синхронизация с remote: локальная ветка переведена на `313531a` (bot-коммит run 36168134501 с обновлёнными образцами/метриками Chatterbox — сохранён).
+- `research/tts/candidates.json`: новая политика `publish` (что попадает в git); заголовок Chatterbox без «(голос по умолчанию)».
+- `research/tts/collect.py` переписан: метрики/логи всех движков → `results/`; MP3 — только по `publish`; чистка лишних MP3; `manifest.js` строится заново по реально существующим файлам (`phraseSet`: full / key / t01).
+- Удалено 232 MP3: Silero v5_5_ru (NC) 30, Piper Irina 10, Vosk 23, RHVoice Anna/Irina 20, Silero `__nostress` 18, мужские/низкие голоса (каталог T1) 11, `ru_igor` 10, Silero CIS T2/T5/T7–T10 у 17 голосов 102, eSpeak T2/T4–T10 8. Осталось 193 MP3 (≈5,2 МБ).
+- `prototype/voice-lab.html`: основная сетка — голоса с образцом выбранной фразы (+ пометка, сколько скрыто и почему), переключатель eSpeak вместо «NC/неясные».
+- `prototype/js/tts/providers.js`: если сохранённый натуральный голос удалён из набора — берётся первый доступный; `settings.js`: пометка «образцы T1, T3, T4, T6» у Silero.
+- `.github/workflows/tts-research.yml`: удалён триггер `push`, остался `workflow_dispatch`; `git add -A` фиксирует и удаления; `research/tts/ENGINES` — список по умолчанию для ручного запуска.
+- Документы: `docs/TTS_RESEARCH.md` (§2 компактный набор и воспроизводимость, актуальные метрики Chatterbox run 4), `docs/VOICE.md`, `docs/CHANGELOG.md`, `prototype/README.md`, эта запись.
+
+### Что проверено
+
+- `node research/tts/normalize.test.js` — 26/26; `node --check` всех js прототипа; `py_compile` скриптов; YAML workflow разбирается, триггер — только `workflow_dispatch`.
+- `collect.py` с фиктивными WAV запрещённых голосов/фраз — ничего не добавлено; подброшенные лишние MP3 — удалены; манифест не изменился.
+- jsdom: 33 голоса / 193 ссылки в manifest — 0 битых; запрещённых голосов нет ни в voice-lab, ни в настройках (29 натуральных голосов); сохранённый удалённый голос (piper) → подставлен доступный; Silero T4 — образец; Silero T5 — честный fallback на системный голос.
+- Headless Chromium: voice-lab отображается, аудио загружается, ошибок JS нет.
+
+### Известные ограничения
+
+- Удалённые файлы остаются в истории ветки PR; при **squash merge** в историю `main` они не попадут (историю не переписывал).
+- Голос и архитектура не выбраны; merge не выполнялся.
+
+### Что рекомендуется делать следующим
+
+1. Владелец слушает voice-lab, отвечает на вопросы TTS_RESEARCH §9.
+2. Merge PR #4 — решение владельца (рекомендуется squash merge).
+
+---
+
+## 2026-09-25 — XIII. Натуральный женский голос Aven: исследование TTS, этап 1 (research + prototype)
+
+- **Дата:** 2026-09-25
+- **Задача:** «Продолжаем Aven» — заменить роботизированный браузерный голос на естественный русский женский: исследовать бесплатные / self-hosted TTS (классы A–E), проверить лицензии кода и весов, сгенерировать одинаковые фразы T1–T10 для A/B-прослушивания, подготовить прототип (нормализация, TTSProvider, состояния, кэш, приватность, Настройки → Голос, A/B) и ОСТАНОВИТЬСЯ до выбора владельца.
+
+### Что конкретно сделано
+
+- `research/tts/`: `phrases.json` (T1–T10 + «Готово.»), `common.py` (метрики, F0), генераторы `gen_silero.py` (v5_5_ru NC + v5_cis_base MIT + silero-stress), `gen_supertonic.py`, `gen_qwen3.py` (CustomVoice, VoiceDesign → клон Base), `gen_chatterbox.py`, `gen_piper.py`, `gen_vosk.py`, `gen_cli.py` (eSpeak NG, RHVoice); `collect.py` (WAV → MP3 48 кбит/с + manifest), `asr_eval.py` (Whisper small round-trip WER), `candidates.json`, `server.py` (исследовательский self-hosted TTS-сервер), `normalize.test.js`, `ENGINES`.
+- `.github/workflows/tts-research.yml`: генерация на CPU-раннере GitHub (4 vCPU, без GPU), по движку в job, логи/ошибки — в артефакт и аннотации, итог коммитится в ветку (`prototype/assets/voice-samples/`, `research/tts/results/`).
+- RHVoice собран из исходников в песочнице; образцы Elena / Dasha / Anna / Irina.
+- Прототип: `js/tts/normalize.js`, `js/tts/providers.js`, `voice.js` (маршрутизация через AvenTTS, stop, Esc), `presence.js` (`preparing` — «Готовлю речь…»), `settings.js` (новая категория «Голос»), `data.js` (`voice.engine`, `voice.natural`), `index.html`, `style.css`, `voice-lab.html`; `app.js` — select'ы по `change` (раньше срабатывали по клику при открытии).
+- Документация: `docs/TTS_RESEARCH.md` (новый), `docs/VOICE.md` (§9, §10.1), `docs/CHANGELOG.md`, `prototype/README.md`, настоящая запись.
+
+### Что проверено
+
+- Прогоны Actions: run 36160072939 (все движки) и 36162159701 (vosk, chatterbox + ASR) — успешно; образцы и метрики закоммичены ботом.
+- Silero (CIS/v5_5_ru), Piper, RHVoice — 0,2–0,3 с на фразу на 4 vCPU; Supertonic ≈ 2 с; Vosk 1,4–1,7 с; Qwen3 на CPU ≈ 24 с. ASR WER нейросетевых голосов ≈ 1–3%, eSpeak — 94%.
+- `node research/tts/normalize.test.js` — 26/26; `node --check` по изменённым js; `py_compile` по скриптам.
+- jsdom smoke-тест: Настройки → Голос, переключение движка, статус сервера, синтез через self-hosted сервер (RHVoice, ~0,24 с до звука), образец для T1, fallback на системный голос, stop; presence `preparing → speaking → idle`.
+- Headless Chromium (@sparticuz/chromium): скриншоты voice-lab и Настроек → Голос, ошибок в консоли нет.
+
+### Известные проблемы / не сделано
+
+- **Chatterbox:** прогоны 1–2 упали на загрузке CUDA-весов на CPU; после исправления (`map_location=cpu`) run 36164238774 прошёл успешно (≈20 с на фразу на CPU, RTF ≈4,5; WER: default 13%, clone 1%). Результат был получен после переподключения GitHub (токен в песочнице временно истекал); локальные коммиты запушены после rebase на коммит бота.
+- Vosk 0.10 отсутствует в каталоге — использована 0.9 (лицензия весов не ясна → только сравнение).
+- Qwen3 и Chatterbox на GPU не проверялись (GPU нет); streaming в пакете qwen-tts 0.1.1 отсутствует.
+- Натуральность голосов агент оценить не может (не слушает аудио) — только метрики; выбор — владелец.
+- Нормализатор: косвенные падежи числительных не согласуются.
+- ADR не создавался; голос не выбран; production-backend нет.
+
+### Что рекомендуется делать следующим
+
+1. PR открыт/обновлён (merge — только владелец).
+2. Владелец слушает `prototype/voice-lab.html` (слепой режим), ставит ★, отвечает на вопросы TTS_RESEARCH §9 («Авен»/«Эйвен», архитектура сервер/браузер/GPU).
+3. После выбора — этап 2: endpoint выбранного движка и замер на целевом железе.
+
+---
+
 ## 2026-09-25 — XII. Интеграция FINAL Female Aven в hero Главной (UX prototype)
 
 - **Дата:** 2026-09-25

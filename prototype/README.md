@@ -41,6 +41,8 @@ prototype/
 │   └── character/
 │       ├── master/female-aven-reference.jpg — FINAL 2D MASTER (с фоном; не перезаписывать)
 │       └── web/female-aven-transparent.png  — FINAL Female Aven, RGBA (hero, Assistant)
+│   └── voice-samples/  — компактный набор MP3 исследования TTS (193 файла, вариант Б) + manifest.js
+│                         (генерирует research/tts/collect.py по политике candidates.json → publish)
 └── js/
     ├── data.js         — демо-данные (явно тестовые) + settings.character / voice.stt
     ├── state.js        — состояние (JS memory + localStorage, ключ aven-proto-v1)
@@ -48,7 +50,9 @@ prototype/
     ├── character.js    — персонаж: реестр Female/Male, аватар, плавающий Aven (опц. слой)
     ├── presence.js     — отображение состояния Aven (idle/listening/thinking/speaking/
     │                     waiting/success/important): текст + классы glow/wave; НЕ state engine
-    ├── voice.js        — TTS speechSynthesis + экспериментальный STT SpeechRecognition
+    ├── voice.js        — AvenVoice.speak/stop (через AvenTTS) + экспериментальный STT SpeechRecognition
+    ├── tts/normalize.js — нормализация текста ТОЛЬКО для речи (числа, время, даты, деньги, единицы)
+    ├── tts/providers.js — TTSProvider: System (speechSynthesis, fallback) + Natural (эксперимент)
     ├── flows.js        — демо state machine: многошаговая заправка, важное событие
     ├── pages1.js       — Главная (hero с Female Aven), День, Календарь, Задачи, Заметки
     ├── pages2.js       — Финансы, Авто, Покупки, Автоматизации, Assistant (+персонаж/STT)
@@ -58,6 +62,9 @@ prototype/
 ```
 
 Зависимостей нет. Сборка не нужна.
+
+`voice-lab.html` — A/B-сравнение голосов исследования TTS (docs/TTS_RESEARCH.md). Натуральный голос
+для произвольного текста — через исследовательский сервер: `python research/tts/server.py` (см. docstring).
 
 ## Персонаж и голос (опциональный слой, без AI)
 

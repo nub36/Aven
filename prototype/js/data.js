@@ -27,6 +27,8 @@ window.AvenDemo = (function () {
           rate: 1,
           pitch: 1,
           volume: 1,
+          engine: 'system', // 'system' | 'natural' (эксперимент, docs/TTS_RESEARCH.md)
+          natural: { voice: '', serverUrl: '', rate: 1, cache: true },
           stt: { enabled: true, lang: 'ru-RU', interim: true, autoSend: false }
         },
         character: {
