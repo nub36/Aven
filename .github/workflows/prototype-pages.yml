@@ -19,6 +19,9 @@ on:
     branches:
       - main
       - arena/01a0d7ec-aven
+      # Примечание: рабочие ветки сессий НЕ деплоятся на Pages — environment
+      # protection rules разрешают деплой только main (см. WORK_LOG 2026-09-25 VI).
+      # Preview рабочей ветки — локальный статический сервер или sandbox.
     paths:
       - 'prototype/**'
       - '.github/workflows/prototype-pages.yml'

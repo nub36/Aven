@@ -246,8 +246,9 @@
       <div class="a-inner">
         <div class="a-top"><button class="btn" data-action="assistant-exit">← Выйти из Assistant</button></div>
         <div class="a-logo">
-          <div class="logo-mark mark">A</div>
-          <h1>Aven</h1>
+          <div class="char-wrap">${window.AvenChar ? window.AvenChar.avatar('s52') : '<div class="logo-mark mark">A</div>'}</div>
+          <h1>${window.AvenChar && !window.AvenChar.isOff() ? A.esc(window.AvenChar.display()) : 'Aven'}</h1>
+          ${window.AvenChar && !window.AvenChar.isOff() ? `<div class="char-name">${A.esc(window.AvenChar.current().label)} · персонаж-оформление</div>` : ''}
           <p>Что сделать?</p>
         </div>
         <div class="chat" id="chat"></div>
@@ -257,12 +258,18 @@
           <button class="btn small" data-action="sugg" data-q="Моя машина">Моя машина</button>
           <button class="btn small" data-action="sugg" data-q="Создать напоминание">Создать напоминание</button>
         </div>
+        <div class="demo-cmds">
+          <span class="dc-label">Демо-команды (state machine, без AI)</span>
+          ${window.AvenFlows ? window.AvenFlows.listCommands().map((c) => `<button class="btn small" data-action="flow-start" data-id="${c.id}">⚡ ${A.esc(c.command)}</button>`).join('') : ''}
+          <button class="btn small" data-action="sugg" data-q="Отмена">Отмена</button>
+          <button class="btn small" data-action="sugg" data-q="Помощь">Помощь</button>
+        </div>
         <div class="a-input">
-          <button class="icon-btn" data-action="mic-demo" title="Голосовой ввод">🎤</button>
+          <button class="icon-btn" data-action="mic-stt" title="Голосовой ввод (экспериментально)">🎤</button>
           <input type="text" id="chat-input" placeholder="Напишите команду… (демо)">
           <button class="btn primary" data-action="chat-send" title="Отправить">→</button>
         </div>
-        <div class="s" style="color:var(--muted);font-size:.78rem;text-align:center;padding:8px 0 14px">Assistant не заменяет обычные страницы сайта · прототип</div>
+        <div class="s" style="color:var(--muted);font-size:.78rem;text-align:center;padding:8px 0 14px">Assistant не заменяет обычные страницы сайта · прототип · персонаж и голос — опциональный слой</div>
       </div>
     </div>`;
     return { html, mount: renderChat };
@@ -271,11 +278,13 @@
   function renderChat() {
     const box = document.getElementById('chat');
     if (!box) return;
+    const ava = window.AvenChar && !window.AvenChar.isOff() ? window.AvenChar.avatar('s24') : '';
     box.innerHTML = A._chat.map((m, i) => {
       if (m.who === 'user') return `<div class="msg user">${A.esc(m.text)}</div>`;
-      return `<div class="msg aven">${A.esc(m.text)}<br>
-        <button class="speak" data-action="chat-speak" data-i="${i}">🔊 Озвучить</button></div>`;
-    }).join('');
+      const body = `<div>${A.esc(m.text)}</div>
+        <button class="speak" data-action="chat-speak" data-i="${i}">🔊 Озвучить</button>`;
+      return `<div class="msg aven"><div class="msg-row">${ava ? `<span class="bubble-avatar">${ava}</span>` : ''}<div style="flex:1">${body}</div></div></div>`;
+    }).join('') + (A._stt && A._stt.active ? `<div class="stt-status"><span class="rec"></span>Слушаю… (экспериментальный STT)</div>` : '');
     box.scrollTop = box.scrollHeight;
   }
 
@@ -287,44 +296,56 @@
     return window.AvenDemo.staticData.assistantDefault;
   }
 
+  function pushAven(text, speak) {
+    A._chat.push({ who: 'aven', text: text });
+    renderChat();
+    if (speak && s().settings.voice.alwaysVoice) A.speak(text, null);
+  }
+
+  function helpText() {
+    const cmds = window.AvenFlows ? window.AvenFlows.listCommands().map((c) => '«' + c.command + '»').join(', ') : '';
+    return 'Демо-команды (без AI): ' + cmds + '. Также работают подсказки выше. Скажите «Отмена», чтобы прервать сценарий.';
+  }
+
+  /* демо-роутинг: многошаговые сценарии + простые команды; fallback — статичные ответы */
+  function routeCommand(t) {
+    const tn = t.toLowerCase();
+    if (/(отмен|cancel|стоп|stop)/.test(tn)) {
+      if (window.AvenFlows) window.AvenFlows.cancel();
+      return window.AvenChar ? window.AvenChar.phrase('cancel') : 'Отменено.';
+    }
+    if (/заправ|залил|бензин|топлив/.test(tn)) {
+      const r = window.AvenFlows.start('fuel');
+      return 'Начинаю демо-сценарий «Заправка» (многошагово). ' + r.question;
+    }
+    if (/(важн|событ)/.test(tn)) {
+      const r = window.AvenFlows.start('event');
+      return 'Начинаю демо-сценарий «Важное событие». ' + r.question;
+    }
+    if (/(помощь|команды|что ты умеешь)/.test(tn)) return helpText();
+    return replyFor(t);
+  }
+
   A._assistantSend = function (text) {
     const t = (text || '').trim();
     if (!t) return;
     A._chat.push({ who: 'user', text: t });
-    setTimeout(() => {
-      A._chat.push({ who: 'aven', text: replyFor(t) });
-      renderChat();
-    }, 350);
     renderChat();
+    setTimeout(() => {
+      let out;
+      if (window.AvenFlows && window.AvenFlows.isActive()) {
+        const r = window.AvenFlows.advance(t);
+        out = r ? r.text : replyFor(t);
+      } else {
+        out = routeCommand(t);
+      }
+      pushAven(out, true);
+    }, 300);
   };
 
-  /* ---------- озвучивание (browser speechSynthesis, если доступно) ---------- */
+  /* ---------- озвучивание: делегируем browser speechSynthesis (voice.js) ---------- */
   A.speak = function (text, btn) {
-    const voice = s().settings.voice;
-    if (!voice.enabled) { A.toast('Голосовые ответы выключены в настройках (демо)'); return; }
-    const synth = window.speechSynthesis;
-    if (!synth || !synth.speak) { A.ttsToast(); pulse(btn); return; }
-    try {
-      synth.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'ru-RU';
-      u.rate = voice.rate;
-      u.pitch = voice.pitch;
-      u.volume = voice.volume;
-      const voices = synth.getVoices() || [];
-      const chosen = voices.find((v) => v.voiceURI === voice.voiceURI) || voices.find((v) => (v.lang || '').toLowerCase().startsWith('ru'));
-      if (chosen) u.voice = chosen;
-      if (btn) { btn.classList.add('playing'); u.onend = () => btn.classList.remove('playing'); u.onerror = () => btn.classList.remove('playing'); }
-      synth.speak(u);
-    } catch (e) {
-      A.ttsToast();
-      pulse(btn);
-    }
-    function pulse(b) {
-      if (!b) return;
-      b.classList.add('playing');
-      setTimeout(() => b.classList.remove('playing'), 900);
-    }
+    return window.AvenVoice ? window.AvenVoice.speak(text, btn) : false;
   };
 
   /* ================= действия ================= */
@@ -452,6 +473,34 @@
       });
     },
     'auto-tpl': (el) => A.toast('Шаблон «' + el.dataset.name + '» — демо. Состав решается отдельно (открытый вопрос №30).'),
+
+    'flow-start': (el) => {
+      const r = window.AvenFlows.start(el.dataset.id);
+      if (r) { A._chat.push({ who: 'aven', text: 'Начинаю демо-сценарий «' + r.flow.title + '». ' + r.question }); renderChat(); }
+    },
+
+    'mic-stt': () => {
+      if (!window.AvenVoice || !window.AvenVoice.support.stt) {
+        A.toast('Голосовой ввод недоступен в этом браузере — используйте текст (экспериментально)');
+        return;
+      }
+      if (A._stt && A._stt.active) { A._stt.stop(); A._stt = null; renderChat(); return; }
+      const inp = document.getElementById('chat-input');
+      A._stt = window.AvenVoice.createRecognizer({
+        onStart: () => { if (inp) inp.placeholder = 'Слушаю… (экспериментальный STT)'; renderChat(); },
+        onInterim: (t) => { if (inp) inp.value = t; },
+        onFinal: (t) => { if (inp) inp.value = t; if (s().settings.voice.stt && s().settings.voice.stt.autoSend) { A._assistantSend(t); inp.value = ''; } },
+        onEnd: () => { A._stt = null; if (inp) inp.placeholder = 'Напишите команду… (демо)'; renderChat(); },
+        onError: (err) => {
+          A._stt = null;
+          if (inp) inp.placeholder = 'Напишите команду… (демо)';
+          const map = { 'not-allowed': 'Нет доступа к микрофону', 'no-speech': 'Речь не распознана', 'audio-capture': 'Микрофон не найден' };
+          A.toast((map[err] || 'Ошибка распознавания') + ' (экспериментально)');
+          renderChat();
+        }
+      });
+      if (A._stt) A._stt.start();
+    },
 
     'chat-send': () => {
       const inp = document.getElementById('chat-input');

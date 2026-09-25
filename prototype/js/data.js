@@ -26,7 +26,16 @@ window.AvenDemo = (function () {
           voiceURI: '',
           rate: 1,
           pitch: 1,
-          volume: 1
+          volume: 1,
+          stt: { enabled: true, lang: 'ru-RU', interim: true, autoSend: false }
+        },
+        character: {
+          enabled: true,
+          id: 'female',
+          name: '',
+          floating: true,
+          greet: true,
+          voiceProfile: true
         },
         notify: {
           voiceAllowed: true,

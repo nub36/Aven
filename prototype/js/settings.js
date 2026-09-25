@@ -6,7 +6,7 @@
   let cat = 'profile';
 
   const cats = [
-    ['profile', 'Профиль', '👤'], ['aven', 'Aven', '🤖'], ['voice', 'Голос', '🎙️'],
+    ['profile', 'Профиль', '👤'], ['aven', 'Aven', '🤖'], ['character', 'Персонаж', '🧍'], ['voice', 'Голос', '🎙️'],
     ['notify', 'Уведомления', '🔔'], ['commands', 'Команды', '⌨️'], ['dict', 'Словарь', '📖'],
     ['memory', 'Память', '🧠'], ['home', 'Главная', '🏠'], ['modules', 'Модули', '🧩'],
     ['automations', 'Автоматизации', '⚡'], ['integrations', 'Интеграции', '🔌'],
@@ -63,8 +63,29 @@
         ${setRow('«После работы» — с', '', `<input type="time" value="${B.afterWork}" style="width:130px">`)}
       </div>`;
 
+    if (cat === 'character') {
+      const C = st.settings.character || { enabled: true, id: 'female' };
+      const chars = window.AvenChar ? window.AvenChar.CHARS : {};
+      const preview = window.AvenChar ? window.AvenChar.avatar('s52') : '';
+      return `
+      <h2 class="set-h">Персонаж</h2><p class="set-sub">Вымышленный визуальный образ Aven · опциональный слой оформления</p>
+      <div class="card">
+        <div class="set-row"><div class="grow"><div class="t">Текущий образ</div><div class="s">персонаж — только оформление, функции от него не зависят</div></div>${preview}</div>
+        ${setRow('Показывать персонажа', 'выключите — будет нейтральный логотип «A»', sw('settings.character.enabled', C.enabled))}
+        ${setRow('Персонаж', 'вымышленные Female / Male', `<select data-action="set-char" style="width:220px">${Object.keys(chars).map((k) => `<option value="${k}" ${C.id === k ? 'selected' : ''}>${A.esc(chars[k].label)}</option>`).join('')}</select>`)}
+        ${setRow('Своё имя персонажа', 'пусто — имя по умолчанию', `<input type="text" value="${A.esc(C.name || '')}" style="width:220px" data-action="set-char-name">`)}
+        ${setRow('Плавающий Aven', 'кнопка-персонаж в углу экрана', sw('settings.character.floating', C.floating))}
+        ${setRow('Приветствие при запуске', 'показывать пузырь-приветствие', sw('settings.character.greet', C.greet))}
+        ${setRow('Голосовой профиль персонажа', 'подбирать тембр под образ (демо)', sw('settings.character.voiceProfile', C.voiceProfile))}
+        <div class="s" style="color:var(--muted);font-size:.82rem;padding:10px 4px">Персонажи — фикциональные. Это Presentation Layer: при отключении весь функционал сайта работает идентично.</div>
+      </div>`;
+    }
+
     if (cat === 'voice') {
       const voices = (window.speechSynthesis && window.speechSynthesis.getVoices().filter((v) => (v.lang || '').toLowerCase().startsWith('ru'))) || [];
+      const sttOn = window.AvenVoice ? window.AvenVoice.support.stt : false;
+      const ttsOn = window.AvenVoice ? window.AvenVoice.support.tts : false;
+      const ST = st.settings.voice.stt || { enabled: true, interim: true, autoSend: false };
       return `
       <h2 class="set-h">Голос</h2><p class="set-sub">Озвучивание ответов и голосовой ввод · демо</p>
       <div class="card">
@@ -75,7 +96,10 @@
         ${setRow('Скорость', '', `<div class="slider-row" style="width:240px"><input type="range" min="0.5" max="2" step="0.1" value="${V.rate}" data-action="set-slider" data-path="settings.voice.rate"><span class="val">${V.rate}</span></div>`)}
         ${setRow('Высота', '', `<div class="slider-row" style="width:240px"><input type="range" min="0.5" max="1.5" step="0.1" value="${V.pitch}" data-action="set-slider" data-path="settings.voice.pitch"><span class="val">${V.pitch}</span></div>`)}
         ${setRow('Громкость', '', `<div class="slider-row" style="width:240px"><input type="range" min="0" max="1" step="0.1" value="${V.volume}" data-action="set-slider" data-path="settings.voice.volume"><span class="val">${V.volume}</span></div>`)}
-        ${setRow('Голосовой ввод', 'микрофон (в прототипе не работает)', `<button class="btn" data-action="mic-demo">🎤 Проверить ввод</button>`)}
+        ${setRow('Поддержка браузера', 'честный статус возможностей', `<span class="pill ${ttsOn ? 'ok' : ''}">TTS: ${ttsOn ? 'да' : 'нет'}</span> <span class="pill ${sttOn ? 'ok' : ''}">STT: ${sttOn ? 'да' : 'нет'}</span>`)}
+        ${setRow('Голосовой ввод (STT)', 'экспериментально · SpeechRecognition', sttOn ? sw('settings.voice.stt.enabled', ST.enabled) : '<span class="pill">недоступно</span>')}
+        ${sttOn && ST.enabled ? setRow('Промежуточный текст', 'показывать распознанное по мере речи', sw('settings.voice.stt.interim', ST.interim)) : ''}
+        ${sttOn && ST.enabled ? setRow('Автоотправка', 'отправлять фразу сразу после распознавания', sw('settings.voice.stt.autoSend', ST.autoSend)) : ''}
         ${setRow('Тест голоса', 'произнести демо-фразу', `<button class="btn primary" data-action="voice-test">▶ Тест голоса</button>`)}
         ${setRow('Fallback при недоступности STT/TTS', 'всегда текст — базовые функции не зависят от голоса', '<span class="pill ok">включён всегда</span>')}
       </div>`;
@@ -298,10 +322,20 @@
       if (val) val.textContent = el.value;
     },
     'set-voice': (el) => { s().settings.voice.voiceURI = el.value; S.save(); },
+    'set-char': (el) => {
+      s().settings.character.id = el.value;
+      S.save();
+      A.render();
+      if (window.AvenChar) window.AvenChar.mountFloat();
+      A.toast('Персонаж: ' + (window.AvenChar ? window.AvenChar.current().label : el.value) + ' (демо)');
+    },
+    'set-char-name': (el) => { s().settings.character.name = el.value; S.save(); A.render(); if (window.AvenChar) window.AvenChar.mountFloat(); },
     'set-textsize': (el) => { s().settings.textSize = el.value; S.save(); A.applyEnv(); },
     'set-theme': (el) => { s().settings.theme = el.value; S.save(); A.applyEnv(); },
     'voice-test': () => {
-      A.speak('Привет, Алексей! Это тест голоса Aven. Прототип использует системный синтез речи браузера.', null);
+      const who = window.AvenChar && !window.AvenChar.isOff() ? window.AvenChar.display() : 'Aven';
+      if (window.AvenVoice) window.AvenVoice.speak('Привет, Алексей! Я — ' + who + '. Это тест голоса Aven на системном синтезе речи браузера.', null, { charProfile: true });
+      else A.speak('Привет, Алексей! Это тест голоса Aven.', null);
     },
     'privacy-reset': () => {
       A.confirmModal('Сбросить все демо-данные прототипа к исходным?', () => {
