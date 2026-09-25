@@ -1,0 +1,49 @@
+[0;93m2026-09-25 18:54:11.519805835 [W:onnxruntime:Default, device_discovery.cc:146 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+
+********
+Warning: flash-attn is not installed. Will only run the manual PyTorch version. Please install flash-attn for faster inference.
+********
+ 
+qwen3/vd17-design/x00: synth 33.30s audio 5.20s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x01: synth 15.28s audio 2.32s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x02: synth 5.68s audio 0.72s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x03: synth 6.61s audio 0.88s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x04: synth 10.47s audio 1.52s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x05: synth 17.90s audio 2.80s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x06: synth 19.14s audio 3.04s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x07: synth 24.70s audio 3.76s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x08: synth 22.24s audio 3.44s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x09: synth 17.28s audio 2.72s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x10: synth 26.79s audio 4.32s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x11: synth 25.31s audio 4.00s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x12: synth 35.39s audio 5.68s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x13: synth 25.31s audio 4.00s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x14: synth 30.09s audio 4.88s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x15: synth 27.08s audio 4.40s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x16: synth 70.07s audio 11.12s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x17: synth 8.18s audio 1.12s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x18: synth 15.41s audio 2.24s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x19: synth 17.22s audio 2.56s
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+qwen3/vd17-design/x20: synth 8.60s audio 1.20s
+metrics → /home/runner/work/Aven/Aven/research/tts/out/metrics/qwen3_vd17.json

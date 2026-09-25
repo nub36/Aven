@@ -1,0 +1,166 @@
+{
+  "engine": "qwen3_vd17",
+  "env": {
+    "cpu": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
+    "cores": 4,
+    "ram_gb": 15.6,
+    "gpu": "none",
+    "runner": "GitHub Actions 1000000289",
+    "python": "3.11.16"
+  },
+  "meta": {
+    "license": "Apache-2.0 (code+weights)",
+    "device": "cpu",
+    "dtype": "float32",
+    "engine_dir": "qwen3",
+    "voice_id": "vd17-design",
+    "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+    "design_prompt": "A young adult Russian woman, about 27 years old. Calm, friendly and confident voice, warm but not overly emotional. Natural conversational Russian with clear diction, like a helpful personal assistant. Not a news anchor, not childish, not cartoonish.",
+    "extended": true
+  },
+  "voices": {
+    "vd17-design": {
+      "info": {
+        "load_s": 20.03,
+        "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+        "extended": true,
+        "f0_median_hz": 235.3
+      },
+      "phrases": {
+        "x00": {
+          "synth_s": 33.299,
+          "audio_s": 5.2,
+          "rtf": 6.404,
+          "first_call": true
+        },
+        "x01": {
+          "synth_s": 15.282,
+          "audio_s": 2.32,
+          "rtf": 6.587,
+          "first_call": false
+        },
+        "x02": {
+          "synth_s": 5.679,
+          "audio_s": 0.72,
+          "rtf": 7.888,
+          "first_call": false
+        },
+        "x03": {
+          "synth_s": 6.608,
+          "audio_s": 0.88,
+          "rtf": 7.509,
+          "first_call": false
+        },
+        "x04": {
+          "synth_s": 10.472,
+          "audio_s": 1.52,
+          "rtf": 6.89,
+          "first_call": false
+        },
+        "x05": {
+          "synth_s": 17.898,
+          "audio_s": 2.8,
+          "rtf": 6.392,
+          "first_call": false
+        },
+        "x06": {
+          "synth_s": 19.138,
+          "audio_s": 3.04,
+          "rtf": 6.295,
+          "first_call": false
+        },
+        "x07": {
+          "synth_s": 24.705,
+          "audio_s": 3.76,
+          "rtf": 6.57,
+          "first_call": false
+        },
+        "x08": {
+          "synth_s": 22.239,
+          "audio_s": 3.44,
+          "rtf": 6.465,
+          "first_call": false
+        },
+        "x09": {
+          "synth_s": 17.283,
+          "audio_s": 2.72,
+          "rtf": 6.354,
+          "first_call": false
+        },
+        "x10": {
+          "synth_s": 26.793,
+          "audio_s": 4.32,
+          "rtf": 6.202,
+          "first_call": false
+        },
+        "x11": {
+          "synth_s": 25.311,
+          "audio_s": 4.0,
+          "rtf": 6.328,
+          "first_call": false
+        },
+        "x12": {
+          "synth_s": 35.389,
+          "audio_s": 5.68,
+          "rtf": 6.23,
+          "first_call": false
+        },
+        "x13": {
+          "synth_s": 25.311,
+          "audio_s": 4.0,
+          "rtf": 6.328,
+          "first_call": false
+        },
+        "x14": {
+          "synth_s": 30.093,
+          "audio_s": 4.88,
+          "rtf": 6.167,
+          "first_call": false
+        },
+        "x15": {
+          "synth_s": 27.078,
+          "audio_s": 4.4,
+          "rtf": 6.154,
+          "first_call": false
+        },
+        "x16": {
+          "synth_s": 70.068,
+          "audio_s": 11.12,
+          "rtf": 6.301,
+          "first_call": false
+        },
+        "x17": {
+          "synth_s": 8.184,
+          "audio_s": 1.12,
+          "rtf": 7.307,
+          "first_call": false
+        },
+        "x18": {
+          "synth_s": 15.41,
+          "audio_s": 2.24,
+          "rtf": 6.879,
+          "first_call": false
+        },
+        "x19": {
+          "synth_s": 17.215,
+          "audio_s": 2.56,
+          "rtf": 6.725,
+          "first_call": false
+        },
+        "x20": {
+          "synth_s": 8.605,
+          "audio_s": 1.2,
+          "rtf": 7.171,
+          "first_call": false
+        }
+      },
+      "summary": {
+        "median_synth_s": 18.518,
+        "median_rtf": 6.428,
+        "max_synth_s": 70.068
+      }
+    }
+  },
+  "errors": [],
+  "total_s": 485.9
+}

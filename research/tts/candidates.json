@@ -49,7 +49,7 @@
       "license_weights": "Apache-2.0",
       "commercial": "yes",
       "status": "shortlist",
-      "notes": "Voice Design (голос по описанию) + клонирование. На CPU медленно; для диалога нужен GPU."
+      "notes": "Voice Design (голос по описанию) + клонирование. На CPU медленно; для диалога нужен GPU. Фаворит владельца на 2026-09-25 — vd17-design (1.7B-VoiceDesign): по нему сделан расширенный сценарный прогон phrases_vd17.json (этап 2)."
     },
     "chatterbox": {
       "title": "Chatterbox Multilingual",

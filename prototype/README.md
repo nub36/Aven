@@ -33,6 +33,8 @@ python3 -m http.server 8080
 ```
 prototype/
 ├── index.html          — оболочка (sidebar + topbar + рабочая область + плавающий Aven)
+├── voice-lab.html      — A/B-сравнение голосов исследования TTS (этап 1)
+├── voice-lab-vd17.html — расширенный сценарный тест фаворита vd17-design (этап 2)
 ├── css/style.css       — единый дизайн, light/dark темы
 ├── css/character.css   — персонаж, плавающий виджет, демо-команды (опц. слой)
 ├── assets/
@@ -42,7 +44,8 @@ prototype/
 │       ├── master/female-aven-reference.jpg — FINAL 2D MASTER (с фоном; не перезаписывать)
 │       └── web/female-aven-transparent.png  — FINAL Female Aven, RGBA (hero, Assistant)
 │   └── voice-samples/  — компактный набор MP3 исследования TTS (193 файла, вариант Б) + manifest.js
-│                         (генерирует research/tts/collect.py по политике candidates.json → publish)
+│                         (генерирует research/tts/collect.py по политике candidates.json → publish;
+                         193 — базовый набор T1–T10, +21 — расширенный тест vd17-design, этап 2)
 └── js/
     ├── data.js         — демо-данные (явно тестовые) + settings.character / voice.stt
     ├── state.js        — состояние (JS memory + localStorage, ключ aven-proto-v1)
@@ -65,6 +68,15 @@ prototype/
 
 `voice-lab.html` — A/B-сравнение голосов исследования TTS (docs/TTS_RESEARCH.md). Натуральный голос
 для произвольного текста — через исследовательский сервер: `python research/tts/server.py` (см. docstring).
+
+`voice-lab-vd17.html` — **расширенный сценарный тест фаворита владельца** `qwen3/vd17-design`
+(Qwen3-TTS, этап 2): реальные реплики Aven группами (короткие ответы, напоминания, деньги, авто,
+вопрос, предупреждение, длинный ответ), отдельный блок «произношение Aven/Авен» из 4 вариантов
+нормализации, ★ за каждую фразу, проигрывание группы/всех подряд и кнопка «Системный голос»
+для сравнения с текущим fallback. Данные берутся из `assets/voice-samples/manifest.js` → `extended`
+(строится `research/tts/collect.py` из `research/tts/phrases_vd17.json`); если образцы ещё не
+сгенерированы, страница честно говорит об этом. Это кандидат, а не обязательный голос Aven:
+`speechSynthesis` остаётся движком по умолчанию.
 
 ## Персонаж и голос (опциональный слой, без AI)
 

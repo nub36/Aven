@@ -20,6 +20,11 @@ on:
         description: 'Движки через запятую (пусто — из research/tts/ENGINES)'
         required: false
         default: ''
+  # Запуск из скриптов/агента (тот же «ручной» смысл: при обычном push workflow не запускается):
+  #   gh api -X POST repos/nub36/Aven/dispatches \
+  #     -f event_type=tts-research -f 'client_payload[engines]=qwen3-vd17'
+  repository_dispatch:
+    types: [tts-research]
 
 permissions:
   contents: read
@@ -42,7 +47,7 @@ jobs:
       - uses: actions/checkout@v7
       - id: p
         env:
-          INPUT_ENGINES: ${{ github.event.inputs.engines }}
+          INPUT_ENGINES: ${{ github.event.inputs.engines || github.event.client_payload.engines }}
         run: |
           list="$INPUT_ENGINES"
           [ -z "$list" ] && list="$(grep -v '^#' research/tts/ENGINES | tr -d ' \n')"
@@ -88,7 +93,7 @@ jobs:
               curl -sSfL https://alphacephei.com/vosk/models/model-list.json | python -c "import json,sys;[print(m) for m in json.load(sys.stdin) if 'tts' in m.get('name','')]" || true ;;
             supertonic)
               pip install supertonic numpy ;;
-            qwen3)
+            qwen3|qwen3-vd17)
               pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
               sudo apt-get update -qq && sudo apt-get install -y -qq sox >/dev/null || true
               pip install qwen-tts numpy soundfile ;;
@@ -113,6 +118,7 @@ jobs:
             vosk) python gen_vosk.py vosk-model-tts-ru-0.10-multi ;;
             supertonic) python gen_supertonic.py ;;
             qwen3) python gen_qwen3.py ;;
+            qwen3-vd17) python gen_qwen3_vd17.py ;;
             chatterbox) python gen_chatterbox.py ;;
             espeak) python gen_cli.py espeak ;;
           esac ) 2>&1 | tee out/logs/${{ matrix.engine }}.log || rc=$?
@@ -159,6 +165,9 @@ jobs:
           ls artifacts
           python research/tts/collect.py artifacts/*
           du -sh prototype/assets/voice-samples
+      - name: Проверка целостности набора (phrases / publish / manifest)
+        run: python research/tts/check.py
+
       - name: ASR round-trip (разборчивость, faster-whisper small)
         continue-on-error: true
         run: |
