@@ -41,7 +41,8 @@ prototype/
 │   └── character/
 │       ├── master/female-aven-reference.jpg — FINAL 2D MASTER (с фоном; не перезаписывать)
 │       └── web/female-aven-transparent.png  — FINAL Female Aven, RGBA (hero, Assistant)
-│   └── voice-samples/  — MP3-образцы исследования TTS + manifest.js (генерирует research/tts/collect.py)
+│   └── voice-samples/  — компактный набор MP3 исследования TTS (193 файла, вариант Б) + manifest.js
+│                         (генерирует research/tts/collect.py по политике candidates.json → publish)
 └── js/
     ├── data.js         — демо-данные (явно тестовые) + settings.character / voice.stt
     ├── state.js        — состояние (JS memory + localStorage, ключ aven-proto-v1)

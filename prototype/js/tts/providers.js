@@ -276,8 +276,12 @@
     stats.lastFallback = '';
     if (engine === 'natural') {
       if (P()) P().set('preparing');
+      // сохранённый голос мог быть удалён из набора образцов — берём первый доступный
+      var natList = NaturalTTSProviderExperimental.voices();
+      var natVoice = o.voice || v.natural.voice;
+      if (!natList.some(function (x) { return x.id === natVoice; }) && natList.length) natVoice = natList[0].id;
       run = NaturalTTSProviderExperimental.speak(speechText, {
-        voice: o.voice || v.natural.voice, rate: v.natural.rate || 1, volume: v.volume,
+        voice: natVoice, rate: v.natural.rate || 1, volume: v.volume,
         signal: ctl.signal, onStart: started('natural'), cacheable: Cache.cacheable(displayText)
       }).then(function () { stats.lastSource = NaturalTTSProviderExperimental.lastSource; })
         .catch(function (e) {

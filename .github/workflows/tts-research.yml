@@ -1,12 +1,15 @@
 # Aven — ИССЛЕДОВАНИЕ TTS (не production, не деплой).
 #
+# Запуск ТОЛЬКО вручную (Actions → TTS Research → Run workflow): при обычном push не запускается.
 # Генерирует ОДИНАКОВЫЕ тестовые фразы (research/tts/phrases.json) разными
-# бесплатными/self-hosted TTS-движками на обычном CPU-раннере GitHub (без GPU),
-# замеряет скорость и коммитит MP3-образцы + метрики обратно в ветку:
-#   prototype/assets/voice-samples/**  (прослушивание: prototype/voice-lab.html)
-#   research/tts/results/*.json
-# Платные API и ключи не используются; расход — в пределах бесплатной квоты минут GitHub Actions.
-# См. docs/TTS_RESEARCH.md.
+# бесплатными/self-hosted TTS-движками на обычном CPU-раннере GitHub (без GPU), замеряет скорость
+# и коммитит обратно в ветку, с которой запущен:
+#   research/tts/results/*.json, results/logs/  — метрики и логи ВСЕХ движков (воспроизводимость);
+#   prototype/assets/voice-samples/**           — ТОЛЬКО компактный набор MP3 по политике
+#                                                  research/tts/candidates.json → "publish" (вариант Б);
+#                                                  collect.py удаляет всё, что в политику не входит.
+# Полные WAV всех движков остаются только в артефактах запуска (tts-<engine>, 14 дней), не в git.
+# Платные API и ключи не используются. См. docs/TTS_RESEARCH.md.
 
 name: TTS Research
 
@@ -17,15 +20,6 @@ on:
         description: 'Движки через запятую (пусто — из research/tts/ENGINES)'
         required: false
         default: ''
-  push:
-    branches:
-      - arena/01a0d94f-aven
-    paths:
-      - 'research/tts/gen_*.py'
-      - 'research/tts/common.py'
-      - 'research/tts/phrases.json'
-      - 'research/tts/ENGINES'
-      - '.github/workflows/tts-research.yml'
 
 permissions:
   contents: read
@@ -159,7 +153,7 @@ jobs:
         with:
           pattern: tts-*
           path: artifacts
-      - name: Collect → prototype/assets/voice-samples
+      - name: Collect → research/tts/results + компактный набор MP3 (publish)
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
           ls artifacts
@@ -177,7 +171,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add prototype/assets/voice-samples research/tts/results
+          git add -A prototype/assets/voice-samples research/tts/results  # -A: удаления лишних MP3 тоже
           if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
           git commit -m "research(tts): образцы голосов и метрики (TTS Research run ${{ github.run_id }})"
           for i in 1 2 3 4 5; do

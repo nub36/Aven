@@ -46,7 +46,7 @@
       <label>Фраза: <select id="phrase"></select></label>
       <button class="btn small" id="prev">◀</button><button class="btn small" id="next">▶</button>
       <label><input type="checkbox" id="blind"> Слепое сравнение (скрыть названия, перемешать)</label>
-      <label><input type="checkbox" id="showRef" checked> Показывать эталоны и голоса с неясной/NC-лицензией</label>
+      <label><input type="checkbox" id="showRef" checked> Показывать эталон «робота» (eSpeak)</label>
       <button class="btn small" id="stopAll">■ Стоп</button>
     </div>
     <div class="lab-phrase" id="ptext"></div>
@@ -54,10 +54,11 @@
     <div class="muted" id="envinfo"></div>
   </div>
 
-  <h2 class="lab-section">Полный набор фраз T1–T10</h2>
+  <h2 class="lab-section">Голоса с образцом этой фразы</h2>
+  <div class="muted" id="hiddenNote" style="margin:-4px 0 10px"></div>
   <div class="lab-grid" id="grid"></div>
 
-  <h2 class="lab-section">Каталог (только T1 — тембр остальных голосов движка)</h2>
+  <h2 class="lab-section">Каталог (только T1 — дополнительные тембры)</h2>
   <div class="lab-grid" id="cat"></div>
 
   <h2 class="lab-section">Мои оценки</h2>
@@ -90,11 +91,13 @@
     function licText(c) { return c === 'yes' ? 'коммерция: да' : (c === 'no' ? 'некоммерческая' : (c === 'per-voice' ? 'по голосам' : 'лицензия не ясна')); }
     function fmt(x, d) { return x == null ? '—' : Number(x).toFixed(d == null ? 2 : d); }
 
-    function list(catalogue) {
+    // Компактный набор (вариант Б): full — T1–T10; key — только ключевые фразы (Silero CIS: T1, T3, T4, T6); t01 — каталог.
+    function list(catalogue, pid) {
       var showRef = $('showRef').checked;
       var arr = Object.keys(M.voices).map(function (k) { var v = M.voices[k]; v.key = k; return v; })
         .filter(function (v) { return !!v.catalogueOnly === catalogue; })
-        .filter(function (v) { return showRef || v.commercial === 'yes'; });
+        .filter(function (v) { return showRef || v.engine !== 'espeak'; })
+        .filter(function (v) { return !pid || v.phrases.indexOf(pid) >= 0; });
       if (!catalogue) arr.push(SYSTEM);
       return $('blind').checked ? shuffled(arr) : arr.sort(function (a, b) { return (a.status === 'shortlist' ? 0 : 1) - (b.status === 'shortlist' ? 0 : 1) || a.key.localeCompare(b.key); });
     }
@@ -126,7 +129,9 @@
       var pid = $('phrase').value || pids[0];
       var p = M.phrases[pid] || { text: '', speech: '' };
       $('ptext').textContent = p.text; $('pspeech').textContent = p.speech;
-      var full = list(false), cat = list(true);
+      var full = list(false, pid), cat = list(true);
+      var hidden = list(false).length - full.length;
+      $('hiddenNote').textContent = hidden > 0 ? 'Для ' + pid.toUpperCase() + ' скрыто голосов без образца: ' + hidden + ' (Silero CIS — только T1, T3, T4, T6; eSpeak — только T1, T3).' : '';
       $('grid').innerHTML = full.map(function (v, i) { return card(v, i, pid); }).join('') || '<div class="muted">Образцов пока нет.</div>';
       $('cat').innerHTML = cat.map(function (v, i) { return card(v, full.length + i, 't01'); }).join('') || '<div class="muted">—</div>';
       var envs = {}; Object.keys(M.voices).forEach(function (k) { var e = M.voices[k].env || {}; if (e.cpu) envs[e.cpu + ' · ' + e.cores + ' ядер · ' + e.ram_gb + ' ГБ RAM · без GPU'] = 1; });

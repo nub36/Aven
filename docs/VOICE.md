@@ -120,5 +120,5 @@ Answer:  result → response text → optional TTS
 - `prototype/js/tts/providers.js` — `SystemTTSProvider` / `NaturalTTSProviderExperimental` + менеджер `AvenTTS` (stop, кэш в памяти вкладки, замер задержки, честный fallback).
 - Presence: новое состояние `preparing` — «Готовлю речь…».
 - «Настройки → Голос»: движок (Системный / Натуральный · эксперимент), голос, лицензия, self-hosted сервер, приватность (Локально / Онлайн-голос браузера / Self-hosted / Готовые образцы), ▶ Прослушать, ■ Стоп, «Как Aven прочитает текст».
-- `prototype/voice-lab.html` — A/B-сравнение образцов (слепой режим, оценки ★).
+- `prototype/voice-lab.html` — A/B-сравнение образцов (слепой режим, оценки ★); в git — компактный набор 193 MP3 (вариант Б), состав — `research/tts/candidates.json` → `publish`.
 - `research/tts/server.py` — исследовательский self-hosted сервер (не production).

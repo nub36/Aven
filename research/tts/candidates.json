@@ -1,5 +1,5 @@
 {
-  "_comment": "Метаданные кандидатов для страницы прослушивания и docs/TTS_RESEARCH.md. commercial: yes | no | unclear. status: shortlist | reference | baseline | not-for-product.",
+  "_comment": "Метаданные кандидатов для voice-lab и docs/TTS_RESEARCH.md. commercial: yes | no | unclear. status: shortlist | reference | baseline | not-for-product. publish — какие MP3 попадают в git (prototype/assets/voice-samples); всё остальное остаётся только в метриках research/tts/results и в артефактах workflow (воспроизводимо скриптами).",
   "engines": {
     "silero_cis_mit": {
       "title": "Silero v5 CIS base (ru_*) + silero-stress",
@@ -52,7 +52,7 @@
       "notes": "Voice Design (голос по описанию) + клонирование. На CPU медленно; для диалога нужен GPU."
     },
     "chatterbox": {
-      "title": "Chatterbox Multilingual (голос по умолчанию)",
+      "title": "Chatterbox Multilingual",
       "class": "C — крупный нейросетевой, желательно GPU",
       "url": "https://github.com/resemble-ai/chatterbox",
       "license_code": "MIT",
@@ -93,9 +93,86 @@
     }
   },
   "voice_license": {
-    "rhvoice/elena": ["GPL-3.0", "yes"],
-    "rhvoice/dasha-rus": ["CC BY-SA 4.0", "yes"],
-    "rhvoice/anna": ["не указана", "unclear"],
-    "rhvoice/irina": ["не указана", "unclear"]
+    "rhvoice/elena": [
+      "GPL-3.0",
+      "yes"
+    ],
+    "rhvoice/dasha-rus": [
+      "CC BY-SA 4.0",
+      "yes"
+    ],
+    "rhvoice/anna": [
+      "не указана",
+      "unclear"
+    ],
+    "rhvoice/irina": [
+      "не указана",
+      "unclear"
+    ]
+  },
+  "publish": {
+    "_comment": "Вариант Б (решение владельца 2026-09-25): компактный набор для A/B. '*' — все голоса/фразы движка. Не публикуются: NC / неясная лицензия (silero_v5_ru, piper, vosk, rhvoice anna/irina), __nostress, мужские/низкие голоса, ru_igor (мужское имя).",
+    "supertonic": {
+      "voices": "*",
+      "phrases": "*"
+    },
+    "qwen3": {
+      "voices": [
+        "cv06-serena",
+        "cv06-vivian",
+        "base06-clone",
+        "cv06-ono_anna",
+        "cv06-sohee",
+        "vd17-design"
+      ],
+      "phrases": "*"
+    },
+    "chatterbox": {
+      "voices": "*",
+      "phrases": "*"
+    },
+    "rhvoice": {
+      "voices": [
+        "elena",
+        "dasha-rus"
+      ],
+      "phrases": "*"
+    },
+    "silero_cis_mit": {
+      "voices": [
+        "ru_aigul",
+        "ru_albina",
+        "ru_alfia",
+        "ru_alfia2",
+        "ru_ekaterina",
+        "ru_karina",
+        "ru_kermen",
+        "ru_nurgul",
+        "ru_oksana",
+        "ru_onaoy",
+        "ru_ramilia",
+        "ru_saida",
+        "ru_vika",
+        "ru_zara",
+        "ru_zhadyra",
+        "ru_zhazira",
+        "ru_zinaida"
+      ],
+      "phrases": [
+        "t01",
+        "t03",
+        "t04",
+        "t06"
+      ]
+    },
+    "espeak": {
+      "voices": [
+        "ru-f"
+      ],
+      "phrases": [
+        "t01",
+        "t03"
+      ]
+    }
   }
 }
