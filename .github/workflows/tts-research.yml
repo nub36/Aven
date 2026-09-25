@@ -25,6 +25,15 @@ on:
   #     -f event_type=tts-research -f 'client_payload[engines]=qwen3-vd17'
   repository_dispatch:
     types: [tts-research]
+  # ВРЕМЕННО (только на время этого прогона, будет снято): ручной dispatch из песочницы агента
+  # недоступен (GitHub App token без прав на Actions), поэтому прогон запускается push'ом
+  # строго по этим двум файлам — коммиты бота с результатами (results/, voice-samples/) его не вызывают.
+  push:
+    branches:
+      - arena/01a0d9d2-aven
+    paths:
+      - '.github/workflows/tts-research.yml'
+      - 'research/tts/ENGINES'
 
 permissions:
   contents: read
