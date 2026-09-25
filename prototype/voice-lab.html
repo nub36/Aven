@@ -40,6 +40,7 @@
     </div>
     <div class="row">
       <a class="btn" href="voice-lab-vd17.html">Расширенный тест vd17-design →</a>
+      <a class="btn" href="voice-lab-name.html">Произношение «Авен» →</a>
       <a class="btn" href="index.html#/settings">← Прототип</a>
     </div>
   </div>
@@ -98,6 +99,7 @@
     function list(catalogue, pid) {
       var showRef = $('showRef').checked;
       var arr = Object.keys(M.voices).map(function (k) { var v = M.voices[k]; v.key = k; return v; })
+        .filter(function (v) { return !v.nameTestOnly; })   // голоса только из мини-прогона имени — на своей странице
         .filter(function (v) { return !!v.catalogueOnly === catalogue; })
         .filter(function (v) { return showRef || v.engine !== 'espeak'; })
         .filter(function (v) { return !pid || v.phrases.indexOf(pid) >= 0; });

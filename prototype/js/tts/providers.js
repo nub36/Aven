@@ -163,7 +163,9 @@
       var sv = samples().voices;
       var order = { shortlist: 0, baseline: 1, reference: 2, 'not-for-product': 3 };
       Object.keys(sv).filter(function (k) {
-        return !sv[k].catalogueOnly && !seen[k] && sv[k].engine !== 'espeak'; // eSpeak — эталон «робота», не вариант
+        // eSpeak — эталон «робота», не вариант; nameTestOnly — клипы мини-прогона произношения имени,
+        // для озвучки реплик Aven они не подходят (нет образцов T1–T10).
+        return !sv[k].catalogueOnly && !sv[k].nameTestOnly && !seen[k] && sv[k].engine !== 'espeak';
       }).sort(function (a, b) {
         return ((order[sv[a].status] != null ? order[sv[a].status] : 9) - (order[sv[b].status] != null ? order[sv[b].status] : 9)) || a.localeCompare(b);
       }).forEach(function (k) {

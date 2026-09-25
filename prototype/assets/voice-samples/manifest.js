@@ -87,8 +87,26 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.011,
-   "phraseSet": "key",
-   "catalogueOnly": false
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t02",
+     "t03",
+     "t04",
+     "t05",
+     "t06",
+     "t07",
+     "t08",
+     "t09",
+     "t10"
+    ],
+    "extended": [],
+    "name": []
+   },
+   "phraseSet": "full",
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1–T10"
   },
   "chatterbox/default": {
    "engine": "chatterbox",
@@ -133,8 +151,26 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.147,
-   "phraseSet": "key",
-   "catalogueOnly": false
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t02",
+     "t03",
+     "t04",
+     "t05",
+     "t06",
+     "t07",
+     "t08",
+     "t09",
+     "t10"
+    ],
+    "extended": [],
+    "name": []
+   },
+   "phraseSet": "full",
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1–T10"
   },
   "espeak/ru-f": {
    "engine": "espeak",
@@ -171,8 +207,18 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.943,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3"
   },
   "qwen3/base06-clone": {
    "engine": "qwen3",
@@ -217,8 +263,26 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.008,
-   "phraseSet": "key",
-   "catalogueOnly": false
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t02",
+     "t03",
+     "t04",
+     "t05",
+     "t06",
+     "t07",
+     "t08",
+     "t09",
+     "t10"
+    ],
+    "extended": [],
+    "name": []
+   },
+   "phraseSet": "full",
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1–T10"
   },
   "qwen3/cv06-ono_anna": {
    "engine": "qwen3",
@@ -245,8 +309,17 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.111,
+   "phraseSets": {
+    "base": [
+     "t01"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "t01",
-   "catalogueOnly": true
+   "catalogueOnly": true,
+   "nameTestOnly": false,
+   "sampleNote": "каталог: только T1"
   },
   "qwen3/cv06-serena": {
    "engine": "qwen3",
@@ -291,8 +364,26 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.022,
-   "phraseSet": "key",
-   "catalogueOnly": false
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t02",
+     "t03",
+     "t04",
+     "t05",
+     "t06",
+     "t07",
+     "t08",
+     "t09",
+     "t10"
+    ],
+    "extended": [],
+    "name": []
+   },
+   "phraseSet": "full",
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1–T10"
   },
   "qwen3/cv06-sohee": {
    "engine": "qwen3",
@@ -319,8 +410,17 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.111,
+   "phraseSets": {
+    "base": [
+     "t01"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "t01",
-   "catalogueOnly": true
+   "catalogueOnly": true,
+   "nameTestOnly": false,
+   "sampleNote": "каталог: только T1"
   },
   "qwen3/cv06-vivian": {
    "engine": "qwen3",
@@ -365,8 +465,26 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.033,
-   "phraseSet": "key",
-   "catalogueOnly": false
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t02",
+     "t03",
+     "t04",
+     "t05",
+     "t06",
+     "t07",
+     "t08",
+     "t09",
+     "t10"
+    ],
+    "extended": [],
+    "name": []
+   },
+   "phraseSet": "full",
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1–T10"
   },
   "qwen3/vd17-design": {
    "engine": "qwen3",
@@ -414,8 +532,39 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.285,
-   "phraseSet": "key",
-   "catalogueOnly": false
+   "phraseSets": {
+    "base": [
+     "t01"
+    ],
+    "extended": [
+     "x00",
+     "x01",
+     "x02",
+     "x03",
+     "x04",
+     "x05",
+     "x06",
+     "x07",
+     "x08",
+     "x09",
+     "x10",
+     "x11",
+     "x12",
+     "x13",
+     "x14",
+     "x15",
+     "x16",
+     "x17",
+     "x18",
+     "x19",
+     "x20"
+    ],
+    "name": []
+   },
+   "phraseSet": "extended",
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "T1 + расширенный набор X"
   },
   "rhvoice/dasha-rus": {
    "engine": "rhvoice",
@@ -460,8 +609,26 @@ window.AvenVoiceSamples = {
     "python": "3.11.2"
    },
    "asrWer": 0.011,
-   "phraseSet": "key",
-   "catalogueOnly": false
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t02",
+     "t03",
+     "t04",
+     "t05",
+     "t06",
+     "t07",
+     "t08",
+     "t09",
+     "t10"
+    ],
+    "extended": [],
+    "name": []
+   },
+   "phraseSet": "full",
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1–T10"
   },
   "rhvoice/elena": {
    "engine": "rhvoice",
@@ -506,8 +673,26 @@ window.AvenVoiceSamples = {
     "python": "3.11.2"
    },
    "asrWer": 0.011,
-   "phraseSet": "key",
-   "catalogueOnly": false
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t02",
+     "t03",
+     "t04",
+     "t05",
+     "t06",
+     "t07",
+     "t08",
+     "t09",
+     "t10"
+    ],
+    "extended": [],
+    "name": []
+   },
+   "phraseSet": "full",
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1–T10"
   },
   "silero_cis_mit/ru_aigul": {
    "engine": "silero_cis_mit",
@@ -546,8 +731,20 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.011,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03",
+     "t04",
+     "t06"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3, T4, T6"
   },
   "silero_cis_mit/ru_albina": {
    "engine": "silero_cis_mit",
@@ -586,8 +783,20 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.011,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03",
+     "t04",
+     "t06"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3, T4, T6"
   },
   "silero_cis_mit/ru_alfia": {
    "engine": "silero_cis_mit",
@@ -626,8 +835,20 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.011,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03",
+     "t04",
+     "t06"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3, T4, T6"
   },
   "silero_cis_mit/ru_alfia2": {
    "engine": "silero_cis_mit",
@@ -666,8 +887,20 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.011,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03",
+     "t04",
+     "t06"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3, T4, T6"
   },
   "silero_cis_mit/ru_ekaterina": {
    "engine": "silero_cis_mit",
@@ -706,8 +939,20 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.033,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03",
+     "t04",
+     "t06"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3, T4, T6"
   },
   "silero_cis_mit/ru_karina": {
    "engine": "silero_cis_mit",
@@ -746,8 +991,20 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.011,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03",
+     "t04",
+     "t06"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3, T4, T6"
   },
   "silero_cis_mit/ru_kermen": {
    "engine": "silero_cis_mit",
@@ -786,8 +1043,20 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.03,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03",
+     "t04",
+     "t06"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3, T4, T6"
   },
   "silero_cis_mit/ru_nurgul": {
    "engine": "silero_cis_mit",
@@ -826,8 +1095,20 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.011,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03",
+     "t04",
+     "t06"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3, T4, T6"
   },
   "silero_cis_mit/ru_oksana": {
    "engine": "silero_cis_mit",
@@ -866,8 +1147,20 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.024,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03",
+     "t04",
+     "t06"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3, T4, T6"
   },
   "silero_cis_mit/ru_onaoy": {
    "engine": "silero_cis_mit",
@@ -906,8 +1199,20 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.011,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03",
+     "t04",
+     "t06"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3, T4, T6"
   },
   "silero_cis_mit/ru_ramilia": {
    "engine": "silero_cis_mit",
@@ -946,8 +1251,20 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.011,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03",
+     "t04",
+     "t06"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3, T4, T6"
   },
   "silero_cis_mit/ru_saida": {
    "engine": "silero_cis_mit",
@@ -986,8 +1303,20 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.011,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03",
+     "t04",
+     "t06"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3, T4, T6"
   },
   "silero_cis_mit/ru_vika": {
    "engine": "silero_cis_mit",
@@ -1026,8 +1355,20 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.011,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03",
+     "t04",
+     "t06"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3, T4, T6"
   },
   "silero_cis_mit/ru_zara": {
    "engine": "silero_cis_mit",
@@ -1066,8 +1407,20 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.011,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03",
+     "t04",
+     "t06"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3, T4, T6"
   },
   "silero_cis_mit/ru_zhadyra": {
    "engine": "silero_cis_mit",
@@ -1106,8 +1459,20 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.011,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03",
+     "t04",
+     "t06"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3, T4, T6"
   },
   "silero_cis_mit/ru_zhazira": {
    "engine": "silero_cis_mit",
@@ -1146,8 +1511,20 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.011,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03",
+     "t04",
+     "t06"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3, T4, T6"
   },
   "silero_cis_mit/ru_zinaida": {
    "engine": "silero_cis_mit",
@@ -1186,8 +1563,20 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.022,
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t03",
+     "t04",
+     "t06"
+    ],
+    "extended": [],
+    "name": []
+   },
    "phraseSet": "key",
-   "catalogueOnly": false
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1, T3, T4, T6"
   },
   "supertonic/F1": {
    "engine": "supertonic",
@@ -1232,8 +1621,26 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.024,
-   "phraseSet": "key",
-   "catalogueOnly": false
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t02",
+     "t03",
+     "t04",
+     "t05",
+     "t06",
+     "t07",
+     "t08",
+     "t09",
+     "t10"
+    ],
+    "extended": [],
+    "name": []
+   },
+   "phraseSet": "full",
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1–T10"
   },
   "supertonic/F2": {
    "engine": "supertonic",
@@ -1278,8 +1685,26 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.027,
-   "phraseSet": "key",
-   "catalogueOnly": false
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t02",
+     "t03",
+     "t04",
+     "t05",
+     "t06",
+     "t07",
+     "t08",
+     "t09",
+     "t10"
+    ],
+    "extended": [],
+    "name": []
+   },
+   "phraseSet": "full",
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1–T10"
   },
   "supertonic/F3": {
    "engine": "supertonic",
@@ -1324,8 +1749,26 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.011,
-   "phraseSet": "key",
-   "catalogueOnly": false
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t02",
+     "t03",
+     "t04",
+     "t05",
+     "t06",
+     "t07",
+     "t08",
+     "t09",
+     "t10"
+    ],
+    "extended": [],
+    "name": []
+   },
+   "phraseSet": "full",
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1–T10"
   },
   "supertonic/F4": {
    "engine": "supertonic",
@@ -1370,8 +1813,26 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.019,
-   "phraseSet": "key",
-   "catalogueOnly": false
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t02",
+     "t03",
+     "t04",
+     "t05",
+     "t06",
+     "t07",
+     "t08",
+     "t09",
+     "t10"
+    ],
+    "extended": [],
+    "name": []
+   },
+   "phraseSet": "full",
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1–T10"
   },
   "supertonic/F5": {
    "engine": "supertonic",
@@ -1416,8 +1877,26 @@ window.AvenVoiceSamples = {
     "python": "3.11.16"
    },
    "asrWer": 0.011,
-   "phraseSet": "key",
-   "catalogueOnly": false
+   "phraseSets": {
+    "base": [
+     "t01",
+     "t02",
+     "t03",
+     "t04",
+     "t05",
+     "t06",
+     "t07",
+     "t08",
+     "t09",
+     "t10"
+    ],
+    "extended": [],
+    "name": []
+   },
+   "phraseSet": "full",
+   "catalogueOnly": false,
+   "nameTestOnly": false,
+   "sampleNote": "образцы T1–T10"
   }
  },
  "extended": {
@@ -1721,87 +2200,149 @@ window.AvenVoiceSamples = {
   "asr": {
    "x00": {
     "hyp": "Здравствуйте! Я Вен. Ваш персональный помощник. Чем могу помочь?",
-    "wer": 0.111
+    "wer": 0.111,
+    "lwer": 0.019,
+    "name": {
+     "letters": "вен",
+     "target": "авен",
+     "lwer": 0.25
+    }
    },
    "x01": {
     "hyp": "Добрый день, Алексей. Чем помочь?",
-    "wer": 0.0
+    "wer": 0.0,
+    "lwer": 0.0,
+    "name": null
    },
    "x02": {
     "hyp": "Готово!",
-    "wer": 0.0
+    "wer": 0.0,
+    "lwer": 0.0,
+    "name": null
    },
    "x03": {
     "hyp": "А, слушай!",
-    "wer": 2.0
+    "wer": 2.0,
+    "lwer": 0.333,
+    "name": null
    },
    "x04": {
     "hyp": "Напоминание создано.",
-    "wer": 0.0
+    "wer": 0.0,
+    "lwer": 0.0,
+    "name": null
    },
    "x05": {
     "hyp": "Завтра в 7.30 не забудьте взять документы.",
-    "wer": 0.25
+    "wer": 0.25,
+    "lwer": 0.233,
+    "name": null
    },
    "x06": {
     "hyp": "Через 20 минут нужно выключить духовку.",
-    "wer": 0.0
+    "wer": 0.0,
+    "lwer": 0.0,
+    "name": null
    },
    "x07": {
     "hyp": "Сегодня вы потратили 12 850 рублей.",
-    "wer": 0.0
+    "wer": 0.0,
+    "lwer": 0.0,
+    "name": null
    },
    "x08": {
     "hyp": "Записала 850 рублей в категорию продукты.",
-    "wer": 0.0
+    "wer": 0.0,
+    "lwer": 0.0,
+    "name": null
    },
    "x09": {
     "hyp": "Следующая встреча сегодня в 18.30",
-    "wer": 0.333
+    "wer": 0.333,
+    "lwer": 0.227,
+    "name": null
    },
    "x10": {
     "hyp": "Пробег автомобиля – 104 500 20 километров.",
-    "wer": 0.0
+    "wer": 0.0,
+    "lwer": 0.0,
+    "name": null
    },
    "x11": {
     "hyp": "До замены масла осталось 1 480 километров.",
-    "wer": 0.0
+    "wer": 0.0,
+    "lwer": 0.0,
+    "name": null
    },
    "x12": {
     "hyp": "Заправка добавлена 42 литра 3200 рублей.",
-    "wer": 0.0
+    "wer": 0.0,
+    "lwer": 0.0,
+    "name": null
    },
    "x13": {
     "hyp": "На пробеге 120 тысяч километров напомню проверить DRM.",
-    "wer": 0.444
+    "wer": 0.444,
+    "lwer": 0.125,
+    "name": null
    },
    "x14": {
     "hyp": "Вы хотите, чтобы я перенесла встречу на 7 часов вечера?",
-    "wer": 0.0
+    "wer": 0.0,
+    "lwer": 0.0,
+    "name": null
    },
    "x15": {
     "hyp": "Внимание, до конца оплаты осталось два дня. Нужно подтверждение.",
-    "wer": 0.0
+    "wer": 0.0,
+    "lwer": 0.0,
+    "name": null
    },
    "x16": {
     "hyp": "Я нашла три свободных слота на этой неделе. Ближайший сегодня в 18.30, но он рядом с вашей встречей. Могу предложить завтра в 10 утра? Вам удобно?",
-    "wer": 0.074
+    "wer": 0.074,
+    "lwer": 0.074,
+    "name": null
    },
    "x17": {
     "hyp": "Ай, вен слушит вас!",
-    "wer": 1.0
+    "wer": 1.0,
+    "lwer": 0.214,
+    "name": {
+     "letters": "айвен",
+     "target": "авен",
+     "lwer": 0.25
+    }
    },
    "x18": {
     "hyp": "А вен слушает вас.",
-    "wer": 0.667
+    "wer": 0.667,
+    "lwer": 0.0,
+    "name": {
+     "letters": "авен",
+     "target": "авен",
+     "lwer": 0.0
+    }
    },
    "x19": {
     "hyp": "Айф, слушает вас.",
-    "wer": 0.5
+    "wer": 0.5,
+    "lwer": 0.214,
+    "name": {
+     "letters": "айф",
+     "target": "авен",
+     "lwer": 0.75
+    }
    },
    "x20": {
     "hyp": "А вон слушает вас.",
-    "wer": 0.667
+    "wer": 0.667,
+    "lwer": 0.071,
+    "name": {
+     "letters": "авон",
+     "target": "авен",
+     "lwer": 0.25
+    }
    }
   },
   "env": {
@@ -1813,5 +2354,414 @@ window.AvenVoiceSamples = {
    "python": "3.11.16"
   },
   "model": "Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+ },
+ "name": {
+  "engine": "qwen3",
+  "title": "Произношение «Aven / Авен» — мини-прогон способов",
+  "name_screen": "Aven",
+  "name_target": "Авен",
+  "groups": [
+   {
+    "id": "reference",
+    "title": "Эталонный клип (VoiceDesign 1.7B) — источник голоса для клонов",
+    "note": "Тот же текст T1 и тот же промпт описания голоса, что в этапе 1. По нему слышно, как «Авен» произносит сам VoiceDesign до всяких исправлений."
+   },
+   {
+    "id": "spelling",
+    "title": "Способ 3 — перебор орфографии (голос не меняется: тот же 1.7B-VoiceDesign и тот же промпт)",
+    "note": "Дёшево и безопасно для тембра: меняем только то, что подаётся в TTS. Экранный текст всегда остаётся «Aven»."
+   },
+   {
+    "id": "prompt",
+    "title": "Способ 2 — подсказка о произношении в промпте описания голоса",
+    "note": "Промпт VoiceDesign влияет и на тембр: если вариант победит, голос нужно переслушать целиком (это будет уже не тот ★5-эталон, а его версия с подсказкой)."
+   },
+   {
+    "id": "clone06",
+    "title": "Способ 1 — in-context learning: клон 0.6B-Base по эталону vd17",
+    "note": "Тот же путь, что дал qwen3/base06-clone в этапе 1: у его T1 Whisper услышал ровно «Я Авен» (WER 0%). Здесь проверяем, воспроизводится ли это на других фразах."
+   },
+   {
+    "id": "clone17",
+    "title": "Способ 1 (уточнение) — клон 1.7B-Base по тому же эталону",
+    "note": "Официально рекомендуемый разработчиком пайплайн «VoiceDesign → Base clone»: та же размерность 1.7B, что у фаворита, но голос берётся из эталонного клипа и не пересоздаётся на каждый вызов."
+   }
+  ],
+  "phrases": {},
+  "metrics": {},
+  "asr": {},
+  "env": null,
+  "namePronunciation": {
+   "chatterbox/clone-silero-karina": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "chatterbox/default": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "espeak/ru-f": {
+    "mean_name_lwer": 1.0,
+    "n": 1,
+    "exact": 0
+   },
+   "piper/irina-medium": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "qwen3/base06-clone": {
+    "mean_name_lwer": 0.0,
+    "n": 1,
+    "exact": 1
+   },
+   "qwen3/cv06-ono_anna": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "qwen3/cv06-serena": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "qwen3/cv06-sohee": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "qwen3/cv06-vivian": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "qwen3/vd17-design": {
+    "mean_name_lwer": 0.292,
+    "n": 6,
+    "exact": 1
+   },
+   "rhvoice/anna": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "rhvoice/dasha-rus": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "rhvoice/elena": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "rhvoice/irina": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_aigul": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_aigul__nostress": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_albina": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_albina__nostress": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_alexandr": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_alfia": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_alfia2": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_alfia2__nostress": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_alfia__nostress": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_bogdan": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_dmitriy": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_eduard": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_ekaterina": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_ekaterina__nostress": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_gamat": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_igor": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_igor__nostress": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_karina": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_karina__nostress": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_kejilgan": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_kermen": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_kermen__nostress": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_marat": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_miyau": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_nurgul": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_nurgul__nostress": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_oksana": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_oksana__nostress": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_onaoy": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_onaoy__nostress": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_ramilia": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_ramilia__nostress": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_roman": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_safarhuja": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_saida": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_saida__nostress": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_sibday": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_vika": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_vika__nostress": {
+    "mean_name_lwer": 1.0,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_zara": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_zara__nostress": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_zhadyra": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_zhadyra__nostress": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_zhazira": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_zhazira__nostress": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_zinaida": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_cis_mit/ru_zinaida__nostress": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_v5_ru/baya": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_v5_ru/kseniya": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "silero_v5_ru/xenia": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "supertonic/F1": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "supertonic/F2": {
+    "mean_name_lwer": 0.0,
+    "n": 1,
+    "exact": 1
+   },
+   "supertonic/F3": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "supertonic/F4": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "supertonic/F5": {
+    "mean_name_lwer": 0.5,
+    "n": 1,
+    "exact": 0
+   },
+   "vosk/spk00": {
+    "mean_name_lwer": 0.0,
+    "n": 1,
+    "exact": 1
+   },
+   "vosk/spk01": {
+    "mean_name_lwer": 0.0,
+    "n": 1,
+    "exact": 1
+   },
+   "vosk/spk02": {
+    "mean_name_lwer": 0.25,
+    "n": 1,
+    "exact": 0
+   },
+   "vosk/spk03": {
+    "mean_name_lwer": 0.0,
+    "n": 1,
+    "exact": 1
+   },
+   "vosk/spk04": {
+    "mean_name_lwer": 0.0,
+    "n": 1,
+    "exact": 1
+   }
+  }
  }
 };

@@ -44,7 +44,7 @@
       (groups[g] = groups[g] || []).push(v);
     });
     return Object.keys(groups).map((g) => `<optgroup label="${A.esc(g)}">${groups[g].map((v) =>
-      `<option value="${A.esc(v.id)}" ${v.id === sel ? 'selected' : ''}>${A.esc(v.privacy === 'self-hosted' ? v.label : ((v.meta && v.meta.voice) || v.label) + (v.meta && v.meta.phraseSet === 'key' ? ' · образцы T1, T3, T4, T6' : ''))}</option>`).join('')}</optgroup>`).join('');
+      `<option value="${A.esc(v.id)}" ${v.id === sel ? 'selected' : ''}>${A.esc(v.privacy === 'self-hosted' ? v.label : ((v.meta && v.meta.voice) || v.label) + (v.meta && v.meta.sampleNote ? ' · ' + v.meta.sampleNote : ''))}</option>`).join('')}</optgroup>`).join('');
   }
 
   function setRow(title, sub, control) {

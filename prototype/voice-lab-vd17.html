@@ -37,6 +37,7 @@
         System TTS (<code>speechSynthesis</code>) остаётся рабочим движком по умолчанию и fallback. Подробности — docs/TTS_RESEARCH.md.</div>
     </div>
     <div class="row">
+      <a class="btn" href="voice-lab-name.html">Произношение «Авен» →</a>
       <a class="btn" href="voice-lab.html">← Сравнение голосов</a>
       <a class="btn" href="index.html#/settings">Прототип</a>
     </div>
@@ -56,7 +57,8 @@
   </div>
 
   <h2 class="lab-section">Произношение «Aven / Авен» <span class="muted">— 4 варианта нормализации, слушать подряд</span>
-    <button class="btn small" id="playName">▶ Проиграть 4 варианта</button></h2>
+    <button class="btn small" id="playName">▶ Проиграть 4 варианта</button>
+    <a class="btn small" href="voice-lab-name.html">Мини-прогон способов (орфография / промпт / клон) →</a></h2>
   <div class="name-grid" id="nameGrid"></div>
   <div class="muted" id="asrName" style="margin:8px 0 0"></div>
 
@@ -144,6 +146,9 @@
           'длительность ' + fmt(m.audio_s) + ' с · синтез на CPU ' + fmt(m.synth_s) + ' с ' +
           (m.rtf ? '· RTF ' + fmt(m.rtf) : '') + (m.first_call ? ' (первый, «холодный» вызов)' : '') +
           (a && a.hyp ? '<br>распознал Whisper: «' + esc(a.hyp) + '»' + (a.wer != null ? ' · WER ' + Math.round(a.wer * 100) + '%' : '') : '') +
+          (a && a.name && a.name.letters ? '<br>имя в гипотезе: «' + esc(a.name.letters) + '» против «авен» · name_lwer ' +
+            (a.name.lwer != null ? Math.round(a.name.lwer * 100) + '%' : '—') +
+            (a.lwer != null ? ' · буквы всей фразы (lwer) ' + Math.round(a.lwer * 100) + '%' : '') : '') +
         '</div>' +
         (compact ? '' : '<div class="row" style="margin-top:8px"><button class="btn small" data-sys="1">▶ Системный голос</button></div>');
       // звёзды за фразу
@@ -163,10 +168,15 @@
 
       var asrName = nameIds.map(function (pid) {
         var a = (EXT.asr || {})[pid];
-        return a && a.hyp ? phrases[pid].speech + ' → «' + a.hyp + '»' : null;
+        if (!a || !a.hyp) return null;
+        var nm = a.name || {};
+        return phrases[pid].speech + ' → «' + a.hyp + '»' +
+          (nm.letters ? ' [имя: «' + nm.letters + '», ' + Math.round((nm.lwer || 0) * 100) + '%]' : '');
       }).filter(Boolean);
       $('asrName').textContent = asrName.length
-        ? 'Что услышал ASR (Whisper small) в каждом варианте: ' + asrName.join(' | ')
+        ? 'Что услышал ASR (Whisper small) в каждом варианте: ' + asrName.join(' | ') +
+          '  ·  Важно: WER по словам наказывает за разбиение «Авен» → «А вен», поэтому в этапе 2.1 добавлена ' +
+          'побуквенная метрика name_lwer — по ней x18 («Авен») совпадает с эталоном точно. Ударение и паузу ASR не измеряет: это слышно только ухом.'
         : 'Распознавание (ASR round-trip) для этих образцов пока не посчитано.';
 
       var wrap = $('groups'); wrap.innerHTML = '';
