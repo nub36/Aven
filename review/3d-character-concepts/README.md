@@ -86,9 +86,12 @@ exaggerated face, plastic doll, Barbie-like, uncanny horror, cyberpunk armor, м
 2. **Этап 1 (завершён): причёски** — `stage1-hair/` (HAIR A–D). **Выбор владельца: HAIR A —
    новый MASTER REFERENCE Female Aven** (лицо, форма головы, причёска, длина, пробор,
    выражение, взгляд, шея, плечи, одежда, композиция, фон, свет зафиксированы).
-3. **Этап 2 (выполнен, ждёт выбора): цвет волос** — `stage2-color/` (COLOR A–D + сравнительный
-   лист `compare-2x2.jpg`); менялся только цвет волос; статус — `stage2-color/README.md`.
-4. Этап 3 (после выбора цвета): 4 варианта макияжа.
+3. **Этап 2 (завершён): цвет волос** — `stage2-color/`. **Выбор владельца: COLOR B**
+   (dark chocolate brown) — master reference стал `stage2-color/color-B.jpg`.
+4. **Этап 3 (выполнен, ждёт выбора): макияж** — `stage3-makeup/` (MAKEUP A–D + сравнительный
+   лист `compare-2x2.jpg`); менялся только макияж; статус — `stage3-makeup/README.md`.
+   После выбора макияжа фиксируется FINAL FEMALE AVEN → прозрачный фон → проверка краёв
+   волос на светлом/тёмном фоне → размещение на Главной Aven (по спецификации владельца).
 5. Только после выбора решаем pipeline настоящей модели: custom 3D / character creator /
    commissioned model / licensed base / другой.
 6. Невыбранные кандидаты после утверждения могут быть удалены из этой папки.
