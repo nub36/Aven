@@ -1,20 +1,180 @@
 {
   "engine": "chatterbox",
   "env": {
-    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "cpu": "Intel(R) Xeon(R) 6973P-C",
     "cores": 4,
     "ram_gb": 15.6,
     "gpu": "none",
-    "runner": "GitHub Actions 1000000249",
+    "runner": "GitHub Actions 1000000256",
     "python": "3.11.16"
   },
   "meta": {
     "license": "MIT (code+weights)",
     "device": "cpu"
   },
-  "voices": {},
-  "errors": [
-    "chatterbox: RuntimeError: Attempting to deserialize object on a CUDA device but torch.cuda.is_available() is False. If you are running on a CPU-only machine, please use torch.load with map_location=torch.device('cpu') to map your storages to the CPU."
-  ],
-  "total_s": 29.6
+  "voices": {
+    "default": {
+      "info": {
+        "load_s": 32.43,
+        "sample_rate": 24000,
+        "f0_median_hz": 173.9
+      },
+      "phrases": {
+        "t01": {
+          "synth_s": 28.819,
+          "audio_s": 4.76,
+          "rtf": 6.054,
+          "first_call": true
+        },
+        "t02": {
+          "synth_s": 21.989,
+          "audio_s": 4.64,
+          "rtf": 4.739,
+          "first_call": false
+        },
+        "t03": {
+          "synth_s": 19.52,
+          "audio_s": 4.16,
+          "rtf": 4.692,
+          "first_call": false
+        },
+        "t04": {
+          "synth_s": 21.883,
+          "audio_s": 4.96,
+          "rtf": 4.412,
+          "first_call": false
+        },
+        "t05": {
+          "synth_s": 15.32,
+          "audio_s": 3.16,
+          "rtf": 4.848,
+          "first_call": false
+        },
+        "t06": {
+          "synth_s": 16.24,
+          "audio_s": 3.36,
+          "rtf": 4.833,
+          "first_call": false
+        },
+        "t07": {
+          "synth_s": 21.806,
+          "audio_s": 4.8,
+          "rtf": 4.543,
+          "first_call": false
+        },
+        "t08": {
+          "synth_s": 20.105,
+          "audio_s": 4.48,
+          "rtf": 4.488,
+          "first_call": false
+        },
+        "t09": {
+          "synth_s": 17.215,
+          "audio_s": 3.72,
+          "rtf": 4.628,
+          "first_call": false
+        },
+        "t10": {
+          "synth_s": 19.35,
+          "audio_s": 4.24,
+          "rtf": 4.564,
+          "first_call": false
+        },
+        "probe": {
+          "synth_s": 9.239,
+          "audio_s": 1.4,
+          "rtf": 6.599,
+          "first_call": false
+        }
+      },
+      "summary": {
+        "median_synth_s": 19.52,
+        "median_rtf": 4.628,
+        "max_synth_s": 21.989
+      }
+    },
+    "clone-silero-karina": {
+      "info": {
+        "load_s": 32.43,
+        "sample_rate": 24000,
+        "reference": "../../prototype/assets/voice-samples/silero_cis_mit/ru_karina/t01.mp3",
+        "f0_median_hz": 230.8
+      },
+      "phrases": {
+        "t01": {
+          "synth_s": 23.319,
+          "audio_s": 5.2,
+          "rtf": 4.484,
+          "first_call": true
+        },
+        "t02": {
+          "synth_s": 23.379,
+          "audio_s": 5.48,
+          "rtf": 4.266,
+          "first_call": false
+        },
+        "t03": {
+          "synth_s": 21.204,
+          "audio_s": 4.96,
+          "rtf": 4.275,
+          "first_call": false
+        },
+        "t04": {
+          "synth_s": 23.682,
+          "audio_s": 5.6,
+          "rtf": 4.229,
+          "first_call": false
+        },
+        "t05": {
+          "synth_s": 12.257,
+          "audio_s": 2.24,
+          "rtf": 5.472,
+          "first_call": false
+        },
+        "t06": {
+          "synth_s": 22.731,
+          "audio_s": 5.08,
+          "rtf": 4.475,
+          "first_call": false
+        },
+        "t07": {
+          "synth_s": 23.816,
+          "audio_s": 5.28,
+          "rtf": 4.511,
+          "first_call": false
+        },
+        "t08": {
+          "synth_s": 19.78,
+          "audio_s": 4.48,
+          "rtf": 4.415,
+          "first_call": false
+        },
+        "t09": {
+          "synth_s": 19.276,
+          "audio_s": 4.2,
+          "rtf": 4.589,
+          "first_call": false
+        },
+        "t10": {
+          "synth_s": 21.5,
+          "audio_s": 4.72,
+          "rtf": 4.555,
+          "first_call": false
+        },
+        "probe": {
+          "synth_s": 13.374,
+          "audio_s": 2.68,
+          "rtf": 4.99,
+          "first_call": false
+        }
+      },
+      "summary": {
+        "median_synth_s": 21.5,
+        "median_rtf": 4.475,
+        "max_synth_s": 23.816
+      }
+    }
+  },
+  "errors": [],
+  "total_s": 477.1
 }

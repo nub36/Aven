@@ -44,6 +44,96 @@ window.AvenVoiceSamples = {
   }
  },
  "voices": {
+  "chatterbox/clone-silero-karina": {
+   "engine": "chatterbox",
+   "voice": "clone-silero-karina",
+   "phrases": [
+    "t01",
+    "t02",
+    "t03",
+    "t04",
+    "t05",
+    "t06",
+    "t07",
+    "t08",
+    "t09",
+    "t10"
+   ],
+   "title": "Chatterbox Multilingual (голос по умолчанию) · clone-silero-karina",
+   "engineTitle": "Chatterbox Multilingual (голос по умолчанию)",
+   "class": "C — крупный нейросетевой, желательно GPU",
+   "license": "MIT",
+   "commercial": "yes",
+   "status": "shortlist",
+   "catalogueOnly": false,
+   "f0": 230.8,
+   "summary": {
+    "median_synth_s": 21.5,
+    "median_rtf": 4.475,
+    "max_synth_s": 23.816
+   },
+   "probe": {
+    "synth_s": 13.374,
+    "audio_s": 2.68,
+    "rtf": 4.99,
+    "first_call": false
+   },
+   "loadS": 32.43,
+   "env": {
+    "cpu": "Intel(R) Xeon(R) 6973P-C",
+    "cores": 4,
+    "ram_gb": 15.6,
+    "gpu": "none",
+    "runner": "GitHub Actions 1000000256",
+    "python": "3.11.16"
+   },
+   "asrWer": 0.011
+  },
+  "chatterbox/default": {
+   "engine": "chatterbox",
+   "voice": "default",
+   "phrases": [
+    "t01",
+    "t02",
+    "t03",
+    "t04",
+    "t05",
+    "t06",
+    "t07",
+    "t08",
+    "t09",
+    "t10"
+   ],
+   "title": "Chatterbox Multilingual (голос по умолчанию) · default",
+   "engineTitle": "Chatterbox Multilingual (голос по умолчанию)",
+   "class": "C — крупный нейросетевой, желательно GPU",
+   "license": "MIT",
+   "commercial": "yes",
+   "status": "shortlist",
+   "catalogueOnly": false,
+   "f0": 173.9,
+   "summary": {
+    "median_synth_s": 19.52,
+    "median_rtf": 4.628,
+    "max_synth_s": 21.989
+   },
+   "probe": {
+    "synth_s": 9.239,
+    "audio_s": 1.4,
+    "rtf": 6.599,
+    "first_call": false
+   },
+   "loadS": 32.43,
+   "env": {
+    "cpu": "Intel(R) Xeon(R) 6973P-C",
+    "cores": 4,
+    "ram_gb": 15.6,
+    "gpu": "none",
+    "runner": "GitHub Actions 1000000256",
+    "python": "3.11.16"
+   },
+   "asrWer": 0.133
+  },
   "espeak/ru-f": {
    "engine": "espeak",
    "voice": "ru-f",

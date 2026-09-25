@@ -1620,9 +1620,97 @@
   "vosk/spk04/t01": {
    "hyp": "Здравствуйте! Я Авен, ваш персональный помощник. Чем могу помочь?",
    "wer": 0.0
+  },
+  "chatterbox/clone-silero-karina/t01": {
+   "hyp": "Здравствуйте! Я Авин, ваш персональный помощник. Чем могу помочь?",
+   "wer": 0.111
+  },
+  "chatterbox/clone-silero-karina/t02": {
+   "hyp": "Сегодня у вас стоматолог в 10 часов, а в 14 нужно забрать посылку.",
+   "wer": 0.0
+  },
+  "chatterbox/clone-silero-karina/t03": {
+   "hyp": "Сегодня вы потратили 3 420 рублей.",
+   "wer": 0.0
+  },
+  "chatterbox/clone-silero-karina/t04": {
+   "hyp": "Текущий пробег автомобиля 104 500 20 километров.",
+   "wer": 0.0
+  },
+  "chatterbox/clone-silero-karina/t05": {
+   "hyp": "Напомнить вам об этом за один час.",
+   "wer": 0.0
+  },
+  "chatterbox/clone-silero-karina/t06": {
+   "hyp": "Хорошо. Я напомню вам в 9 часов 30 минут.",
+   "wer": 0.0
+  },
+  "chatterbox/clone-silero-karina/t07": {
+   "hyp": "заправка добавлена 42 литра 3 200 рублей",
+   "wer": 0.0
+  },
+  "chatterbox/clone-silero-karina/t08": {
+   "hyp": "Я не совсем поняла команду. Повторите, пожалуйста.",
+   "wer": 0.0
+  },
+  "chatterbox/clone-silero-karina/t09": {
+   "hyp": "Через 15 минут вам нужно выходить.",
+   "wer": 0.0
+  },
+  "chatterbox/clone-silero-karina/t10": {
+   "hyp": "Доброе утро, Алексей! На сегодня запланировано три дела.",
+   "wer": 0.0
+  },
+  "chatterbox/default/t01": {
+   "hyp": "Здравствуйте! Я Авин, ваш персональный помощник. Чем могу помочь?",
+   "wer": 0.111
+  },
+  "chatterbox/default/t02": {
+   "hyp": "Сегодня у вас томодолог в 10 часов, а в 14 нужно забрать посылку.",
+   "wer": 0.077
+  },
+  "chatterbox/default/t03": {
+   "hyp": "Сегодня вы потратили 3420 рублей.",
+   "wer": 0.0
+  },
+  "chatterbox/default/t04": {
+   "hyp": "Чекущий пробег автомобиля – 104,520 километров.",
+   "wer": 0.556
+  },
+  "chatterbox/default/t05": {
+   "hyp": "Напомнить вам об этом за один час.",
+   "wer": 0.0
+  },
+  "chatterbox/default/t06": {
+   "hyp": "Хорошо. Я напомню вам деле часа в полицейск минут.",
+   "wer": 0.444
+  },
+  "chatterbox/default/t07": {
+   "hyp": "Заправка добавлена 42 литра 3200 рублей.",
+   "wer": 0.0
+  },
+  "chatterbox/default/t08": {
+   "hyp": "Я не совсем поняла команду, повторите пожелуйство.",
+   "wer": 0.143
+  },
+  "chatterbox/default/t09": {
+   "hyp": "Через 15 минут вам нужно выходить.",
+   "wer": 0.0
+  },
+  "chatterbox/default/t10": {
+   "hyp": "Доброе утро, Алексей. На сегодня запланировано три дела.",
+   "wer": 0.0
   }
  },
  "voices": {
+  "chatterbox/clone-silero-karina": {
+   "mean_wer": 0.011,
+   "n": 10
+  },
+  "chatterbox/default": {
+   "mean_wer": 0.133,
+   "n": 10
+  },
   "espeak/ru-f": {
    "mean_wer": 0.943,
    "n": 10
