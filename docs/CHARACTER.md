@@ -96,3 +96,32 @@ Aven может иметь **вымышленный визуальный обр�
 - Существующие 2D-аватары прототипа (`prototype/assets/aven-*.png`) остаются текущим
   Presentation Layer прототипа до отдельных решений владельца; 3D-направление прототип пока не меняет.
 
+## 7. FINAL 2D MASTER Female Aven (утверждено владельцем 2026-09-25)
+
+> Это UX/art decision владельца, **НЕ новый ADR**. Внешность не перегенерировать без
+> прямого указания владельца.
+
+### 7.1 Утверждённый reference
+
+- Face: reference face (раунд 1, вариант D) → **HAIR A** (прямые ~до плеч) → **COLOR B**
+  (dark chocolate brown) → **MAKEUP B** (Soft Professional).
+- Одежда: dark minimal (charcoal mock-neck с violet-blue zip-деталью); композиция: бюст
+  (head + full neck + shoulders).
+- Source master с фоном: `prototype/assets/character/master/female-aven-reference.jpg`
+  (не перезаписывать). Прозрачная производная для web:
+  `prototype/assets/character/web/female-aven-transparent.png` (RGBA 741×700).
+- Pipeline прозрачности, QC краёв и preview — `prototype/assets/character/README.md` и
+  `review/3d-character-concepts/final/` (preview A белый / B почти чёрный / C фон Главной
+  light / D dark theme; qc-sheet краёв). Без синей/белой каймы и halo; внешность не
+  регенерировалась — фон удалён у утверждённого изображения.
+
+### 7.2 Статус интеграции
+
+- Preview показаны владельцу; **интеграция на Главную — после его одобрения** (не выполнена).
+- План интеграции (после одобрения): Desktop — слева приветствие + «Что сделать?», справа
+  Female Aven без собственного прямоугольного фона; за ней CSS background сайта
+  (soft radial indigo/violet glow); персонаж визуально ВНУТРИ интерфейса, не «вставленная
+  фотография»; нарисованного background персонаж не содержит.
+- История подборов (этапы 0–3): `review/3d-character-concepts/` (face → hair → color →
+  makeup; все этапы identity-locked от master reference).
+

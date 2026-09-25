@@ -13,6 +13,12 @@
 
 ## [Unreleased]
 
+### 2026-09-25 (VI) — FINAL 2D MASTER Female Aven утверждена; прозрачная версия готова (не release)
+
+- **Утверждено владельцем (UX/art decision, не ADR):** FINAL FEMALE AVEN = reference face + HAIR A + COLOR B + MAKEUP B; dark minimal одежда; бюст. Внешность не перегенерируется без прямого указания владельца.
+- **Добавлено:** `prototype/assets/character/master/female-aven-reference.jpg` (source master с фоном, не перезаписывается) и `prototype/assets/character/web/female-aven-transparent.png` (RGBA, фон удалён у утверждённого изображения без регенерации внешности); QC краёв и 4 preview (белый / почти чёрный / фон Главной light / dark theme) — без каймы и halo.
+- **Статус:** интеграция на Главную **не выполнена** — ждёт одобрения preview владельцем; прототип и его текущие аватары не изменены.
+
 ### 2026-09-25 (V) — 3D-направление Aven: visual concepts Female (review, не release)
 
 - **Изменено (направление):** визуальная цель 3D Aven — **бюст** (голова + полная шея + немного плеч + верх груди, кадр «собеседника видеозвонка»); сначала только **Female**, Male позже в том же стиле после утверждения (ADR-015, Proposed).

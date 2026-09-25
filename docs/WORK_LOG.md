@@ -6,6 +6,35 @@
 
 ---
 
+## 2026-09-25 — XI. FINAL 2D MASTER Female: прозрачность + preview (интеграция ожидает)
+
+- **Дата:** 2026-09-25
+- **Задача:** Выбор владельца: MAKEUP B → FINAL FEMALE AVEN утверждена (face + HAIR A + COLOR B + MAKEUP B). Подготовить прозрачную версию из утверждённого master (без регенерации внешности), показать 4 preview, НЕ интегрировать до одобрения.
+
+### Что конкретно сделано
+
+- Master сохранён отдельно: `prototype/assets/character/master/female-aven-reference.jpg` (копия утверждённого `stage3-makeup/makeup-B.jpg`); правило «не перезаписывать master» зафиксировано в README ассетов.
+- Прозрачность: pipeline без внешних весов (CDN моделей заблокирован прокси sandbox): MediaPipe Selfie Segmentation 0.10.21 (модель в wheel) → trimap → pymatting closed-form alpha → estimate_foreground_ml (анти-halo) → crop bbox+6px. Результат `prototype/assets/character/web/female-aven-transparent.png` (RGBA 741×700, ~464 КБ). Внешность НЕ регенерировалась: фон удалён у утверждённого изображения, identity pixel-level та же.
+- QC: лист краёв (макушка/уши/плечи × белый/чёрный) + preview A (белый), B (почти чёрный), C (реальный фон Главной light #f4f5fa), D (dark theme #0f1117) — без синей/белой каймы, halo, остатков фона; пряди, уши, шея, плечи, одежда сохранены. Копии preview и qc-sheet — `review/3d-character-concepts/final/`.
+- Документация: новый `prototype/assets/character/README.md` (файлы, правила, pipeline, план интеграции); `docs/CHARACTER.md` §7 (FINAL 2D MASTER, UX/art decision — НЕ ADR; статус интеграции); `docs/CHANGELOG.md`; настоящая запись.
+- Commit + push в `arena/01a0d8a6-aven` (PR #3 обновляется).
+
+### Что проверено
+
+- Визуально: 4 preview + qc-sheet (см. выше); размер/alpha PNG (`identify`: 741×700, RGBA).
+- Воспроизводимость: pipeline описан в README ассетов (venv вне репозитория).
+
+### Что НЕ сделано (осознанно)
+
+- Интеграция на Главную НЕ выполнена (ждёт одобрения preview владельцем); код прототипа не менялся; Male нет; 3D нет; внешность не перегенерировалась.
+
+### Что рекомендуется делать следующим
+
+1. Владелец одобряет preview (или указывает проблемы маски → улучшение alpha matte).
+2. После одобрения: интеграция на Главную по плану (слева приветствие + «Что сделать?», справа Female без собственного фона, за ней CSS radial indigo/violet glow).
+
+---
+
 ## 2026-09-25 — X. 3D-направление, этап 3: макияж при master reference COLOR B (review)
 
 - **Дата:** 2026-09-25
