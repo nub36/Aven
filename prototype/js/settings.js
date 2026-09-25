@@ -1,0 +1,407 @@
+/* Aven — Visual Prototype. Настройки и Профиль. Переключения локальные (localStorage). Не production. */
+(function () {
+  const A = window.Aven, S = window.AvenState;
+  A.pages = A.pages || {};
+  const s = () => S.s();
+  let cat = 'profile';
+
+  const cats = [
+    ['profile', 'Профиль', '👤'], ['aven', 'Aven', '🤖'], ['voice', 'Голос', '🎙️'],
+    ['notify', 'Уведомления', '🔔'], ['commands', 'Команды', '⌨️'], ['dict', 'Словарь', '📖'],
+    ['memory', 'Память', '🧠'], ['home', 'Главная', '🏠'], ['modules', 'Модули', '🧩'],
+    ['automations', 'Автоматизации', '⚡'], ['integrations', 'Интеграции', '🔌'],
+    ['sync', 'Синхронизация', '🔄'], ['files', 'Файлы', '🗂️'], ['privacy', 'Приватность', '🔐'],
+    ['security', 'Безопасность', '🛡️'], ['a11y', 'Доступность', '♿'], ['exp', 'Экспериментальные', '🧪']
+  ];
+
+  function setRow(title, sub, control) {
+    return `<div class="set-row"><div class="grow"><div class="t">${title}</div>${sub ? `<div class="s">${sub}</div>` : ''}</div>${control}</div>`;
+  }
+  function sw(name, checked, action) {
+    return `<label class="switch"><input type="checkbox" ${checked ? 'checked' : ''} data-action="${action || 'set-toggle'}" data-path="${name}"><span class="slider"></span></label>`;
+  }
+
+  A.pages.settings = function () {
+    const nav = cats.map(([id, label, ico]) =>
+      `<button class="nav-item ${cat === id ? 'active' : ''}" data-action="set-cat" data-id="${id}"><span class="ico">${ico}</span>${label}</button>`).join('');
+    const html = `
+    <div class="page-head"><div><h1>Настройки</h1><div class="sub">/settings — настройки конкретного пользователя · демо, переключения локальные</div></div></div>
+    <div class="set-layout">
+      <div class="set-nav">${nav}</div>
+      <div>${renderCat()}</div>
+    </div>`;
+    return { html };
+  };
+
+  function renderCat() {
+    const st = s();
+    const V = st.settings.voice, N = st.settings.notify, B = st.settings.behavior;
+
+    if (cat === 'profile') return `
+      <h2 class="set-h">Профиль</h2><p class="set-sub">Имя, обращение, язык, регион, форматы</p>
+      <div class="card">
+        ${setRow('Имя', '', `<input type="text" value="${A.esc(st.profile.name)}" style="width:220px" data-action-stop>`)}
+        ${setRow('Обращение', 'как Aven обращается к вам', `<input type="text" value="${A.esc(st.profile.greeting)}" style="width:220px">`)}
+        ${setRow('Язык', '', `<select><option selected>Русский</option><option>English (перспектива)</option></select>`)}
+        ${setRow('Регион / город', '', `<input type="text" value="${A.esc(st.profile.city)}" style="width:220px">`)}
+        ${setRow('Часовой пояс', '', `<input type="text" value="${A.esc(st.profile.tz)}" style="width:220px">`)}
+        ${setRow('Валюта', '', `<input type="text" value="${A.esc(st.profile.currency)}" style="width:220px">`)}
+        ${setRow('Формат даты', '', `<select><option selected>ДД.ММ.ГГГГ</option><option>ГГГГ-ММ-ДД</option></select>`)}
+        ${setRow('Формат времени', '', `<select><option selected>24 ч</option><option>12 ч</option></select>`)}
+        ${setRow('Начало недели', '', `<select><option selected>Понедельник</option><option>Воскресенье</option></select>`)}
+      </div>`;
+
+    if (cat === 'aven') return `
+      <h2 class="set-h">Aven</h2><p class="set-sub">Поведение помощника и временные понятия</p>
+      <div class="card">
+        ${setRow('Ответы', 'краткие или подробные', `<select data-action-stop><option ${B.answers === 'краткие' ? 'selected' : ''}>краткие</option><option ${B.answers === 'подробные' ? 'selected' : ''}>подробные</option></select>`)}
+        ${setRow('Уровень подтверждений', 'когда спрашивать перед действием', `<select><option ${B.confirmation === 'только перед опасными' ? 'selected' : ''}>перед опасными действиями</option><option ${B.confirmation === 'перед удалениями' ? 'selected' : ''}>перед удалениями</option><option>всегда спрашивать</option></select>`)}
+        ${setRow('«Утро» начинается в', '', `<input type="time" value="${B.morning}" style="width:130px">`)}
+        ${setRow('«День» начинается в', '', `<input type="time" value="${B.day}" style="width:130px">`)}
+        ${setRow('«Вечер» начинается в', '', `<input type="time" value="${B.evening}" style="width:130px">`)}
+        ${setRow('«Ночь» начинается в', '', `<input type="time" value="${B.night}" style="width:130px">`)}
+        ${setRow('«После работы» — с', '', `<input type="time" value="${B.afterWork}" style="width:130px">`)}
+      </div>`;
+
+    if (cat === 'voice') {
+      const voices = (window.speechSynthesis && window.speechSynthesis.getVoices().filter((v) => (v.lang || '').toLowerCase().startsWith('ru'))) || [];
+      return `
+      <h2 class="set-h">Голос</h2><p class="set-sub">Озвучивание ответов и голосовой ввод · демо</p>
+      <div class="card">
+        ${setRow('Голосовые ответы', 'озвучивать ответы Aven', sw('settings.voice.enabled', V.enabled))}
+        ${setRow('Всегда отвечать голосом', 'если выключено — только по запросу', sw('settings.voice.alwaysVoice', V.alwaysVoice))}
+        ${setRow('Голос', voices.length ? 'доступные системные голоса' : 'системные голоса не найдены — демо',
+          `<select data-action="set-voice" style="width:220px">${voices.length ? voices.map((v) => `<option value="${A.esc(v.voiceURI)}" ${v.voiceURI === V.voiceURI ? 'selected' : ''}>${A.esc(v.name)}</option>`).join('') : '<option>Системный (по умолчанию)</option>'}</select>`)}
+        ${setRow('Скорость', '', `<div class="slider-row" style="width:240px"><input type="range" min="0.5" max="2" step="0.1" value="${V.rate}" data-action="set-slider" data-path="settings.voice.rate"><span class="val">${V.rate}</span></div>`)}
+        ${setRow('Высота', '', `<div class="slider-row" style="width:240px"><input type="range" min="0.5" max="1.5" step="0.1" value="${V.pitch}" data-action="set-slider" data-path="settings.voice.pitch"><span class="val">${V.pitch}</span></div>`)}
+        ${setRow('Громкость', '', `<div class="slider-row" style="width:240px"><input type="range" min="0" max="1" step="0.1" value="${V.volume}" data-action="set-slider" data-path="settings.voice.volume"><span class="val">${V.volume}</span></div>`)}
+        ${setRow('Голосовой ввод', 'микрофон (в прототипе не работает)', `<button class="btn" data-action="mic-demo">🎤 Проверить ввод</button>`)}
+        ${setRow('Тест голоса', 'произнести демо-фразу', `<button class="btn primary" data-action="voice-test">▶ Тест голоса</button>`)}
+        ${setRow('Fallback при недоступности STT/TTS', 'всегда текст — базовые функции не зависят от голоса', '<span class="pill ok">включён всегда</span>')}
+      </div>`;
+    }
+
+    if (cat === 'notify') return `
+      <h2 class="set-h">Уведомления</h2><p class="set-sub">Голосовые события · тихие часы · приватность произнесения</p>
+      <div class="card">
+        ${setRow('Разрешить голосовое произнесение уведомлений', '', sw('settings.notify.voiceAllowed', N.voiceAllowed))}
+        ${setRow('Тихие часы', 'не беспокоить голосом ночью', sw('settings.notify.quietHours', N.quietHours))}
+        ${N.quietHours ? setRow('Интервал тихих часов', '', `<div style="display:flex;gap:6px;align-items:center"><input type="time" value="${N.quietFrom}" style="width:110px"> — <input type="time" value="${N.quietTo}" style="width:110px"></div>`) : ''}
+        ${setRow('Звук перед голосом', '', sw('settings.notify.soundBefore', N.soundBefore))}
+        ${setRow('При подключённых наушниках', 'поведение (реализуемость — открытый вопрос №22)', `<select><option ${N.headphones === 'продолжать' ? 'selected' : ''}>продолжать</option><option>только звук</option><option>молча</option></select>`)}
+        ${setRow('Приватная информация', 'правила произнесения сумм и имен', `<select><option ${N.privateInfo === 'не произносить суммы' ? 'selected' : ''}>не произносить суммы</option><option>произносить всё</option><option>всегда молча</option></select>`)}
+        <div class="s" style="color:var(--muted);font-size:.82rem;padding:10px 4px">Ограничения платформ отображаются честно: закрытая вкладка не получит голос (ADR-010).</div>
+      </div>`;
+
+    if (cat === 'commands') {
+      return `
+      <h2 class="set-h">Команды</h2><p class="set-sub">Системные и пользовательские команды · демо (Command Engine — Stage 2)</p>
+      <div class="card">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button class="btn primary" data-action="cmd-add">＋ Команда</button></div>
+        <table class="tbl">
+          <tr><th>Фраза / шаблон</th><th>Action</th><th>Вкл.</th><th></th></tr>
+          ${st.commands.map((c) => `
+          <tr>
+            <td><code>${A.esc(c.phrase)}</code></td>
+            <td><span class="pill accent">${A.esc(c.action)}</span></td>
+            <td>${sw('cmd', c.enabled, 'cmd-toggle:' + c.id)}</td>
+            <td><button class="btn small" data-action="cmd-test" data-id="${c.id}">Тест</button></td>
+          </tr>`).join('')}
+        </table>
+        <div class="s" style="color:var(--muted);font-size:.82rem;margin-top:8px">Конфликты фраз подсвечиваются (демо: конфликтов нет). Связь с Automation Workflow — в перспективе.</div>
+      </div>`;
+    }
+
+    if (cat === 'dict') return `
+      <h2 class="set-h">Словарь</h2><p class="set-sub">Персональные значения слов · приоритет над системным там, где безопасно</p>
+      <div class="card">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button class="btn primary" data-action="dict-add">＋ Слово</button></div>
+        <table class="tbl">
+          <tr><th>Слово / фраза</th><th>Значение</th><th>Тип</th><th></th></tr>
+          ${st.dictionary.map((d) => `
+          <tr>
+            <td><b>${A.esc(d.word)}</b></td>
+            <td>${A.esc(d.value)}</td>
+            <td><span class="pill">${A.esc(d.type)}</span></td>
+            <td><button class="btn small danger" data-action="dict-del" data-id="${d.id}">Удалить</button></td>
+          </tr>`).join('')}
+        </table>
+      </div>`;
+
+    if (cat === 'memory') return `
+      <h2 class="set-h">Память Aven</h2><p class="set-sub">Что Aven знает о вас — просмотр, редактирование, удаление · демо</p>
+      <div class="grid cols-2">
+        <div class="card">
+          <h3>Факты</h3>
+          ${st.memory.facts.map((m) => `
+          <div class="mem-li"><div class="grow" style="flex:1">${A.esc(m.text)}</div>
+            <button class="btn small" data-action="mem-edit" data-id="${m.id}" data-kind="facts">✏️</button>
+            <button class="btn small danger" data-action="mem-del" data-id="${m.id}" data-kind="facts">🗑</button>
+          </div>`).join('')}
+          <button class="btn block" style="margin-top:10px" data-action="mem-add" data-kind="facts">＋ Факт</button>
+        </div>
+        <div class="card">
+          <h3>Объекты</h3>
+          ${st.memory.objects.map((m) => `
+          <div class="mem-li"><div class="grow" style="flex:1">${A.esc(m.text)}</div>
+            <button class="btn small" data-action="mem-edit" data-id="${m.id}" data-kind="objects">✏️</button>
+            <button class="btn small danger" data-action="mem-del" data-id="${m.id}" data-kind="objects">🗑</button>
+          </div>`).join('')}
+          <button class="btn block" style="margin-top:10px" data-action="mem-add" data-kind="objects">＋ Объект</button>
+        </div>
+      </div>
+      <div class="s" style="color:var(--muted);font-size:.84rem;margin-top:12px">Aven не сохраняет бесконтрольно каждую фразу как постоянную память. Очистка контекста диалога — в перспективе.</div>`;
+
+    if (cat === 'home') {
+      const C = st.settings.homeCards;
+      const rows = [['today', 'Карточка «Сегодня»'], ['tasks', 'Карточка «Задачи»'], ['expenses', 'Карточка «Расходы»'], ['car', 'Карточка «Автомобиль»'], ['quick', 'Быстрые действия']];
+      return `
+      <h2 class="set-h">Главная</h2><p class="set-sub">Включение/отключение карточек · порядок — в перспективе (вопрос №25)</p>
+      <div class="card">${rows.map(([id, label]) => setRow(label, '', sw('settings.homeCards.' + id, C[id]))).join('')}
+      <div class="s" style="color:var(--muted);font-size:.82rem;padding-top:10px">Изменения сразу применяются на главной странице.</div></div>`;
+    }
+
+    if (cat === 'modules') {
+      const M = st.settings.modules;
+      const rows = [['calendar', 'Календарь'], ['tasks', 'Задачи'], ['notes', 'Заметки'], ['finance', 'Финансы'], ['auto', 'Авто'], ['shopping', 'Покупки'], ['tools', 'Инструменты']];
+      return `
+      <h2 class="set-h">Модули</h2><p class="set-sub">Включение/отключение ненужных модулей — пункты скрываются в меню (демо)</p>
+      <div class="card">
+        ${rows.map(([id, label]) => setRow(label, '', sw('settings.modules.' + id, M[id]))).join('')}
+        ${setRow('Пользовательские модули', 'собственные разделы — перспектива (ADR-009)', '<span class="pill">позже</span>')}
+      </div>`;
+    }
+
+    if (cat === 'automations') return `
+      <h2 class="set-h">Автоматизации</h2><p class="set-sub">Управление из настроек · полный список — в разделе «Автоматизации»</p>
+      <div class="card">
+        ${st.automations.map((a) => setRow(`${a.icon} ${A.esc(a.name)}`, A.esc(a.trigger), sw('auto', a.enabled, 'auto-toggle:' + a.id))).join('')}
+        ${setRow('Visual Automation Canvas', 'Stage 4 — планируется', '<span class="pill">планируется</span>')}
+      </div>`;
+
+    if (cat === 'integrations') return `
+      <h2 class="set-h">Интеграции</h2><p class="set-sub">Подключённые сервисы · permissions · статус</p>
+      <div class="card">
+        ${st.integrations.map((i) => setRow(A.esc(i.name), 'последняя синхронизация: ' + A.esc(i.last), `<span class="pill ${i.status === 'подключено' ? 'ok' : ''}">${A.esc(i.status)}</span>`)).join('')}
+        <div class="s" style="color:var(--muted);font-size:.82rem;padding-top:10px">Секреты интеграций шифруются и не попадают в логи (SECURITY.md).</div>
+      </div>`;
+
+    if (cat === 'sync') return `
+      <h2 class="set-h">Синхронизация</h2><p class="set-sub">Состояния: Online / Offline / Sync pending — Future/Under Design</p>
+      <div class="card">
+        ${setRow('Статус', '', '<span class="pill ok">Online (демо)</span>')}
+        ${st.sessions.map((x) => setRow(A.esc(x.device), A.esc(x.where) + ' · ' + A.esc(x.when), x.current ? '<span class="pill accent">текущее</span>' : '<span class="pill">offline</span>')).join('')}
+        ${setRow('Pending operations', 'офлайн-очередь — не часть первого web-релиза', '<span class="pill">0</span>')}
+        ${setRow('Offline storage', 'локальные данные браузера — где даёт практическую пользу', '<span class="pill">Future</span>')}
+      </div>`;
+
+    if (cat === 'files') return `
+      <h2 class="set-h">Файлы</h2><p class="set-sub">Занятое пространство · квота · хранение</p>
+      <div class="card">
+        ${setRow('Занятое пространство', 'чеки и фото — в перспективе', '<b>12,4 МБ (демо)</b>')}
+        ${setRow('Квота', 'модель квот не определена (вопрос №15)', '<b>5 ГБ (демо)</b>')}
+        ${setRow('Backup / Export', 'экспорт состояния прототипа', '<button class="btn" data-action="export-state">⬇ Экспорт (демо)</button>')}
+      </div>`;
+
+    if (cat === 'privacy') return `
+      <h2 class="set-h">Приватность</h2><p class="set-sub">Пользователь контролирует свои данные</p>
+      <div class="card">
+        ${setRow('Экспорт данных', 'весь аккаунт — в перспективе', '<button class="btn" data-action="export-state">⬇ Экспорт прототипа</button>')}
+        ${setRow('Удаление данных', 'delete account — в перспективе', '<button class="btn danger" data-action="privacy-reset">Сбросить демо-данные</button>')}
+        ${setRow('Диагностические данные', 'управление телеметрией (вопрос №22)', sw('privacy.diag', false))}
+        ${setRow('История действий', 'что Aven сделал', '<a href="#/day">открывается в «Дне» (демо)</a>')}
+        ${setRow('Постоянная память', 'управление тем, что разрешено сохранять', '<a href="#/settings" data-action="set-cat-link" data-id="memory">раздел «Память»</a>')}
+      </div>`;
+
+    if (cat === 'security') return `
+      <h2 class="set-h">Безопасность</h2><p class="set-sub">Пароль · 2FA · сессии · устройства · демо (настоящая авторизация не нужна)</p>
+      <div class="card">
+        ${setRow('Пароль', 'изменение пароля', '<button class="btn" data-action="demo-stub">Изменить…</button>')}
+        ${setRow('Двухфакторная аутентификация', '2FA — политика по ролям уточняется', '<span class="pill warn">не включена</span>')}
+        ${st.sessions.map((x) => setRow('🖥 ' + A.esc(x.device), A.esc(x.where) + ' · ' + A.esc(x.when), x.current ? '<span class="pill accent">текущая</span>' : `<button class="btn small" data-action="demo-stub">Завершить</button>`)).join('')}
+        ${setRow('Security history', 'журнал событий безопасности', '<span class="pill">пусто (демо)</span>')}
+      </div>`;
+
+    if (cat === 'a11y') return `
+      <h2 class="set-h">Доступность</h2><p class="set-sub">Размер текста · тема · анимации (демо)</p>
+      <div class="card">
+        ${setRow('Размер текста', '', `<select data-action="set-textsize"><option value="sm" ${st.settings.textSize === 'sm' ? 'selected' : ''}>Мелкий</option><option value="md" ${st.settings.textSize === 'md' ? 'selected' : ''}>Обычный</option><option value="lg" ${st.settings.textSize === 'lg' ? 'selected' : ''}>Крупный</option></select>`)}
+        ${setRow('Тема', '', `<select data-action="set-theme"><option value="light" ${st.settings.theme === 'light' ? 'selected' : ''}>Светлая</option><option value="dark" ${st.settings.theme === 'dark' ? 'selected' : ''}>Тёмная</option></select>`)}
+        ${setRow('Уменьшить анимации', 'reduced motion', sw('settings.reduceMotion', st.settings.reduceMotion))}
+        ${setRow('Управление с клавиатуры', 'базовая навигация Tab/Enter работает в прототипе', '<span class="pill ok">включено</span>')}
+      </div>`;
+
+    if (cat === 'exp') return `
+      <h2 class="set-h">Экспериментальные функции</h2><p class="set-sub">Возможность отдельно включать будущие возможности Aven</p>
+      <div class="card">
+        ${setRow('Automation Canvas (превью)', 'Stage 4', sw('settings.experiments.canvas', st.settings.experiments.canvas))}
+        ${setRow('AI Router (заглушка)', 'AI — необязательный слой, ADR-002', sw('settings.experiments.aiRouter', st.settings.experiments.aiRouter))}
+        ${setRow('Гео-напоминания', 'перспектива', sw('settings.experiments.geoReminders', st.settings.experiments.geoReminders))}
+        <div class="s" style="color:var(--muted);font-size:.82rem;padding-top:10px">Экспериментальные функции могут работать нестабильно — это ожидаемо.</div>
+      </div>`;
+
+    return '';
+  }
+
+  A.pages.profile = function () {
+    const p = s().profile;
+    return { html: `
+    <div class="page-head"><div><h1>Профиль</h1><div class="sub">Демо-пользователь · настоящая авторизация не нужна</div></div></div>
+    <div class="grid cols-2" style="max-width:860px">
+      <div class="card">
+        <div class="profile-head">
+          <button class="avatar big">А</button>
+          <div>
+            <div style="font-size:1.2rem;font-weight:700">${A.esc(p.name)}</div>
+            <div style="color:var(--muted)">${A.esc(p.email)}</div>
+            <div style="margin-top:6px"><span class="pill accent">демо-аккаунт</span></div>
+          </div>
+        </div>
+        <div style="margin-top:16px">
+          ${setRow('Город', '', `<span>${A.esc(p.city)}</span>`)}
+          ${setRow('Часовой пояс', '', `<span>${A.esc(p.tz)}</span>`)}
+          ${setRow('Валюта', '', `<span>${A.esc(p.currency)}</span>`)}
+        </div>
+      </div>
+      <div class="card">
+        <h3>Быстрые ссылки</h3>
+        ${setRow('Настройки', 'все категории', '<a class="btn small" href="#/settings">Открыть</a>')}
+        ${setRow('Память Aven', 'что Aven знает о вас', `<a class="btn small" href="#/settings" data-action="set-cat-link" data-id="memory">Открыть</a>`)}
+        ${setRow('Безопасность', 'сессии и устройства', `<a class="btn small" href="#/settings" data-action="set-cat-link" data-id="security">Открыть</a>`)}
+        ${setRow('Выйти', 'в прототипе — просто вернуться на главную', '<a class="btn small" href="#/home">На главную</a>')}
+      </div>
+    </div>` };
+  };
+
+  /* ---------- действия ---------- */
+  function getByPath(obj, path) { return path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj); }
+  function setByPath(obj, path, val) {
+    const ks = path.split('.');
+    let o = obj;
+    for (let i = 0; i < ks.length - 1; i++) o = o[ks[i]];
+    o[ks[ks.length - 1]] = val;
+  }
+
+  A.register({
+    'set-cat': (el) => { cat = el.dataset.id; A.render(); },
+    'set-cat-link': (el) => { cat = el.dataset.id; },
+    'set-toggle': (el) => {
+      setByPath(s(), el.dataset.path, el.checked);
+      S.save();
+      A.toast(el.checked ? 'Включено (демо)' : 'Выключено (демо)');
+      if (/^settings\.modules\./.test(el.dataset.path) || /^settings\.homeCards\./.test(el.dataset.path)) A.applyEnv();
+    },
+    'set-slider': (el) => {
+      setByPath(s(), el.dataset.path, parseFloat(el.value));
+      S.save();
+      const val = el.parentElement.querySelector('.val');
+      if (val) val.textContent = el.value;
+    },
+    'set-voice': (el) => { s().settings.voice.voiceURI = el.value; S.save(); },
+    'set-textsize': (el) => { s().settings.textSize = el.value; S.save(); A.applyEnv(); },
+    'set-theme': (el) => { s().settings.theme = el.value; S.save(); A.applyEnv(); },
+    'voice-test': () => {
+      A.speak('Привет, Алексей! Это тест голоса Aven. Прототип использует системный синтез речи браузера.', null);
+    },
+    'privacy-reset': () => {
+      A.confirmModal('Сбросить все демо-данные прототипа к исходным?', () => {
+        S.reset(); A.applyEnv(); A.render(); A.toast('Демо-данные сброшены');
+      });
+    },
+    'export-state': () => {
+      try {
+        const blob = new Blob([JSON.stringify(S.s, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'aven-prototype-state.json';
+        a.click();
+        A.demoToast('Экспорт состояния прототипа');
+      } catch (e) { A.toast('Экспорт недоступен в этом браузере'); }
+    },
+    'demo-stub': () => A.toast('Демо: в прототипе действие не выполняется'),
+
+    'cmd-toggle': (el) => {
+      const [, id] = el.dataset.action.split(':');
+      const c = s().commands.find((x) => x.id === id);
+      if (c) { c.enabled = el.checked; S.save(); }
+    },
+    'cmd-test': (el) => {
+      const c = s().commands.find((x) => x.id === el.dataset.id);
+      if (!c) return;
+      A.openModal({
+        title: 'Тест распознавания',
+        body: `
+          <div class="field"><label>Введите фразу по шаблону: <code>${A.esc(c.phrase)}</code></label>
+          <input type="text" id="cmd-test-in" placeholder="${A.esc(c.phrase)}"></div>
+          <div class="tool-out" id="cmd-test-out">— до фактического выполнения в режиме теста ничего не изменяется —</div>`,
+        submitText: 'Распознать',
+        onSubmit: () => {
+          const o = document.getElementById('cmd-test-out');
+          if (o) o.textContent = 'Демо-разбор:\nintent: ' + c.action + '\nconfidence: высокая (демо)\nподтверждение: не требуется';
+        }
+      });
+    },
+    'cmd-add': () => {
+      A.openModal({
+        title: 'Новая команда',
+        body: `
+          <div class="field"><label>Фраза / шаблон</label><input type="text" name="phrase" placeholder="запиши {сумма} на {категория}"></div>
+          <div class="field"><label>Action</label><select name="action"><option>expense.add</option><option>note.create</option><option>event.create</option><option>car.fuel.add</option><option>timer.start</option></select></div>`,
+        onSubmit: (v) => {
+          const st = S.s();
+          st.commands.push({ id: S.id('c'), phrase: v.phrase || 'моя команда', action: v.action, enabled: true });
+          S.save(); A.closeModal(); A.render(); A.demoToast('Команда добавлена (демо)');
+        }
+      });
+    },
+
+    'dict-add': () => {
+      A.openModal({
+        title: 'Новое слово',
+        body: `
+          <div class="field"><label>Слово / фраза</label><input type="text" name="word" placeholder="например: бэха"></div>
+          <div class="field"><label>Значение</label><input type="text" name="value" placeholder="BMW 530d"></div>
+          <div class="field"><label>Тип</label><select name="type"><option>Автомобиль</option><option>Место</option><option>Человек</option><option>Счёт</option><option>Другое</option></select></div>`,
+        onSubmit: (v) => {
+          const st = S.s();
+          st.dictionary.push({ id: S.id('d'), word: v.word || 'слово', value: v.value || '—', type: v.type });
+          S.save(); A.closeModal(); A.render(); A.demoToast('Слово добавлено (демо)');
+        }
+      });
+    },
+    'dict-del': (el) => {
+      A.confirmModal('Удалить слово из персонального словаря (демо)?', () => {
+        const st = S.s();
+        st.dictionary = st.dictionary.filter((d) => d.id !== el.dataset.id);
+        S.save(); A.render();
+      });
+    },
+
+    'mem-add': (el) => memForm(el.dataset.kind),
+    'mem-edit': (el) => {
+      const m = s().memory[el.dataset.kind].find((x) => x.id === el.dataset.id);
+      if (m) memForm(el.dataset.kind, m);
+    },
+    'mem-del': (el) => {
+      A.confirmModal('Удалить запись памяти (демо)?', () => {
+        const st = S.s();
+        st.memory[el.dataset.kind] = st.memory[el.dataset.kind].filter((m) => m.id !== el.dataset.id);
+        S.save(); A.render(); A.toast('Запись удалена из памяти (демо)');
+      });
+    }
+  });
+
+  function memForm(kind, existing) {
+    A.openModal({
+      title: (existing ? 'Редактировать: ' : 'Добавить в память — ') + (kind === 'facts' ? 'факт' : 'объект'),
+      body: `<div class="field"><label>Текст</label><textarea name="text" style="min-height:70px">${A.esc(existing ? existing.text : '')}</textarea></div>
+             <div class="s" style="color:var(--muted);font-size:.8rem">Aven сохраняет в постоянную память только то, что разрешено пользователем.</div>`,
+      onSubmit: (v) => {
+        const st = S.s();
+        if (existing) existing.text = v.text || existing.text;
+        else st.memory[kind].push({ id: S.id('m'), text: v.text || '—' });
+        S.save(); A.closeModal(); A.render(); A.demoToast('Память обновлена (демо)');
+      }
+    });
+  }
+})();
