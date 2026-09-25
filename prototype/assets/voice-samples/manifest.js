@@ -86,7 +86,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000245",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.943
   },
   "piper/irina-medium": {
    "engine": "piper",
@@ -130,7 +131,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000244",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
   },
   "qwen3/base06-clone": {
    "engine": "qwen3",
@@ -174,7 +176,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000241",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.008
   },
   "qwen3/cv06-ono_anna": {
    "engine": "qwen3",
@@ -200,7 +203,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000241",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "qwen3/cv06-serena": {
    "engine": "qwen3",
@@ -244,7 +248,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000241",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.022
   },
   "qwen3/cv06-sohee": {
    "engine": "qwen3",
@@ -270,7 +275,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000241",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "qwen3/cv06-vivian": {
    "engine": "qwen3",
@@ -314,7 +320,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000241",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.033
   },
   "qwen3/vd17-design": {
    "engine": "qwen3",
@@ -340,7 +347,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000241",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.222
   },
   "rhvoice/anna": {
    "engine": "rhvoice",
@@ -384,7 +392,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "e2b.local",
     "python": "3.11.2"
-   }
+   },
+   "asrWer": 0.011
   },
   "rhvoice/dasha-rus": {
    "engine": "rhvoice",
@@ -428,7 +437,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "e2b.local",
     "python": "3.11.2"
-   }
+   },
+   "asrWer": 0.011
   },
   "rhvoice/elena": {
    "engine": "rhvoice",
@@ -472,7 +482,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "e2b.local",
     "python": "3.11.2"
-   }
+   },
+   "asrWer": 0.011
   },
   "rhvoice/irina": {
    "engine": "rhvoice",
@@ -516,7 +527,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "e2b.local",
     "python": "3.11.2"
-   }
+   },
+   "asrWer": 0.011
   },
   "silero_cis_mit/ru_aigul": {
    "engine": "silero_cis_mit",
@@ -560,7 +572,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
   },
   "silero_cis_mit/ru_aigul__nostress": {
    "engine": "silero_cis_mit",
@@ -586,7 +599,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_albina": {
    "engine": "silero_cis_mit",
@@ -630,7 +644,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
   },
   "silero_cis_mit/ru_albina__nostress": {
    "engine": "silero_cis_mit",
@@ -656,7 +671,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_alexandr": {
    "engine": "silero_cis_mit",
@@ -682,7 +698,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_alfia": {
    "engine": "silero_cis_mit",
@@ -726,7 +743,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
   },
   "silero_cis_mit/ru_alfia2": {
    "engine": "silero_cis_mit",
@@ -770,7 +788,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
   },
   "silero_cis_mit/ru_alfia2__nostress": {
    "engine": "silero_cis_mit",
@@ -796,7 +815,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_alfia__nostress": {
    "engine": "silero_cis_mit",
@@ -822,7 +842,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_bogdan": {
    "engine": "silero_cis_mit",
@@ -848,7 +869,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_dmitriy": {
    "engine": "silero_cis_mit",
@@ -874,7 +896,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_eduard": {
    "engine": "silero_cis_mit",
@@ -900,7 +923,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_ekaterina": {
    "engine": "silero_cis_mit",
@@ -944,7 +968,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.033
   },
   "silero_cis_mit/ru_ekaterina__nostress": {
    "engine": "silero_cis_mit",
@@ -970,7 +995,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_gamat": {
    "engine": "silero_cis_mit",
@@ -996,7 +1022,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_igor": {
    "engine": "silero_cis_mit",
@@ -1040,7 +1067,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
   },
   "silero_cis_mit/ru_igor__nostress": {
    "engine": "silero_cis_mit",
@@ -1066,7 +1094,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_karina": {
    "engine": "silero_cis_mit",
@@ -1110,7 +1139,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
   },
   "silero_cis_mit/ru_karina__nostress": {
    "engine": "silero_cis_mit",
@@ -1136,7 +1166,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_kejilgan": {
    "engine": "silero_cis_mit",
@@ -1162,7 +1193,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_kermen": {
    "engine": "silero_cis_mit",
@@ -1206,7 +1238,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.03
   },
   "silero_cis_mit/ru_kermen__nostress": {
    "engine": "silero_cis_mit",
@@ -1232,7 +1265,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_marat": {
    "engine": "silero_cis_mit",
@@ -1258,7 +1292,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_miyau": {
    "engine": "silero_cis_mit",
@@ -1284,7 +1319,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_nurgul": {
    "engine": "silero_cis_mit",
@@ -1328,7 +1364,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
   },
   "silero_cis_mit/ru_nurgul__nostress": {
    "engine": "silero_cis_mit",
@@ -1354,7 +1391,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_oksana": {
    "engine": "silero_cis_mit",
@@ -1398,7 +1436,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.024
   },
   "silero_cis_mit/ru_oksana__nostress": {
    "engine": "silero_cis_mit",
@@ -1424,7 +1463,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_onaoy": {
    "engine": "silero_cis_mit",
@@ -1468,7 +1508,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
   },
   "silero_cis_mit/ru_onaoy__nostress": {
    "engine": "silero_cis_mit",
@@ -1494,7 +1535,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_ramilia": {
    "engine": "silero_cis_mit",
@@ -1538,7 +1580,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
   },
   "silero_cis_mit/ru_ramilia__nostress": {
    "engine": "silero_cis_mit",
@@ -1564,7 +1607,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_roman": {
    "engine": "silero_cis_mit",
@@ -1590,7 +1634,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_safarhuja": {
    "engine": "silero_cis_mit",
@@ -1616,7 +1661,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_saida": {
    "engine": "silero_cis_mit",
@@ -1660,7 +1706,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
   },
   "silero_cis_mit/ru_saida__nostress": {
    "engine": "silero_cis_mit",
@@ -1686,7 +1733,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_sibday": {
    "engine": "silero_cis_mit",
@@ -1712,7 +1760,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_vika": {
    "engine": "silero_cis_mit",
@@ -1756,7 +1805,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
   },
   "silero_cis_mit/ru_vika__nostress": {
    "engine": "silero_cis_mit",
@@ -1782,7 +1832,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_zara": {
    "engine": "silero_cis_mit",
@@ -1826,7 +1877,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
   },
   "silero_cis_mit/ru_zara__nostress": {
    "engine": "silero_cis_mit",
@@ -1852,7 +1904,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_zhadyra": {
    "engine": "silero_cis_mit",
@@ -1896,7 +1949,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
   },
   "silero_cis_mit/ru_zhadyra__nostress": {
    "engine": "silero_cis_mit",
@@ -1922,7 +1976,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_zhazira": {
    "engine": "silero_cis_mit",
@@ -1966,7 +2021,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
   },
   "silero_cis_mit/ru_zhazira__nostress": {
    "engine": "silero_cis_mit",
@@ -1992,7 +2048,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_cis_mit/ru_zinaida": {
    "engine": "silero_cis_mit",
@@ -2036,7 +2093,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.022
   },
   "silero_cis_mit/ru_zinaida__nostress": {
    "engine": "silero_cis_mit",
@@ -2062,7 +2120,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.111
   },
   "silero_v5_ru/baya": {
    "engine": "silero_v5_ru",
@@ -2106,7 +2165,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.025
   },
   "silero_v5_ru/kseniya": {
    "engine": "silero_v5_ru",
@@ -2150,7 +2210,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.022
   },
   "silero_v5_ru/xenia": {
    "engine": "silero_v5_ru",
@@ -2194,7 +2255,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000242",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
   },
   "supertonic/F1": {
    "engine": "supertonic",
@@ -2238,7 +2300,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000243",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.024
   },
   "supertonic/F2": {
    "engine": "supertonic",
@@ -2282,7 +2345,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000243",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.027
   },
   "supertonic/F3": {
    "engine": "supertonic",
@@ -2326,7 +2390,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000243",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
   },
   "supertonic/F4": {
    "engine": "supertonic",
@@ -2370,7 +2435,8 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000243",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.019
   },
   "supertonic/F5": {
    "engine": "supertonic",
@@ -2414,7 +2480,179 @@ window.AvenVoiceSamples = {
     "gpu": "none",
     "runner": "GitHub Actions 1000000243",
     "python": "3.11.16"
-   }
+   },
+   "asrWer": 0.011
+  },
+  "vosk/spk00": {
+   "engine": "vosk",
+   "voice": "spk00",
+   "phrases": [
+    "t01"
+   ],
+   "title": "Vosk TTS ru multi · spk00",
+   "engineTitle": "Vosk TTS ru multi",
+   "class": "B — лёгкий VITS+BERT, CPU",
+   "license": "не опубликована явно (голоса Irina/Tiflocomp, Natasha/SOVA и др.)",
+   "commercial": "unclear",
+   "status": "not-for-product",
+   "catalogueOnly": true,
+   "f0": 153.7,
+   "summary": null,
+   "probe": null,
+   "loadS": 70.06,
+   "env": {
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "cores": 4,
+    "ram_gb": 15.6,
+    "gpu": "none",
+    "runner": "GitHub Actions 1000000248",
+    "python": "3.11.16"
+   },
+   "asrWer": 0.0
+  },
+  "vosk/spk01": {
+   "engine": "vosk",
+   "voice": "spk01",
+   "phrases": [
+    "t01",
+    "t02",
+    "t03",
+    "t04",
+    "t05",
+    "t06",
+    "t07",
+    "t08",
+    "t09",
+    "t10"
+   ],
+   "title": "Vosk TTS ru multi · spk01",
+   "engineTitle": "Vosk TTS ru multi",
+   "class": "B — лёгкий VITS+BERT, CPU",
+   "license": "не опубликована явно (голоса Irina/Tiflocomp, Natasha/SOVA и др.)",
+   "commercial": "unclear",
+   "status": "not-for-product",
+   "catalogueOnly": false,
+   "f0": 237.1,
+   "summary": {
+    "median_synth_s": 1.428,
+    "median_rtf": 0.447,
+    "max_synth_s": 1.823
+   },
+   "probe": {
+    "synth_s": 0.361,
+    "audio_s": 0.511,
+    "rtf": 0.708,
+    "first_call": false
+   },
+   "loadS": 70.06,
+   "env": {
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "cores": 4,
+    "ram_gb": 15.6,
+    "gpu": "none",
+    "runner": "GitHub Actions 1000000248",
+    "python": "3.11.16"
+   },
+   "asrWer": 0.0
+  },
+  "vosk/spk02": {
+   "engine": "vosk",
+   "voice": "spk02",
+   "phrases": [
+    "t01",
+    "t02",
+    "t03",
+    "t04",
+    "t05",
+    "t06",
+    "t07",
+    "t08",
+    "t09",
+    "t10"
+   ],
+   "title": "Vosk TTS ru multi · spk02",
+   "engineTitle": "Vosk TTS ru multi",
+   "class": "B — лёгкий VITS+BERT, CPU",
+   "license": "не опубликована явно (голоса Irina/Tiflocomp, Natasha/SOVA и др.)",
+   "commercial": "unclear",
+   "status": "not-for-product",
+   "catalogueOnly": false,
+   "f0": 171.6,
+   "summary": {
+    "median_synth_s": 1.716,
+    "median_rtf": 0.437,
+    "max_synth_s": 2.2
+   },
+   "probe": {
+    "synth_s": 0.516,
+    "audio_s": 0.848,
+    "rtf": 0.609,
+    "first_call": false
+   },
+   "loadS": 70.06,
+   "env": {
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "cores": 4,
+    "ram_gb": 15.6,
+    "gpu": "none",
+    "runner": "GitHub Actions 1000000248",
+    "python": "3.11.16"
+   },
+   "asrWer": 0.011
+  },
+  "vosk/spk03": {
+   "engine": "vosk",
+   "voice": "spk03",
+   "phrases": [
+    "t01"
+   ],
+   "title": "Vosk TTS ru multi · spk03",
+   "engineTitle": "Vosk TTS ru multi",
+   "class": "B — лёгкий VITS+BERT, CPU",
+   "license": "не опубликована явно (голоса Irina/Tiflocomp, Natasha/SOVA и др.)",
+   "commercial": "unclear",
+   "status": "not-for-product",
+   "catalogueOnly": true,
+   "f0": 111.1,
+   "summary": null,
+   "probe": null,
+   "loadS": 70.06,
+   "env": {
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "cores": 4,
+    "ram_gb": 15.6,
+    "gpu": "none",
+    "runner": "GitHub Actions 1000000248",
+    "python": "3.11.16"
+   },
+   "asrWer": 0.0
+  },
+  "vosk/spk04": {
+   "engine": "vosk",
+   "voice": "spk04",
+   "phrases": [
+    "t01"
+   ],
+   "title": "Vosk TTS ru multi · spk04",
+   "engineTitle": "Vosk TTS ru multi",
+   "class": "B — лёгкий VITS+BERT, CPU",
+   "license": "не опубликована явно (голоса Irina/Tiflocomp, Natasha/SOVA и др.)",
+   "commercial": "unclear",
+   "status": "not-for-product",
+   "catalogueOnly": true,
+   "f0": 129.7,
+   "summary": null,
+   "probe": null,
+   "loadS": 70.06,
+   "env": {
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "cores": 4,
+    "ram_gb": 15.6,
+    "gpu": "none",
+    "runner": "GitHub Actions 1000000248",
+    "python": "3.11.16"
+   },
+   "asrWer": 0.0
   }
  }
 };

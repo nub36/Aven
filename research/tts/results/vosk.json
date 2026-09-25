@@ -1,0 +1,258 @@
+{
+  "engine": "vosk",
+  "env": {
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "cores": 4,
+    "ram_gb": 15.6,
+    "gpu": "none",
+    "runner": "GitHub Actions 1000000248",
+    "python": "3.11.16"
+  },
+  "meta": {
+    "package": "vosk-tts (Apache-2.0 code)",
+    "model": "vosk-model-tts-ru-0.9-multi",
+    "weights_license": "unclear",
+    "load_s": 70.06,
+    "num_speakers": 5,
+    "config_keys": [
+      "audio",
+      "inference",
+      "model_type",
+      "num_speakers",
+      "num_symbols",
+      "phoneme_id_map",
+      "speaker_id_map"
+    ],
+    "inference": {
+      "noise_level": 0.8,
+      "speech_rate": 1,
+      "duration_noise_level": 0.8
+    },
+    "female_by_f0": [
+      [
+        "spk01",
+        1,
+        208.0
+      ],
+      [
+        "spk02",
+        2,
+        168.3
+      ]
+    ]
+  },
+  "voices": {
+    "spk00": {
+      "info": {
+        "f0_median_hz": 153.7,
+        "load_s": 70.06,
+        "sample_rate": 22050,
+        "catalogue_only": true
+      },
+      "phrases": {
+        "t01": {
+          "synth_s": 2.964,
+          "audio_s": 7.21,
+          "rtf": 0.411,
+          "first_call": true
+        }
+      }
+    },
+    "spk01": {
+      "info": {
+        "f0_median_hz": 237.1,
+        "load_s": 70.06,
+        "sample_rate": 22050,
+        "catalogue_only": false
+      },
+      "phrases": {
+        "t01": {
+          "synth_s": 1.808,
+          "audio_s": 4.389,
+          "rtf": 0.412,
+          "first_call": true
+        },
+        "t02": {
+          "synth_s": 1.823,
+          "audio_s": 4.365,
+          "rtf": 0.418,
+          "first_call": false
+        },
+        "t03": {
+          "synth_s": 1.387,
+          "audio_s": 3.03,
+          "rtf": 0.458,
+          "first_call": false
+        },
+        "t04": {
+          "synth_s": 1.798,
+          "audio_s": 4.11,
+          "rtf": 0.438,
+          "first_call": false
+        },
+        "t05": {
+          "synth_s": 0.933,
+          "audio_s": 1.858,
+          "rtf": 0.502,
+          "first_call": false
+        },
+        "t06": {
+          "synth_s": 1.396,
+          "audio_s": 3.123,
+          "rtf": 0.447,
+          "first_call": false
+        },
+        "t07": {
+          "synth_s": 1.694,
+          "audio_s": 3.82,
+          "rtf": 0.443,
+          "first_call": false
+        },
+        "t08": {
+          "synth_s": 1.428,
+          "audio_s": 3.181,
+          "rtf": 0.449,
+          "first_call": false
+        },
+        "t09": {
+          "synth_s": 1.004,
+          "audio_s": 2.113,
+          "rtf": 0.475,
+          "first_call": false
+        },
+        "t10": {
+          "synth_s": 1.486,
+          "audio_s": 3.437,
+          "rtf": 0.432,
+          "first_call": false
+        },
+        "probe": {
+          "synth_s": 0.361,
+          "audio_s": 0.511,
+          "rtf": 0.708,
+          "first_call": false
+        }
+      },
+      "summary": {
+        "median_synth_s": 1.428,
+        "median_rtf": 0.447,
+        "max_synth_s": 1.823
+      }
+    },
+    "spk02": {
+      "info": {
+        "f0_median_hz": 171.6,
+        "load_s": 70.06,
+        "sample_rate": 22050,
+        "catalogue_only": false
+      },
+      "phrases": {
+        "t01": {
+          "synth_s": 2.247,
+          "audio_s": 5.317,
+          "rtf": 0.423,
+          "first_call": true
+        },
+        "t02": {
+          "synth_s": 2.2,
+          "audio_s": 5.259,
+          "rtf": 0.418,
+          "first_call": false
+        },
+        "t03": {
+          "synth_s": 1.718,
+          "audio_s": 3.936,
+          "rtf": 0.437,
+          "first_call": false
+        },
+        "t04": {
+          "synth_s": 2.053,
+          "audio_s": 5.039,
+          "rtf": 0.407,
+          "first_call": false
+        },
+        "t05": {
+          "synth_s": 1.146,
+          "audio_s": 2.438,
+          "rtf": 0.47,
+          "first_call": false
+        },
+        "t06": {
+          "synth_s": 1.563,
+          "audio_s": 3.692,
+          "rtf": 0.423,
+          "first_call": false
+        },
+        "t07": {
+          "synth_s": 2.062,
+          "audio_s": 5.05,
+          "rtf": 0.408,
+          "first_call": false
+        },
+        "t08": {
+          "synth_s": 1.651,
+          "audio_s": 3.738,
+          "rtf": 0.442,
+          "first_call": false
+        },
+        "t09": {
+          "synth_s": 1.233,
+          "audio_s": 2.705,
+          "rtf": 0.456,
+          "first_call": false
+        },
+        "t10": {
+          "synth_s": 1.716,
+          "audio_s": 3.924,
+          "rtf": 0.437,
+          "first_call": false
+        },
+        "probe": {
+          "synth_s": 0.516,
+          "audio_s": 0.848,
+          "rtf": 0.609,
+          "first_call": false
+        }
+      },
+      "summary": {
+        "median_synth_s": 1.716,
+        "median_rtf": 0.437,
+        "max_synth_s": 2.2
+      }
+    },
+    "spk03": {
+      "info": {
+        "f0_median_hz": 111.1,
+        "load_s": 70.06,
+        "sample_rate": 22050,
+        "catalogue_only": true
+      },
+      "phrases": {
+        "t01": {
+          "synth_s": 2.019,
+          "audio_s": 4.853,
+          "rtf": 0.416,
+          "first_call": true
+        }
+      }
+    },
+    "spk04": {
+      "info": {
+        "f0_median_hz": 129.7,
+        "load_s": 70.06,
+        "sample_rate": 22050,
+        "catalogue_only": true
+      },
+      "phrases": {
+        "t01": {
+          "synth_s": 1.751,
+          "audio_s": 4.342,
+          "rtf": 0.403,
+          "first_call": true
+        }
+      }
+    }
+  },
+  "errors": [],
+  "total_s": 115.0
+}
