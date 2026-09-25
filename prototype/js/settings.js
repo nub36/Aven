@@ -36,6 +36,17 @@
     }
   });
 
+  /* натуральные голоса, сгруппированные по источнику/движку */
+  function natGroups(list, sel) {
+    const groups = {};
+    list.forEach((v) => {
+      const g = v.privacy === 'self-hosted' ? 'Self-hosted сервер' : ((v.meta && v.meta.engineTitle) || 'Образцы') + (v.meta && v.meta.commercial && v.meta.commercial !== 'yes' ? ' — только сравнение' : '');
+      (groups[g] = groups[g] || []).push(v);
+    });
+    return Object.keys(groups).map((g) => `<optgroup label="${A.esc(g)}">${groups[g].map((v) =>
+      `<option value="${A.esc(v.id)}" ${v.id === sel ? 'selected' : ''}>${A.esc(v.privacy === 'self-hosted' ? v.label : (v.meta && v.meta.voice) || v.label)}</option>`).join('')}</optgroup>`).join('');
+  }
+
   function setRow(title, sub, control) {
     return `<div class="set-row"><div class="grow"><div class="t">${title}</div>${sub ? `<div class="s">${sub}</div>` : ''}</div>${control}</div>`;
   }
@@ -137,7 +148,7 @@
         ${engine === 'system' ? setRow('Голос', sysVoices.length ? 'системные голоса: «на устройстве» — локально, «онлайн» — текст уходит поставщику' : 'системные голоса не найдены — демо',
           `<select data-action="set-voice" style="width:240px">${sysVoices.length ? sysVoices.map((v) => `<option value="${A.esc(v.id)}" ${v.id === V.voiceURI ? 'selected' : ''}>${A.esc(v.label)} · ${v.privacy === 'device' ? 'на устройстве' : 'онлайн'}</option>`).join('') : '<option>Системный (по умолчанию)</option>'}</select>`) : ''}
         ${engine === 'natural' ? setRow('Натуральный голос', 'кандидаты исследования TTS · выбор — за владельцем после прослушивания',
-          `<select data-action="set-natural-voice" style="width:240px">${natVoices.length ? natVoices.map((v) => `<option value="${A.esc(v.id)}" ${v.id === natSel ? 'selected' : ''}>${A.esc(v.label)}${v.privacy === 'self-hosted' ? ' · сервер' : ''}</option>`).join('') : '<option value="">образцов пока нет</option>'}</select>`) : ''}
+          `<select data-action="set-natural-voice" style="width:240px">${natVoices.length ? natGroups(natVoices, natSel) : '<option value="">образцов пока нет</option>'}</select>`) : ''}
         ${engine === 'natural' && natMeta ? setRow('Лицензия голоса', A.esc(natMeta.license || ''), licPill(natMeta)) : ''}
         ${engine === 'natural' ? setRow('Self-hosted TTS-сервер', 'research/tts/server.py · пусто — тот же адрес, что у страницы',
           `<div style="display:flex;gap:6px;align-items:center"><input type="text" value="${A.esc(NV.serverUrl || '')}" placeholder="http://192.168.1.10:8080" style="width:190px" data-action="set-natural-server"><button class="btn small" data-action="tts-check-server">Проверить</button></div>`) : ''}

@@ -6,6 +6,44 @@
 
 ---
 
+## 2026-09-25 — XIII. Натуральный женский голос Aven: исследование TTS, этап 1 (research + prototype)
+
+- **Дата:** 2026-09-25
+- **Задача:** «Продолжаем Aven» — заменить роботизированный браузерный голос на естественный русский женский: исследовать бесплатные / self-hosted TTS (классы A–E), проверить лицензии кода и весов, сгенерировать одинаковые фразы T1–T10 для A/B-прослушивания, подготовить прототип (нормализация, TTSProvider, состояния, кэш, приватность, Настройки → Голос, A/B) и ОСТАНОВИТЬСЯ до выбора владельца.
+
+### Что конкретно сделано
+
+- `research/tts/`: `phrases.json` (T1–T10 + «Готово.»), `common.py` (метрики, F0), генераторы `gen_silero.py` (v5_5_ru NC + v5_cis_base MIT + silero-stress), `gen_supertonic.py`, `gen_qwen3.py` (CustomVoice, VoiceDesign → клон Base), `gen_chatterbox.py`, `gen_piper.py`, `gen_vosk.py`, `gen_cli.py` (eSpeak NG, RHVoice); `collect.py` (WAV → MP3 48 кбит/с + manifest), `asr_eval.py` (Whisper small round-trip WER), `candidates.json`, `server.py` (исследовательский self-hosted TTS-сервер), `normalize.test.js`, `ENGINES`.
+- `.github/workflows/tts-research.yml`: генерация на CPU-раннере GitHub (4 vCPU, без GPU), по движку в job, логи/ошибки — в артефакт и аннотации, итог коммитится в ветку (`prototype/assets/voice-samples/`, `research/tts/results/`).
+- RHVoice собран из исходников в песочнице; образцы Elena / Dasha / Anna / Irina.
+- Прототип: `js/tts/normalize.js`, `js/tts/providers.js`, `voice.js` (маршрутизация через AvenTTS, stop, Esc), `presence.js` (`preparing` — «Готовлю речь…»), `settings.js` (новая категория «Голос»), `data.js` (`voice.engine`, `voice.natural`), `index.html`, `style.css`, `voice-lab.html`; `app.js` — select'ы по `change` (раньше срабатывали по клику при открытии).
+- Документация: `docs/TTS_RESEARCH.md` (новый), `docs/VOICE.md` (§9, §10.1), `docs/CHANGELOG.md`, `prototype/README.md`, настоящая запись.
+
+### Что проверено
+
+- Прогоны Actions: run 36160072939 (все движки) и 36162159701 (vosk, chatterbox + ASR) — успешно; образцы и метрики закоммичены ботом.
+- Silero (CIS/v5_5_ru), Piper, RHVoice — 0,2–0,3 с на фразу на 4 vCPU; Supertonic ≈ 2 с; Vosk 1,4–1,7 с; Qwen3 на CPU ≈ 24 с. ASR WER нейросетевых голосов ≈ 1–3%, eSpeak — 94%.
+- `node research/tts/normalize.test.js` — 26/26; `node --check` по изменённым js; `py_compile` по скриптам.
+- jsdom smoke-тест: Настройки → Голос, переключение движка, статус сервера, синтез через self-hosted сервер (RHVoice, ~0,24 с до звука), образец для T1, fallback на системный голос, stop; presence `preparing → speaking → idle`.
+- Headless Chromium (@sparticuz/chromium): скриншоты voice-lab и Настроек → Голос, ошибок в консоли нет.
+
+### Известные проблемы / не сделано
+
+- **Chatterbox — не измерен:** прогоны 1–2 упали на загрузке CUDA-весов на CPU; исправление (`map_location=cpu`) запушено, run 36164238774 запущен, но результат **не получен** — токен GitHub в песочнице стал недействительным во время ожидания. Этот и последующие локальные коммиты не запушены до переподключения GitHub.
+- Vosk 0.10 отсутствует в каталоге — использована 0.9 (лицензия весов не ясна → только сравнение).
+- Qwen3 и Chatterbox на GPU не проверялись (GPU нет); streaming в пакете qwen-tts 0.1.1 отсутствует.
+- Натуральность голосов агент оценить не может (не слушает аудио) — только метрики; выбор — владелец.
+- Нормализатор: косвенные падежи числительных не согласуются.
+- ADR не создавался; голос не выбран; production-backend нет.
+
+### Что рекомендуется делать следующим
+
+1. Переподключить GitHub в Arena → push, забрать результат Chatterbox, открыть PR.
+2. Владелец слушает `prototype/voice-lab.html` (слепой режим), ставит ★, отвечает на вопросы TTS_RESEARCH §9 («Авен»/«Эйвен», архитектура сервер/браузер/GPU).
+3. После выбора — этап 2: endpoint выбранного движка и замер на целевом железе.
+
+---
+
 ## 2026-09-25 — XII. Интеграция FINAL Female Aven в hero Главной (UX prototype)
 
 - **Дата:** 2026-09-25

@@ -5,7 +5,7 @@
 # замеряет скорость и коммитит MP3-образцы + метрики обратно в ветку:
 #   prototype/assets/voice-samples/**  (прослушивание: prototype/voice-lab.html)
 #   research/tts/results/*.json
-# Платные API и ключи не используются. Репозиторий публичный → минуты Actions бесплатны.
+# Платные API и ключи не используются; расход — в пределах бесплатной квоты минут GitHub Actions.
 # См. docs/TTS_RESEARCH.md.
 
 name: TTS Research
