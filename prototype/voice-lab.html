@@ -19,6 +19,7 @@
     .lab-card .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
     .lab-card.playing { outline: 2px solid var(--accent); }
     .lab-card audio { width: 100%; height: 34px; margin-top: 8px; }
+        .stars { white-space: nowrap; flex-shrink: 0; }
     .stars button { background: none; border: 0; font-size: 1.15rem; cursor: pointer; color: var(--muted); padding: 0 1px; }
     .stars button.on { color: #e6a700; }
     .lab-letter { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; }
@@ -113,7 +114,8 @@
         '<div class="row"><span class="pill ' + licClass(v.commercial) + '" title="' + esc(v.license) + '">' + licText(v.commercial) + '</span>' +
         (v.status ? '<span class="pill">' + esc(v.status) + '</span>' : '') + '</div>' +
         '<div class="muted" style="margin-top:6px">Лицензия: ' + esc(v.license) + '<br>Синтез фразы: медиана ' + fmt(sm.median_synth_s) + ' с · RTF ' + fmt(sm.median_rtf) +
-        (v.probe ? ' · «Готово.» ' + fmt(v.probe.synth_s) + ' с' : '') + (v.f0 ? ' · F0 ≈ ' + Math.round(v.f0) + ' Гц' : '') + '</div>';
+        (v.probe ? ' · «Готово.» ' + fmt(v.probe.synth_s) + ' с' : '') + (v.f0 ? ' · F0 ≈ ' + Math.round(v.f0) + ' Гц' : '') +
+        (v.asrWer != null ? '<br>Разборчивость (ASR WER, меньше — лучше): ' + Math.round(v.asrWer * 100) + '%' : '') + '</div>';
       var player = v.system
         ? '<div class="row"><button class="btn small primary" data-sys="1">▶ Произнести системным голосом</button></div>'
         : (has ? '<audio controls preload="none" src="assets/voice-samples/' + esc(v.key) + '/' + pid + '.mp3"></audio>' : '<div class="muted" style="margin-top:8px">Для этой фразы образца нет (только T1).</div>');

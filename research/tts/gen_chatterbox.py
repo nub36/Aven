@@ -17,7 +17,8 @@ _torch_load = torch.load
 
 
 def _cpu_load(*a, **kw):
-    kw.setdefault("map_location", torch.device("cpu"))
+    if len(a) < 2 and kw.get("map_location") is None:  # загрузчик chatterbox передаёт map_location=None явно
+        kw["map_location"] = torch.device("cpu")
     return _torch_load(*a, **kw)
 
 
