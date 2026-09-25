@@ -27,7 +27,7 @@ Aven должен быть спроектирован так, чтобы поз�
 - часть возможностей офлайн ([OFFLINE_SYNC.md](OFFLINE_SYNC.md));
 - синхронизироваться с сервером.
 
-Кандидат стека: Flutter/Dart, локальная БД SQLite ([DECISIONS.md](DECISIONS.md), ADR-104 — «Предложено»).
+Кандидат стека: Flutter/Dart, локальная БД SQLite ([DECISIONS.md](DECISIONS.md), ADR-104 — `Proposed`).
 
 ### 1.2. Desktop Agent (будущее)
 
@@ -42,7 +42,7 @@ Aven должен быть спроектирован так, чтобы поз�
 - «Открой папку проекта.»
 - «Передай файл на компьютер.»
 
-Кандидат стека: Rust + Tauri ([DECISIONS.md](DECISIONS.md), ADR-105 — «Предложено»).
+Кандидат стека: Rust + Tauri ([DECISIONS.md](DECISIONS.md), ADR-105 — `Proposed`).
 
 **Не считать эти функции частью первого MVP.**
 
