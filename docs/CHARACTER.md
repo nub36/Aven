@@ -54,3 +54,45 @@ Aven может иметь **вымышленный визуальный обр�
 - Нужен ли выбор/кастомизация персонажа в production (или фиксированный бренд-образ)?
 - Юридическая чистота и лицензирование финальных ассетов (в прототипе — сгенерированные иллюстрации).
 - Анимация/мимика персонажа (в прототипе — только «парение» и пульс индикаторов).
+
+## 6. 3D-направление: бюст, visual concepts (этап review)
+
+> Решение владельца от 2026-09-25; зафиксировано как [ADR-015](DECISIONS.md) (Proposed).
+
+### 6.1 Новая визуальная цель
+
+- 3D Aven — **бюст**: голова + полная шея + немного плеч + верхняя часть груди; нижний край
+  кадра немного ниже ключиц («виртуальный собеседник при видеозвонке»). Не до пояса, не полное тело.
+- Стиль: premium realistic / semi-realistic digital human; clean, premium, calm, modern,
+  slightly futuristic, НЕ sci-fi; без cartoon/anime/plastic doll/uncanny/robot/fantasy/sexualized.
+- Одежда: минималистичная верхняя часть; цвета dark navy / indigo / graphite с небольшими
+  violet-blue акцентами; без логотипов сторонних брендов.
+- **Сначала только Female.** Male 3D — позже, в том же стиле, после утверждения Female владельцем.
+
+### 6.2 Текущий этап: visual concepts (НЕ 3D-модели)
+
+- Кандидаты: `review/3d-character-concepts/` — `female-A.jpg`, `female-B.jpg`,
+  `female-C.jpg`, `female-D.jpg` + README с описаниями и чек-листом требований.
+- **Это только visual concepts, НЕ готовые 3D models.** PNG/JPG не являются rigged-моделью:
+  нет геометрии, rig, blendshapes, visemes; в WebGL они не используются.
+- Все кандидаты: одна композиция (бюст), одинаковые освещение и стиль, фронт/небольшой 3/4,
+  взгляд на пользователя; различаются лицо, причёска, детали одежды.
+- **Решение ждёт владельца.** Победитель не выбран; интеграция в основной интерфейс и
+  замена текущего персонажа прототипа запрещены до явного «Выбираю вариант X».
+- После утверждения внешности отдельно решается pipeline настоящей модели: custom 3D /
+  character creator / commissioned model / licensed base / другой; требования (GLB/GLTF,
+  rig head/neck/eyes/jaw, blendshapes incl. blinkLeft/blinkRight/jawOpen, visemes
+  REST/A/E/I/O/U/M-B-P/F-V с mapping, hair cards, realtime-бюджет, PBR, лицензионная
+  проверка) — в `review/3d-character-concepts/README.md`.
+
+### 6.3 Честный статус предыдущего 3D-прототипа
+
+- Коммит предыдущего 3D-прототипа (`ddd1c31`: процедурная Three.js-голова, states, blink,
+  visemes, event bus, fallback) **не был push в GitHub и отсутствует в репозитории**;
+  3D-кода в репозитории нет; работа невосстановима (проверено 2026-09-25, WORK_LOG запись VII).
+- Процедурная голова, если будет пересоздана, — только **Developer/Test Model**
+  (Developer Settings → «Use Test 3D Model») для проверки состояний/blink/visemes/lip-sync/
+  event bus/fallback. Пользователю как основной 3D Aven она не предлагается.
+- Существующие 2D-аватары прототипа (`prototype/assets/aven-*.png`) остаются текущим
+  Presentation Layer прототипа до отдельных решений владельца; 3D-направление прототип пока не меняет.
+
