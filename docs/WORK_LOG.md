@@ -6,6 +6,42 @@
 
 ---
 
+## 2026-09-25 — V. Инфраструктура preview прототипа: GitHub Pages workflow
+
+- **Дата:** 2026-09-25
+- **Задача:** Организовать постоянный визуальный preview папки /prototype через GitHub Pages (временные sandbox preview больше не используются как основной способ просмотра). Только инфраструктура UX-prototype preview — НЕ production feature.
+
+### Что конкретно сделано
+
+- Создан `.github/workflows/prototype-pages.yml`: checkout репозитория → загрузка **только содержимого /prototype** как Pages artifact → деплой официальными actions (checkout@v7, configure-pages@v5, upload-pages-artifact@v5, deploy-pages@v5 — версии проверены по releases на дату). permissions: `contents: read`, `pages: write`, `id-token: write`, `actions: read` (последнее требуется deploy-pages@v5). concurrency с cancel-in-progress. Триггеры: `workflow_dispatch` + автоматический `push` в явно перечисленные ветки `main` и `arena/01a0d7ec-aven` с фильтром путей `prototype/**` / workflow-файл (предположений о «main/master» не делается: ветки перечислены явно; при смене основной ветки список правится в одном месте).
+- Проверена совместимость с проектным URL GitHub Pages (`https://<user>.github.io/<repo>/`): в index.html только относительные пути (css/style.css, js/*.js), навигация hash-based (`#/...`), favicon — data-URI, абсолютных путей нет. index.html попадает в корень артефакта, поэтому вложенность подкаталога не ломает загрузку.
+- Workflow закоммичен и запушен в `origin/arena/01a0d7ec-aven`; GitHub зарегистрировал workflow (Actions → «Prototype Pages», active).
+- Попытка включить Pages через API (`gh api repos/nub36/Aven/pages`): GET → 404 (не включён), POST → 403 «Resource not accessible by integration» — у токена агента нет прав администрирования Pages. Обход прав не предпринимался; включение Source: GitHub Actions — шаг владельца (инструкция добавлена).
+- `prototype/README.md` дополнен разделом «GitHub Pages preview»: пошагово Settings → Pages → Source: GitHub Actions → запуск workflow → где взять ссылку; ожидаемый URL `https://nub36.github.io/Aven/`; правила обновления; замечание о приватных репозиториях.
+- В CHANGELOG не записывалось (не продуктовая фича), production-архитектура/ADR не менялись, prototype не переделывался, зависимости не добавлялись.
+
+### Какие файлы изменены
+
+- Создано: `.github/workflows/prototype-pages.yml`
+- Обновлено: `prototype/README.md`, `docs/WORK_LOG.md` (эта запись)
+
+### Что проверено/протестировано
+
+- YAML синтаксис; наличие workflow на GitHub (`gh workflow list` → Prototype Pages, active).
+- Отсутствие абсолютных путей в prototype (grep); относительные ресурсы и hash-навигация — совместимо с подкаталогом Pages.
+- Права: включение Pages владельцем — подтверждено 403 от API (ожидаемо).
+
+### Известные проблемы
+
+- Preview не активен, пока владелец не выберет Source: GitHub Actions в Settings → Pages и не запустит workflow (первый деплой).
+- Если репозиторий приватный — Pages может требовать платный план GitHub.
+
+### Что рекомендуется делать следующим
+
+1. Владельцу: Settings → Pages → Source: GitHub Actions → Actions → Prototype Pages → Run workflow (ветка arena/01a0d7ec-aven или main).
+2. Проверить постоянный URL: https://nub36.github.io/Aven/
+3. Далее — по плану: вопросы №31–35 и утверждение ADR стека (прототип остаётся UX-справочником).
+
 ## 2026-09-25 — IV. Визуальный интерактивный прототип (/prototype)
 
 - **Дата:** 2026-09-25
