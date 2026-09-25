@@ -38,7 +38,10 @@
       <h1>Сравнение голосов Aven · исследование TTS</h1>
       <div class="muted">Одинаковые фразы, разные бесплатные / self-hosted движки. Это образцы для выбора на слух, не production. Подробности — docs/TTS_RESEARCH.md.</div>
     </div>
-    <a class="btn" href="index.html#/settings">← Прототип</a>
+    <div class="row">
+      <a class="btn" href="voice-lab-vd17.html">Расширенный тест vd17-design →</a>
+      <a class="btn" href="index.html#/settings">← Прототип</a>
+    </div>
   </div>
 
   <div class="card">
@@ -111,7 +114,8 @@
       var sm = v.summary || {};
       var r = st.ratings[v.key] || 0;
       var stars = '<span class="stars" data-k="' + esc(v.key) + '">' + [1, 2, 3, 4, 5].map(function (n) { return '<button data-n="' + n + '" class="' + (n <= r ? 'on' : '') + '">★</button>'; }).join('') + '</span>';
-      var head = blind ? '<span class="lab-letter">' + lab + '</span>' : '<span>' + esc(v.engineTitle || v.key) + '</span>';
+      var fav = v.key === 'qwen3/vd17-design';   // фаворит владельца на 2026-09-25 (предварительно, не утверждено)
+      var head = blind ? '<span class="lab-letter">' + lab + '</span>' : '<span>' + esc(v.engineTitle || v.key) + '</span>' + (fav ? ' <span class="pill" title="Предварительная оценка владельца ★5. Не утверждённая архитектура: System TTS остаётся fallback.">★ фаворит</span>' : '');
       var sub = blind ? 'голос ' + lab : esc(v.voice || '') + (v.class ? ' · ' + esc(v.class) : '');
       var meta = blind || v.system ? '' :
         '<div class="row"><span class="pill ' + licClass(v.commercial) + '" title="' + esc(v.license) + '">' + licText(v.commercial) + '</span>' +
