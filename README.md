@@ -43,6 +43,7 @@
 | [docs/VOICE.md](docs/VOICE.md) | Голосовой слой: STT/TTS, настройки, ограничения платформ |
 | [docs/TTS_RESEARCH.md](docs/TTS_RESEARCH.md) | Исследование натурального голоса (этапы 1, 2, 2.1): движки, метрики, GPU/latency, произношение «Авен» |
 | [docs/STACK_RESEARCH.md](docs/STACK_RESEARCH.md) | Исследование стека Stage 1: альтернативы, лицензии, риски, стоимость владения, план проверок, вопросы владельцу |
+| [docs/MVP_SCOPE.md](docs/MVP_SCOPE.md) | Состав Stage 1 и первого MVP: критерии отбора разделов, предлагаемый срез, спецификации и критерии приёмки, вопросы владельцу |
 | [docs/AUTOMATION.md](docs/AUTOMATION.md) | Automation Canvas, блоки, готовые автоматизации |
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | Модель данных, память Aven, связи сущностей |
 | [docs/OFFLINE_SYNC.md](docs/OFFLINE_SYNC.md) | Offline-first / local-first, синхронизация |
