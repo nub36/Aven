@@ -1,7 +1,7 @@
 # План проекта Aven
 
 > **Статус документа:** главный человеческий план проекта, источник истины по карте развития.
-> **Последнее обновление:** 2026-09-25
+> **Последнее обновление:** 2026-09-26
 > **Стадия проекта:** планирование / документирование. Реализация не начата.
 > **Текущее продуктовое направление:** **WEB-FIRST** ([ADR-013](DECISIONS.md), Product Direction — может быть пересмотрено владельцем). Production-разработка не начата.
 > **Статус архитектуры:** проектируется; окончательные архитектурные/технологические решения **не** утверждены (см. раздел 10 «Статус архитектуры»).
@@ -79,6 +79,7 @@ Result → UI
 | [FEATURES.md](FEATURES.md) | Возможности, разделы Web Aven, модули |
 | [COMMAND_ENGINE.md](COMMAND_ENGINE.md) | Движок команд, естественная речь без AI, пользовательские команды и словарь, confidence |
 | [VOICE.md](VOICE.md) | Голос: архитектура, настройки, ограничения платформ |
+| [STACK_RESEARCH.md](STACK_RESEARCH.md) | Исследование стека Stage 1: требования из спецификаций, альтернативы, лицензии, риски, стоимость, план проверок, вопросы владельцу |
 | [TTS_RESEARCH.md](TTS_RESEARCH.md) | Исследование натурального голоса (этапы 1, 2, 2.1): движки, лицензии, метрики, GPU/latency, произношение «Авен» |
 | [AUTOMATION.md](AUTOMATION.md) | Automation Canvas, типы блоков, готовые автоматизации |
 | [DATA_MODEL.md](DATA_MODEL.md) | Память Aven, сущности, связи, пользовательские типы |
@@ -270,17 +271,27 @@ Offline/local-first остаётся **желаемым будущим свой�
 
 > **НЕ окончательное решение, пока нет ADR в [DECISIONS.md](DECISIONS.md) со статусом `Accepted`. Реализацию не начинать.**
 
-| Область | Предварительный кандидат | Статус |
-|---|---|---|
-| Backend | TypeScript + Node.js, возможный framework: NestJS | Proposed, требует ADR |
-| Server database | PostgreSQL | Proposed, требует ADR |
-| Web | React/TypeScript, возможный framework: Next.js | Proposed, требует ADR |
-| Mobile (будущее) | Flutter/Dart — один из кандидатов | Proposed, требует ADR |
-| Local mobile database | SQLite | Proposed, требует ADR |
-| Desktop Agent (будущее) | Rust + Tauri — кандидат | Proposed, требует ADR |
-| Background jobs | production-ready очередь/worker — **нужно выбрать** | Under Discussion |
-| Caching | Redis или совместимое, **если обосновано** | Under Discussion |
-| Object storage | S3-compatible abstraction | Proposed, требует ADR |
+> **2026-09-26:** сравнение альтернатив, лицензии, версии, риски, стоимость владения и план проверок
+> подготовлены в **[STACK_RESEARCH.md](STACK_RESEARCH.md)**. Статусы решений **не изменились**: всё по-прежнему
+> `Proposed`, реализация до `Accepted` запрещена. Список вопросов владельцу — [STACK_RESEARCH.md](STACK_RESEARCH.md) раздел 13.
+
+| Область | Предварительный кандидат | Статус | Материалы для решения |
+|---|---|---|---|
+| Backend runtime/язык | Node.js 24 LTS + TypeScript 6.x | Proposed ([ADR-101](DECISIONS.md)) | [STACK_RESEARCH](STACK_RESEARCH.md) §4.1 |
+| Backend framework | NestJS **или** Fastify (альтернативы: Hono, Express) | Proposed ([ADR-101](DECISIONS.md)) | [STACK_RESEARCH](STACK_RESEARCH.md) §4.2 |
+| Контракт API и валидация | REST + OpenAPI + общие Zod-схемы | Proposed ([ADR-111](DECISIONS.md)) | [STACK_RESEARCH](STACK_RESEARCH.md) §4.3 |
+| Доступ к данным / миграции | Drizzle ORM (альтернатива: Prisma 7, Kysely) | Proposed ([ADR-109](DECISIONS.md)) | [STACK_RESEARCH](STACK_RESEARCH.md) §4.4 |
+| Server database | PostgreSQL 17/18 | Proposed ([ADR-102](DECISIONS.md)) | [STACK_RESEARCH](STACK_RESEARCH.md) §6.1 |
+| Web | React + TypeScript; развилка «отдельный API + Vite/TanStack SPA» / «full-stack Next.js 16» | Proposed ([ADR-103](DECISIONS.md)) | [STACK_RESEARCH](STACK_RESEARCH.md) §3 (R1), §5 |
+| Аутентификация / сессии / 2FA | Better Auth (встроенная) + свой RBAC | Proposed ([ADR-110](DECISIONS.md)) | [STACK_RESEARCH](STACK_RESEARCH.md) §6.5 |
+| Background jobs | pg-boss (очередь в PostgreSQL) + критерии перехода на BullMQ | Proposed ([ADR-106](DECISIONS.md)) | [STACK_RESEARCH](STACK_RESEARCH.md) §6.2 |
+| Caching | отдельный кэш-сервер **не вводится** до измеренной необходимости; если понадобится — Valkey (не Redis 8, AGPLv3) | Proposed ([ADR-107](DECISIONS.md)) | [STACK_RESEARCH](STACK_RESEARCH.md) §6.3 |
+| Object storage | абстракция `StorageProvider`, целевой контракт S3-совместимый; MinIO не выбирать (репозиторий архивирован) | Proposed ([ADR-108](DECISIONS.md)) | [STACK_RESEARCH](STACK_RESEARCH.md) §6.4 |
+| Тестирование и качество | Vitest + Testing Library + Playwright + интеграционные на реальном PostgreSQL | Proposed ([ADR-112](DECISIONS.md)) | [STACK_RESEARCH](STACK_RESEARCH.md) §7 |
+| Репозиторий и деплой | монорепо pnpm workspaces, Docker Compose на VPS, GitHub Actions, бэкап с проверенным восстановлением | Proposed ([ADR-113](DECISIONS.md)) | [STACK_RESEARCH](STACK_RESEARCH.md) §7, §3 (R2) |
+| Mobile (будущее) | Flutter/Dart — один из кандидатов | Proposed ([ADR-104](DECISIONS.md)) | не исследовалось (Stage 5–6) |
+| Local mobile database | SQLite | Proposed ([ADR-104](DECISIONS.md)) | не исследовалось (Stage 5–6) |
+| Desktop Agent (будущее) | Rust + Tauri — кандидат | Proposed ([ADR-105](DECISIONS.md)) | не исследовалось (Stage 5–6) |
 
 ---
 
@@ -290,9 +301,9 @@ Offline/local-first остаётся **желаемым будущим свой�
 
 1. **Automation Canvas в MVP или после?** Направление Web-first относит Canvas к Stage 4, но границы раннего этапа (готовые автоматизации/простые правила/расписания) нужно определить.
 2. **Пороги confidence** Command Engine — принцип уровней зафиксирован, конкретные числовые пороги **не утверждены**.
-3. **Background jobs** — production-ready система очередей/воркеров не выбрана.
-4. **Кэширование** — Redis «если обосновано»; обоснование не подготовлено.
-5. **Backend/Web/Mobile/Desktop стеки** — кандидаты перечислены, ADR нет.
+3. **Background jobs** — кандидаты предложены и сравнены ([STACK_RESEARCH.md](STACK_RESEARCH.md) §6.2, [ADR-106](DECISIONS.md): pg-boss vs BullMQ vs Temporal vs cron); **решение за владельцем**.
+4. **Кэширование** — обоснование подготовлено 2026-09-26 ([STACK_RESEARCH.md](STACK_RESEARCH.md) §6.3, [ADR-107](DECISIONS.md)): на Stage 1 отдельный кэш-сервер не вводится, критерии введения зафиксированы; **подтверждение за владельцем**.
+5. **Backend/Web/Mobile/Desktop стеки** — кандидаты перечислены; по Backend/Web/данным/деплою подготовлены материалы для решения ([STACK_RESEARCH.md](STACK_RESEARCH.md), ADR-101…103, 106…113), по Mobile/Desktop — не исследовались (Stage 5–6). **Утверждение ADR — за владельцем.**
 6. **Стратегия разрешения конфликтов офлайн-синхронизации** не выбрана (и отложена: не условие web-запуска).
 7. **STT/TTS провайдеры** не выбраны; поддержка браузерами не гарантирована — план fallback и матрица поддержки (актуально к Stage 3).
 8. **Состав и приоритеты MVP** — список в разделе 5 помечен как «вероятный», требуется утверждение.
@@ -323,6 +334,10 @@ Offline/local-first остаётся **желаемым будущим свой�
 33. **Пересечение строки «Что сделать?» на главной и полноэкранного Assistant** — единое поведение, переходы и глубина истории чата требуют UX-решения (в прототипе команда с главной передаётся в Assistant).
 34. **Адаптивность**: поведение сайдбара и сетки карточек на малых экранах (в прототипе — горизонтальная лента меню, одна колонка) — детали не определены.
 35. **Структура навигации профиля**: «Профиль» — отдельный пункт меню или часть настроек (в прототипе — отдельный пункт внизу меню) — уточнить.
+36. **Инфраструктура Stage 1**: провайдер и регион хостинга, бюджет, домен и TLS — не определены (варианты и ориентировочная стоимость — [STACK_RESEARCH.md](STACK_RESEARCH.md) §3 (R2), §8). Решение владельца.
+37. **Наблюдаемость**: состав мониторинга — минимум (health + структурированные логи + uptime) либо Sentry/полный стек метрик — не определён ([STACK_RESEARCH.md](STACK_RESEARCH.md) §7). Решение владельца.
+38. **Инструменты качества**: линтер/форматтер (ESLint + Prettier или Biome) и состав обязательных CI-проверок — не определены ([STACK_RESEARCH.md](STACK_RESEARCH.md) §7, [ADR-112](DECISIONS.md)).
+39. **Разрешение на spikes**: проверки стека S1–S5 ([STACK_RESEARCH.md](STACK_RESEARCH.md) §12) требуют кода, поэтому на этапе 0 запрещены ([AGENT_GUIDE.md](AGENT_GUIDE.md) §8). Нужно явное разрешение владельца и согласованный объём (предлагается отдельная папка `research/stack-spike/`, не production-код).
 
 ---
 
