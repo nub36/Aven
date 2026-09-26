@@ -922,6 +922,17 @@ System TTS. **На реальный VPS агент ничего не стави�
   длинные, тестовая фраза успеха), настоящий RIFF/WAV, synth_s/RTF, WAV→MP3 для
   прослушивания, 413/400, rate limit 429 на отдельном инстансе. Workflow
   `.github/workflows/silero-aigul-live.yml`; publish ботом → `review/silero-aigul-live/`.
+  **Итог прогона 36239146298 (2026-09-26): 25 PASS, 0 FAIL**; метрики 1 ядра —
+  `review/silero-aigul-live/silero_live.json`: фраза владельца (97 симв.) — синтез
+  0,43 с → 7,2 с аудио (RTF 0,060); «Готово.» — 0,07 с; длинная (470 симв.) — 2,4 с →
+  37,8 с аудио (RTF 0,063); rate limit 200/200/200 → 429 + Retry-After; health minimal
+  ровно {ok, status, server, version, max_chars, default_voice}. MP3 всех фраз —
+  `review/silero-aigul-live/mp3/` (owner.mp3 — тестовая фраза успеха).
+  Отладка прогона: (1) `… | tee` без `pipefail` маскировал падение шага — исправлено
+  `set -eo pipefail`; (2) движок не грузился из-за ОТНОСИТЕЛЬНОГО пути модели в
+  `SILERO_MODEL` для subprocess — исправлено (`Path(model).resolve()`); (3) вывод
+  сервера (причина «engine unavailable») раньше уходил в недочитаемый PIPE — теперь
+  лог сервера печатается тестом.
 - Регресс: `tts-proto-check.js` — 42 PASS (37 прежних + M1–M4 minimal health/default_voice/
   отсутствие bundled-образцов + K1 фраза владельца); `dryrun_server_qwen3.py` — 19 PASS;
   `stage1-proto-check.js` — 140/140.
@@ -929,8 +940,8 @@ System TTS. **На реальный VPS агент ничего не стави�
 ### 19.5 Статусы честно
 
 Проверено в песочнице: dry-run контракт (23), jsdom-пути фронтенда (42+140), qwen3-регресс (19).
-Проверено в CI: live-синтез Silero ru_aigul на server.py 0.4.0 (workflow Silero Aigul Live;
-MP3 и метрики — review/silero-aigul-live/). НЕ проверено (нет доступа): реальный deploy на
-VPS владельца, Caddy+DNS+HTTPS на реальном домене, systemd на Ubuntu 24.04 — для этого
-README-vps.md (9 шагов). Липсинк/3D — вне этапа 6: Silero-аудио → lip-sync → виземы —
-следующий отдельный слой (§14, §18.3).
+Проверено в CI: live-синтез Silero ru_aigul на server.py 0.4.0 — прогон 36239146298,
+25 PASS / 0 FAIL (MP3 и метрики — review/silero-aigul-live/). НЕ проверено (нет доступа):
+реальный deploy на VPS владельца, Caddy+DNS+HTTPS на реальном домене, systemd на
+Ubuntu 24.04 — для этого README-vps.md (9 шагов). Липсинк/3D — вне этапа 6:
+Silero-аудио → lip-sync → виземы — следующий отдельный слой (§14, §18.3).

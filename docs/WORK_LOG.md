@@ -57,8 +57,13 @@ docs/WORK_LOG.md, docs/CHANGELOG.md.
 ### Проверено
 
 dryrun_server_silero.py — 23 PASS (без движка); tts-proto-check.js — 42 PASS (37 регресс
-+ 5 новых: M1–M4, K1); stage1-proto-check.js — 140/140; dryrun_server_qwen3.py — 19 PASS;
-live-прогон Silero в CI — workflow Silero Aigul Live (см. review/silero-aigul-live/).
++ 5 новых: M1–M4, K1); stage1-proto-check.js — 140/140; dryrun_server_qwen3.py — 19 PASS.
+**LIVE-прогон Silero в CI: run 36239146298 — 25 PASS / 0 FAIL** (server.py 0.4.0 +
+настоящая модель, taskset -c 0): health minimal, все категории фраз (включая тестовую
+фразу владельца: 0,43 с синтез → 7,2 с аудио, RTF 0,060; длинная 470 симв.: 2,4 с →
+37,8 с, RTF 0,063), rate limit 429, лимиты 413/400; MP3 + метрики — review/silero-aigul-live/.
+Отладка CI (3 прогона): tee без pipefail маскировал падение; движок не грузился из-за
+относительного пути модели в subprocess — исправлено; лог сервера теперь печатается.
 НЕ проверено и НЕ выполнялось: deploy на реальный VPS, реальный DNS/HTTPS — за владельцем
 по README-vps.md; live deployment не изображён.
 
