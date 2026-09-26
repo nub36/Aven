@@ -21,13 +21,13 @@ HTTPS-endpoint на вашем VPS. Ограничение длины и при�
 
 ## Голоса (финалисты этапа 5; финальный выбор — владелец на слух, prototype/voice-compare.html)
 
-| Движок | Голоса | Лицензия | Коммерческое | RAM (RSS) | Примечание |
+| Движок | Голоса | Лицензия | Коммерческое | RAM (RSS), 1 CPU | Примечание |
 |---|---|---|---|---|---|
-| Silero v5 CIS base + silero-stress | ru_aigul, ru_vika, ru_zara | MIT (код и веса CIS) | да | ~0,5 ГБ c torch | нейроголос, естественнее |
-| RHVoice (HTS) | elena, dasha-rus | elena GPL-3.0; dasha-rus CC BY-SA 4.0 | да (dasha — с указанием авторства) | ~50 МБ | мгновенный, звучит синтетичнее |
+| Silero v5 CIS base + silero-stress | ru_aigul, ru_vika, ru_zara | MIT (код и веса CIS) | да | ~0,6 ГБ (пик 0,72 ГБ, c torch) | нейроголос, естественнее; короткая фраза ≈0,08 с, RTF 0,065 |
+| RHVoice (HTS) | elena, dasha-rus | elena GPL-3.0; dasha-rus CC BY-SA 4.0 | да (dasha — с указанием авторства) | ~26 МБ | мгновенный (0,12–0,17 с), звучит синтетичнее |
 
-Цифры задержек на честном «1 CPU» (taskset -c 0, CI) — `research/tts/results/vps_compare`
-(заполняется прогоном `VPS TTS Compare`, см. §19). Выбранный движок ставится одной командой ниже.
+Цифры задержек на честном «1 CPU» (taskset -c 0, CI) — `research/tts/results/vps_probe.json`
+(прогон `VPS TTS Compare`; подробности — docs/TTS_RESEARCH.md §18). Выбранный движок ставится одной командой ниже.
 
 ## Шаг 1. Подключитесь к VPS по SSH
 
