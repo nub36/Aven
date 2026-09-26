@@ -18,7 +18,10 @@
   ];
   const stageOf = (id) => (cats.filter((c) => c[0] === id)[0] || [])[3] || '';
 
-  /* статус self-hosted TTS-сервера (асинхронно, без перерисовки всей страницы) */
+  /* статус self-hosted TTS-сервера (асинхронно, без перерисовки всей страницы).
+     Кнопка «Проверить» вызывает реальный health endpoint: при успехе — сервер/движки/число голосов/
+     latency, при неудаче — конкретная причина (HTTP-код, timeout, mixed content, сеть/CORS),
+     а не общее «не работает». */
   let lastServerKey = null;
   const serverKey = (st) => (st && st.checked ? st.ok + ':' + st.voices.map((v) => v.id).join(',') : 'unchecked');
   function refreshTtsServer(force) {
@@ -26,7 +29,15 @@
     window.AvenTTS.checkServer(force).then((st) => {
       const el = document.getElementById('tts-server-status');
       if (el) {
-        el.textContent = st.ok ? 'подключён · голосов: ' + st.voices.length : 'не подключён — ' + (st.error || 'нет ответа');
+        if (st.ok) {
+          const eng = st.info && st.info.engines ? Object.keys(st.info.engines) : [];
+          el.textContent = 'подключён · ' + ((st.info && st.info.server) || 'сервер') +
+            (st.info && st.info.version ? ' ' + st.info.version : '') +
+            (eng.length ? ' · ' + eng.join(', ') : ' · движков нет') +
+            ' · голосов: ' + st.voices.length + (st.latencyMs != null ? ' · ' + st.latencyMs + ' мс' : '');
+        } else {
+          el.textContent = 'недоступен — ' + (st.error || 'нет ответа');
+        }
         el.className = 'pill ' + (st.ok ? 'ok' : '');
       }
       // перерисовать, если список серверных голосов изменился с момента отрисовки
@@ -160,6 +171,8 @@
           `<div style="display:flex;gap:6px;align-items:center"><input type="text" value="${A.esc(NV.serverUrl || '')}" placeholder="http://192.168.1.10:8080" style="width:190px" data-action="set-natural-server"><button class="btn small" data-action="tts-check-server">Проверить</button></div>`) : ''}
         ${engine === 'natural' ? setRow('Статус сервера', '', '<span class="pill" id="tts-server-status">проверяю…</span>') : ''}
         ${engine === 'natural' ? setRow('Кэш озвучки', 'только память вкладки; фразы с цифрами и именами не кэшируются', sw('settings.voice.natural.cache', NV.cache !== false)) : ''}
+        ${engine === 'natural' ? setRow('Таймаут Natural, сек', 'сервер не ответил за это время → честный переход на системный голос (здоровый GPU отвечает за доли секунды; для CPU-проверки своего сервера поднимите до ~120)',
+          `<input type="number" min="2" max="600" step="1" value="${A.esc(NV.timeoutSec != null ? NV.timeoutSec : 10)}" style="width:80px" data-action="set-natural-timeout">`) : ''}
         ${priv ? `<div class="tts-priv ${priv.ok ? '' : 'warn'}"><span class="pill ${priv.ok ? 'ok' : ''}">${A.esc(priv.tag)}</span><span>${A.esc(priv.text)}</span></div>` : ''}
         ${engine === 'system' ? setRow('Скорость', '', `<div class="slider-row" style="width:240px"><input type="range" min="0.5" max="2" step="0.1" value="${V.rate}" data-action="set-slider" data-path="settings.voice.rate"><span class="val">${V.rate}</span></div>`) : ''}
         ${engine === 'system' ? setRow('Высота', '', `<div class="slider-row" style="width:240px"><input type="range" min="0.5" max="1.5" step="0.1" value="${V.pitch}" data-action="set-slider" data-path="settings.voice.pitch"><span class="val">${V.pitch}</span></div>`) : ''}
@@ -423,6 +436,12 @@
     },
     'set-natural-voice': (el) => { s().settings.voice.natural.voice = el.value; S.save(); A.render(); },
     'set-natural-server': (el) => { s().settings.voice.natural.serverUrl = el.value.trim(); S.save(); },
+    'set-natural-timeout': (el) => {
+      const t = Math.round(parseFloat(el.value));
+      s().settings.voice.natural.timeoutSec = (isFinite(t) && t >= 2 && t <= 600) ? t : 10;
+      el.value = s().settings.voice.natural.timeoutSec;
+      S.save();
+    },
     'tts-check-server': () => { refreshTtsServer(true); },
     'tts-stop': () => { if (window.AvenTTS) window.AvenTTS.stop(); },
     'tts-norm-preview': (el) => {

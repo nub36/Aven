@@ -6,17 +6,22 @@
  *     voices() → [{ id, label, privacy, meta }],
  *     available() → Promise<boolean>,
  *     speak(speechText, { voice, rate, pitch, volume, signal, onStart }) → Promise (resolve по окончании),
- *     stop()
+ *     stop(),
+ *     // Natural дополнительно (§9): health(), getStatus(), getVoice()
  *   }
  *
  *   SystemTTSProvider — браузерный speechSynthesis (ВСЕГДА остаётся как бесплатный fallback).
  *   NaturalTTSProviderExperimental — нейросетевые голоса из исследования:
- *       1) self-hosted сервер (research/tts/server.py): POST {base}/api/tts/synthesize → WAV;
+ *       1) self-hosted сервер (research/tts/server.py):
+ *          GET {base}/api/tts/health → проверка, POST {base}/api/tts/synthesize → WAV;
  *       2) если сервера нет — заранее сгенерированные образцы (только тестовые фразы T1–T10);
- *       3) иначе — честная ошибка → менеджер говорит системным голосом.
+ *       3) иначе — честная ошибка → менеджер говорит системным голосом
+ *          («Natural Voice недоступен… — используется системный голос»), а не делает вид,
+ *          что звучит Natural (ADR-010).
  *
  * Менеджер window.AvenTTS: normalize → provider → presence (preparing → speaking → idle),
- * stop() в любой момент, сессионный кэш аудио, замер задержки до начала звука.
+ * stop() в любой момент, сессионный кэш аудио, замер задержки до начала звука,
+ * таймаут запроса к серверу (natural.timeoutSec, по умолчанию 10 с) → fallback на системный.
  */
 (function () {
   'use strict';
@@ -110,27 +115,86 @@
 
   /* ---------------- Natural (эксперимент) ---------------- */
   var SAMPLES_BASE = 'assets/voice-samples/';
+  var HEALTH_TIMEOUT_MS = 3000;   // проверка сервера — быстрая
   var audioEl = null;
-  var serverState = { checked: 0, ok: false, voices: [], base: null, error: '' };
+  var serverState = { checked: 0, ok: false, voices: [], base: null, error: '', kind: '', latencyMs: null, info: null };
 
   function samples() { return window.AvenVoiceSamples || { phrases: {}, voices: {} }; }
   function serverBase() { return (cfg().natural.serverUrl || '').replace(/\/+$/, ''); }
   function canon(t) { return String(t || '').toLowerCase().replace(/ё/g, 'е').replace(/[^а-яa-z0-9]+/g, ' ').trim(); }
 
+  /* Таймаут ответа сервера на синтез (§13): по умолчанию 10 с — здоровый GPU-сервер отвечает
+   * за доли секунды (TTS_RESEARCH §12.2: RTF 0,29–0,46), зависший не должен вешать Aven.
+   * Для CPU-проверки собственного сервера значение поднимается в Настройках (CPU: 18–70 с!). */
+  function timeoutCfg() {
+    var t = Number(cfg().natural.timeoutSec);
+    return (isFinite(t) && t >= 2 && t <= 600) ? t : 10;
+  }
+
+  function failState(base, error, kind, httpStatus) {
+    serverState = { checked: Date.now(), ok: false, voices: [], base: base, error: error, kind: kind || '', httpStatus: httpStatus || null, latencyMs: null, info: null };
+    return serverState;
+  }
+
+  /**
+   * Проверка сервера (§14). Результат — serverState:
+   *   ok: true + voices[], latencyMs, info.engine/server/version
+   *   ok: false + kind: 'mixed-content' | 'http' (+httpStatus) | 'timeout' | 'network' | 'no-base'
+   * Честный текст причины — в .error (никакого общего «не работает»).
+   */
   function checkServer(force) {
     var base = serverBase();
     if (location.protocol === 'file:' && !base) {
-      serverState = { checked: Date.now(), ok: false, voices: [], base: base, error: 'страница открыта как файл — сервера нет' };
-      return Promise.resolve(serverState);
+      return Promise.resolve(failState(base, 'страница открыта как файл — сервера нет', 'no-base'));
     }
     if (!force && serverState.base === base && Date.now() - serverState.checked < 30000) return Promise.resolve(serverState);
+    // §16: HTTPS-страница (GitHub Pages) не может обратиться к HTTP-серверу — браузер заблокирует.
+    // Показываем причину сразу, не дожидаясь TypeError от fetch.
+    if (location.protocol === 'https:' && /^http:\/\//i.test(base)) {
+      return Promise.resolve(failState(base,
+        'mixed content: страница открыта по HTTPS, а сервер — HTTP: браузер блокирует запрос. ' +
+        'Local Development Mode: откройте прототип по HTTP с адреса сервера (http://<IP>:8080/) ' +
+        'или поднимите TTS endpoint по HTTPS', 'mixed-content'));
+    }
     var ctl = new AbortController();
-    var to = setTimeout(function () { ctl.abort(); }, 1500);
-    return fetch(base + '/api/tts/voices', { signal: ctl.signal, cache: 'no-store' })
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(function (j) { serverState = { checked: Date.now(), ok: true, voices: j.voices || [], base: base, error: '' }; return serverState; })
-      .catch(function (e) { serverState = { checked: Date.now(), ok: false, voices: [], base: base, error: e.name === 'AbortError' ? 'нет ответа' : String(e.message || e) }; return serverState; })
-      .finally(function () { clearTimeout(to); });
+    var timedOut = false;
+    var to = setTimeout(function () { timedOut = true; ctl.abort(); }, HEALTH_TIMEOUT_MS);
+    var t0 = performance.now();
+    var done = function (st) { clearTimeout(to); return st; };
+    function classify(e) {
+      if (timedOut) return failState(base, 'нет ответа за ' + (HEALTH_TIMEOUT_MS / 1000) + ' с (timeout) — сервер молчит', 'timeout');
+      if (e && e.kind === 'http') {
+        var h = e.httpStatus;
+        var hint = h === 404 ? ' — endpoint не найден: по этому адресу работает НЕ Aven TTS server ' +
+          '(нужен research/tts/server.py с /api/tts/health). Проверьте адрес и порт' : '';
+        return failState(base, 'HTTP ' + h + hint, 'http', h);
+      }
+      // TypeError в браузере неотличим: нет соединения, DNS, CORS-блок — честно перечисляем варианты
+      return failState(base, 'сеть/CORS: нет соединения, сервер не принимает соединение или CORS не разрешён ' +
+        '(разрешённые origin задаются AVEN_TTS_ORIGINS на сервере)', 'network');
+    }
+    function proceed(j) {
+      var latency = Math.round(performance.now() - t0);
+      if (Array.isArray(j.voices)) {
+        serverState = {
+          checked: Date.now(), ok: true, voices: j.voices, base: base, error: '', kind: '',
+          latencyMs: latency,
+          info: { server: j.server || 'aven-tts', version: j.version || '?', engines: j.engines || {} }
+        };
+        return serverState;
+      }
+      // старый сервер: health есть, но списка голосов в нём нет → добираем /api/tts/voices
+      return fetch(base + '/api/tts/voices', { signal: ctl.signal, cache: 'no-store' })
+        .then(function (r) { if (!r.ok) { var e = new Error('HTTP ' + r.status); e.kind = 'http'; e.httpStatus = r.status; throw e; } return r.json(); })
+        .then(function (j2) {
+          serverState = { checked: Date.now(), ok: true, voices: j2.voices || [], base: base, error: '', kind: '', latencyMs: latency, info: { server: j.server || 'aven-tts', version: j.version || '?', engines: j.engines || {} } };
+          return serverState;
+        });
+    }
+    return fetch(base + '/api/tts/health', { signal: ctl.signal, cache: 'no-store' })
+      .then(function (r) { if (!r.ok) { var e = new Error('HTTP ' + r.status); e.kind = 'http'; e.httpStatus = r.status; throw e; } return r.json(); })
+      .then(proceed, classify)
+      .then(done, function (e) { clearTimeout(to); return classify(e); });
   }
 
   function playUrl(url, o) {
@@ -147,6 +211,37 @@
       var p = a.play();
       if (p && p.catch) p.catch(function (e) { reject(e.name === 'AbortError' ? abortError() : e); });
     });
+  }
+
+  /* POST синтеза с таймаутом (§13): отдельный AbortController — внешний signal (Стоп/новая речь)
+   * и таймер. Таймаут → ошибка 'NaturalTimeout' → fallback; внешняя отмена → AbortError → тишина. */
+  function synthesizeFetch(text, o) {
+    var ctl = new AbortController();
+    var tsec = timeoutCfg();
+    var timedOut = false;
+    var to = setTimeout(function () { timedOut = true; ctl.abort(); }, tsec * 1000);
+    if (o.signal) o.signal.addEventListener('abort', function () { ctl.abort(); });
+    return fetch(serverBase() + '/api/tts/synthesize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text, voice: o.voice, rate: o.rate || 1 }),
+      signal: ctl.signal
+    }).then(function (r) {
+      if (!r.ok) return r.text().then(function (t) { throw new Error('сервер TTS: HTTP ' + r.status + (t ? ' — ' + t.slice(0, 200) : '')); });
+      return r.blob();
+    }).then(function (b) {
+      var url = URL.createObjectURL(b);
+      if (o.cacheable) Cache.put(o.cacheKey, url);
+      return playUrl(url, o).finally(function () { if (!o.cacheable) URL.revokeObjectURL(url); });
+    }).catch(function (e) {
+      if (timedOut) {
+        var te = new Error('Natural Voice не ответил вовремя (' + tsec + ' с)');
+        te.name = 'NaturalTimeout';
+        throw te;
+      }
+      if (e && e.name === 'AbortError') throw abortError();
+      throw e;
+    }).finally(function () { clearTimeout(to); });
   }
 
   var NaturalTTSProviderExperimental = {
@@ -179,6 +274,10 @@
     available: function () {
       return checkServer().then(function (st) { return st.ok || Object.keys(samples().voices).length > 0; });
     },
+    /* capabilities (§9): реальный health endpoint, статус, выбранный голос */
+    health: function () { return checkServer(true); },
+    getStatus: function () { return serverState; },
+    getVoice: function () { return cfg().natural.voice || ''; },
     sampleFor: function (voice, speechText) {
       var man = samples();
       var v = man.voices[voice];
@@ -198,23 +297,14 @@
         var onServer = st.ok && st.voices.some(function (v) { return v.id === o.voice; });
         if (onServer) {
           self.lastSource = 'self-hosted сервер';
-          return fetch(serverBase() + '/api/tts/synthesize', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text, voice: o.voice, rate: o.rate || 1 }),
-            signal: o.signal
-          }).then(function (r) {
-            if (!r.ok) return r.text().then(function (t) { throw new Error('сервер TTS: ' + (t || r.status)); });
-            return r.blob();
-          }).then(function (b) {
-            var url = URL.createObjectURL(b);
-            if (o.cacheable) Cache.put(key, url);
-            return playUrl(url, o).finally(function () { if (!o.cacheable) URL.revokeObjectURL(url); });
+          return synthesizeFetch(text, {
+            voice: o.voice, rate: o.rate, volume: o.volume, signal: o.signal,
+            onStart: o.onStart, cacheable: o.cacheable, cacheKey: key
           });
         }
         var sample = self.sampleFor(o.voice, text);
         if (sample) { self.lastSource = 'готовый образец (исследование)'; return playUrl(sample, o); }
-        var err = new Error(st.ok ? 'этого голоса нет на сервере, а готового образца для фразы нет' : 'сервер TTS недоступен, а готового образца для этой фразы нет');
+        var err = new Error(st.ok ? 'этого голоса нет на сервере, а готового образца для фразы нет' : 'сервер TTS недоступен (' + (st.error || 'нет ответа') + '), а готового образца для этой фразы нет');
         err.name = 'NaturalUnavailable';
         throw err;
       });
@@ -252,12 +342,12 @@
     var btn = o.btn;
     if (btn) btn.classList.add('playing');
 
-    function started(label) {
+    function started(label, speakLabel) {
       return function () {
         if (current !== me) return;
         stats.lastLatencyMs = Math.round(performance.now() - t0);
         stats.lastEngine = label;
-        if (P()) P().set('speaking');
+        if (P()) P().set('speaking', speakLabel ? { label: speakLabel } : undefined);
         o.onStart && o.onStart(stats);
       };
     }
@@ -267,10 +357,10 @@
       o.onEnd && o.onEnd(ok, stats);
       return ok;
     }
-    function viaSystem() {
+    function viaSystem(speakLabel) {
       return SystemTTSProvider.speak(speechText, {
         voice: v.voiceURI, rate: o.rate != null ? o.rate : v.rate, pitch: o.pitch != null ? o.pitch : v.pitch,
-        volume: v.volume, signal: ctl.signal, onStart: started('system')
+        volume: v.volume, signal: ctl.signal, onStart: started('system', speakLabel)
       });
     }
 
@@ -284,15 +374,20 @@
       if (!natList.some(function (x) { return x.id === natVoice; }) && natList.length) natVoice = natList[0].id;
       run = NaturalTTSProviderExperimental.speak(speechText, {
         voice: natVoice, rate: v.natural.rate || 1, volume: v.volume,
-        signal: ctl.signal, onStart: started('natural'), cacheable: Cache.cacheable(displayText)
+        signal: ctl.signal, onStart: started('natural', 'Говорю · Natural'), cacheable: Cache.cacheable(displayText)
       }).then(function () { stats.lastSource = NaturalTTSProviderExperimental.lastSource; })
         .catch(function (e) {
           if (e.name === 'AbortError') throw e;
-          // Fallback: Aven всё равно говорит — системным голосом, и честно сообщает об этом
+          // Fallback: Aven всё равно говорит — системным голосом, и ЧЕСТНО сообщает об этом (ADR-010):
+          // пользователь всегда видит, что звучит не Natural, а системный голос.
           stats.lastFallback = e.message || String(e);
           stats.lastSource = 'fallback → системный голос';
-          if (window.Aven && window.Aven.toast) window.Aven.toast('Натуральный голос недоступен (' + stats.lastFallback + ') — говорю системным голосом');
-          return viaSystem();
+          if (window.Aven && window.Aven.toast) {
+            window.Aven.toast(e.name === 'NaturalTimeout'
+              ? 'Natural Voice не ответил вовремя — используется системный голос'
+              : 'Natural Voice недоступен (' + stats.lastFallback + ') — используется системный голос');
+          }
+          return viaSystem('Говорю · системный голос');
         });
     } else {
       stats.lastSource = 'speechSynthesis';
@@ -321,6 +416,7 @@
     isSpeaking: function () { return !!current; },
     checkServer: checkServer,
     server: function () { return serverState; },
+    timeoutCfg: timeoutCfg,
     stats: stats,
     cache: Cache,
     privacyInfo: privacyInfo

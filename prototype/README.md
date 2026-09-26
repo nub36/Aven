@@ -69,14 +69,31 @@ prototype/
     └── app.js          — роутер (hash), меню, тема (светлая/тёмная/как в системе), роут-гард аккаунта
 
 prototype/tests/
-└── stage1-proto-check.js — проверки прототипа на срез Stage 1.0 (jsdom, 86 проверок; разработческий
-                            инструмент, в репозитории нет package.json/node_modules — см. шапку файла)
+├── stage1-proto-check.js — проверки прототипа на срез Stage 1.0 (jsdom, 140 проверок; разработческий
+│                           инструмент, в репозитории нет package.json/node_modules — см. шапку файла)
+└── tts-proto-check.js    — голос Natural end-to-end (jsdom, 37 проверок сценариев A–J: Главная →
+                            normalize → контракт сервера → воспроизведение → состояния → честный fallback)
 ```
 
 Зависимостей нет. Сборка не нужна.
 
 `voice-lab.html` — A/B-сравнение голосов исследования TTS (docs/TTS_RESEARCH.md). Натуральный голос
 для произвольного текста — через исследовательский сервер: `python research/tts/server.py` (см. docstring).
+
+## Natural Voice `vd17-design` — реальный запуск (experimental, 2026-09-26)
+
+Natural TTS в прототипе идёт по contract: `GET {сервер}/api/tts/health` (кнопка «Проверить» в
+Настройках → Голос — с честной причиной при недоступности: HTTP-код, timeout, mixed content, сеть/CORS)
+и `POST {сервер}/api/tts/synthesize {text, voice, rate}` → `audio/wav`. Сервер — `research/tts/server.py`
+(v0.3.0): теперь с движком **Qwen3-TTS VoiceDesign** (голос `qwen3/vd17-design`, промпт тот же, что
+у образцов исследования). Требуется **GPU ≥ 8 ГБ VRAM** и скачивание ≈4,5 ГБ весов на машину владельца
+(в git не попадают). Пошаговый запуск: **[research/tts/runtime/README.md](../research/tts/runtime/README.md)**.
+
+Важно про адреса: GitHub Pages — статический хостинг, он не запускает модель; `192.168.x.x` — только
+LAN-тест, а HTTPS-страница не может обращаться к HTTP-серверу (mixed content). Рабочие пути:
+открыть прототип по HTTP с адреса самого сервера (`http://<IP>:8080/`) или поднять HTTPS endpoint.
+При недоступном сервере прототип честно говорит системным голосом («Natural Voice недоступен —
+используется системный голос») и показывает «Говорю · системный голос» вместо «Говорю · Natural».
 
 `voice-lab-vd17.html` — **расширенный сценарный тест фаворита владельца** `qwen3/vd17-design`
 (Qwen3-TTS, этап 2): реальные реплики Aven группами (короткие ответы, напоминания, деньги, авто,

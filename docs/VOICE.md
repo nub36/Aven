@@ -166,3 +166,32 @@ Answer:  result → response text → optional TTS
 - **Прослушивание:** `prototype/voice-lab-name.html` — варианты по способам, сравнение шести вариантов одной
   фразы подряд, ★ за каждый вариант, кнопка «Системный голос», таблица «кто как говорит «Авен»» по всем
   прогонам. Ссылки на страницу — из `voice-lab.html` и `voice-lab-vd17.html`.
+
+### 10.4. Natural Voice runtime — связь с реальным сервером (2026-09-26, [TTS_RESEARCH.md](TTS_RESEARCH.md) §17)
+
+- **Причина прошлого «не подключён — HTTP 404»** найдена аудитом: фронт ждёт contract
+  `GET {base}/api/tts/health` (ранее `/api/tts/voices`) и `POST {base}/api/tts/synthesize`, а по
+  указанному LAN-адресу работал **другой** сервер без этих путей (HTTP 404 = сервер ответил, путь
+  не найден; mixed content дал бы `TypeError`, а не код ответа). Плюс структурный разрыв: в самом
+  `server.py` Qwen3-движка не было — `vd17-design` не мог на нём появиться.
+- **Движок `qwen3/vd17-design` добавлен** в `research/tts/server.py` (env `AVEN_TTS_QWEN3=1`; тот же
+  `DESIGN_PROMPT`, что у образцов — иначе тембр «уплывёт»). GPU обязателен (§12 исследования);
+  запуск — пошагово в `research/tts/runtime/README.md`. Веса в git не коммитятся.
+- **Контракт (§8, согласован с существующим кодом — не второй API):**
+  `GET /api/tts/health` → `{ok, status, server, version, engines, voices, uptime_s, max_chars}`;
+  `GET /api/tts/voices`; `POST /api/tts/synthesize {text, voice, rate}` → `audio/wav` (PCM 24 кГц —
+  играется `<audio>` без перекодирования; на LAN сеть не лимитирует). `text` — уже нормализованный
+  для речи; тексты запросов сервер не логирует.
+- **Frontend (providers.js):** реальный health-check с честной классификацией причин —
+  HTTP-код (404 = «по адресу НЕ Aven TTS server»), timeout, mixed content, сеть/CORS; таймаут синтеза
+  (`natural.timeoutSec`, по умолчанию 10 с — здоровый GPU отвечает за доли секунды; для CPU-проверки
+  поднять до ~120); presence различает «Говорю · Natural» и «Говорю · системный голос»; fallback-тосты
+  «Natural Voice недоступен … — используется системный голос» / «…не ответил вовремя…» — никакого
+  имитированного Natural (ADR-010). Stop и прерывание новой речью работают для обоих движков.
+- **CORS сервера — контролируемый** (не `*`): `https://nub36.github.io` + localhost, остальные origin —
+  `AVEN_TTS_ORIGINS`; preflight Private Network Access поддержан.
+- **Статусы честно (§26-style):** Frontend integration ready ✅ · Backend contract ready ✅ (19/19
+  HTTP-проверок заглушечной моделью) · Локальная связка «Главная → Natural → состояния/fallback/stop» —
+  37/37 jsdom-проверок · **GPU runtime — НЕ запускался** (в песочнице нет GPU, HF заблокирован;
+  запуск — на машине владельца по runtime-README) · Public HTTPS demo — нет (GitHub Pages статичен;
+  нужен HTTPS endpoint — решение владельца, варианты §13).
