@@ -18,7 +18,9 @@
 # Отключить: `modal app stop aven-tts`. Расходов в простое нет (scale-to-zero).
 # Секреты не нужны: ни в репозитории, ни во frontend ничего не добавляется.
 set -euo pipefail
-cd "$(dirname "$0")/../.."   # корень репозитория Aven
+# modal_app.py лежит рядом с этим скриптом — цели абсолютные, запуск из любой папки
+APP="$(cd "$(dirname "$0")" && pwd)/modal_app.py"
+[ -f "$APP" ] || { echo "!! Не найден modal_app.py рядом со скриптом: $APP" >&2; exit 1; }
 
 PY="python3"
 command -v "$PY" >/dev/null 2>&1 || PY="python"
@@ -47,11 +49,11 @@ fi
 
 # 3) Веса модели → Volume (CPU-контейнер; ≈4,5 ГБ, один раз)
 echo "==> Скачиваю веса Qwen3-TTS-12Hz-1.7B-VoiceDesign в Volume (первый раз ≈4,5 ГБ)…"
-modal run research/tts/runtime/modal_app.py::download_weights
+modal run "$APP::download_weights"
 
 # 4) Deploy: server.py на GPU + HTTPS endpoint
 echo "==> Деплой (сборка образа + L4)…"
-modal deploy research/tts/runtime/modal_app.py
+modal deploy "$APP"
 
 cat <<'EOF'
 

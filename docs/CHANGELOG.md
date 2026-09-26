@@ -13,6 +13,21 @@
 
 ## [Unreleased]
 
+### 2026-09-26 (XVIII) — Запуск Natural Voice с Windows: deploy-modal.ps1 + правки по факту
+
+- **Добавлено (research):** `research/tts/runtime/deploy-modal.ps1` — запуск Modal-deploy из
+  Windows PowerShell без bash/WSL/Git (нужен только Python 3.10+ с python.org). Делает то же,
+  что `deploy-modal.sh`: CLI → вход через GitHub (бесплатный Starter, без карты) → веса в
+  Volume → `modal deploy` → печатает HTTPS URL.
+- **Исправлено (research):** `deploy-modal.sh` неверно вычислял корень репозитория
+  (`cd …/../..` → `research/`) — команды `modal run/deploy` могли получить несуществующий
+  путь; теперь путь к `modal_app.py` строится от самого скрипта, запуск из любой папки.
+- **Исправлено (прототип):** на HTTPS-странице, которую отдаёт сам TTS-сервер
+  (`https://tts--…modal.run/`), пустое поле сервера снова означает «тот же адрес» — health
+  идёт относительным путём (same-origin). Честное «адрес не задан… статический хостинг»
+  осталось только для GitHub Pages.
+- Fallback на системный голос не изменился. PR #8 не смержён.
+
 ### 2026-09-26 (XVII) — Natural Voice `vd17-design`: GPU-runtime Modal для GitHub Pages + честный UX настроек голоса
 
 - **Добавлено (research, НЕ production):** запуск **того же** `research/tts/server.py` на

@@ -44,17 +44,27 @@
 
 ## Быстрый старт Б — Modal (рекомендуемый для GitHub Pages, этап 4 §18)
 
-Одна команда (клонируйте репозиторий и запустите на любом ПК с интернетом — GPU не нужен локально):
+Одна команда (клонируйте/скачайте репозиторий и запустите — GPU локально не нужен):
 
-```bash
-bash research/tts/runtime/deploy-modal.sh
-```
+- **Windows (PowerShell):**
 
-Скрипт: поставит CLI Modal → `modal setup` (браузер: **Continue with GitHub** — аккаунт создастся
-сам, Starter $0/мес, без карты; $30 кредитов каждый месяц) → скачает веса ≈4,5 ГБ в Volume
-(CPU-контейнер — за загрузку GPU не оплачивается) → `modal deploy` (GPU **L4**, тот же
-`research/tts/server.py` без изменений) → напечатает **HTTPS URL** вида
-`https://tts--aven-tts-….modal.run`.
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File research\tts\runtime\deploy-modal.ps1
+  ```
+
+- **macOS / Linux (bash):**
+
+  ```bash
+  bash research/tts/runtime/deploy-modal.sh
+  ```
+
+Для Windows нужен только Python 3.10+ с [python.org](https://www.python.org/downloads/)
+(при установке отметить «Add python.exe to PATH»); bash/WSL/Git не требуются.
+Оба скрипта делают одно и то же: поставят CLI Modal → `modal setup` (браузер:
+**Continue with GitHub** — аккаунт создастся сам, Starter $0/мес, без карты; $30 кредитов
+каждый месяц) → скачают веса ≈4,5 ГБ в Volume (CPU-контейнер — за загрузку GPU не
+оплачивается) → `modal deploy` (GPU **L4**, тот же `research/tts/server.py` без изменений)
+→ напечатают **HTTPS URL** вида `https://tts--aven-tts-….modal.run`.
 
 Дальше в Aven: Настройки → Голос → Движок «Натуральный · эксперимент» → в поле
 «TTS-сервер Natural Voice» вставьте URL → **«Проверить backend»** (health + настоящая пробная

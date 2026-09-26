@@ -159,10 +159,12 @@
     if (location.protocol === 'file:' && !base) {
       return Promise.resolve(failState(base, 'страница открыта как файл — сервера нет', 'no-base'));
     }
-    // §18: страница по HTTPS (GitHub Pages) без адреса сервера. Статический хостинг
-    // синтезировать речь не может — говорим это сразу и честно, не делая вид,
-    // что «проверяем» то, чего нет.
-    if (location.protocol === 'https:' && !base) {
+    // §18: «пусто — тот же адрес, что у страницы». На HTTP это LAN/localhost-режим, а на HTTPS:
+    // если страницу отдаёт сам TTS-сервер (например, прототип с https://tts--…modal.run/) —
+    // health идёт относительным путём и всё работает; если же это GitHub Pages — статический
+    // хостинг, синтезировать речь он не может, и пустое поле означает отсутствие сервера —
+    // говорим это сразу и честно, не делая вид, что «проверяем» то, чего нет.
+    if (location.protocol === 'https:' && !base && /github\.io$/i.test(location.hostname)) {
       return Promise.resolve(failState(base,
         'адрес TTS-сервера не задан. GitHub Pages — статический хостинг и синтезировать речь не может: ' +
         'нужен HTTPS-endpoint Aven TTS (research/tts/runtime/README.md — GPU-ПК или Modal)', 'no-base'));

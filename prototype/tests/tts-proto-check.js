@@ -292,6 +292,24 @@ async function load(hash, mode, opts) {
       p8.q('#tts-server-status').textContent + ' | fetches=' + fetches8);
     p8.dom.window.close();
 
+    // S11: страницу отдаёт сам TTS-сервер по HTTPS (например https://tts--…modal.run/):
+    // пустое поле сервера = «тот же адрес» → health по относительному пути (same-origin, без CORS)
+    const p11 = await load('#/settings', 'ok');
+    p11.setNatural();
+    p11.st().settings.voice.natural.serverUrl = '';
+    p11.w.AvenState.save();
+    let seenUrl11 = '';
+    const realFetch11 = p11.w.fetch;
+    p11.w.fetch = (u, fo) => { if (String(u).indexOf('/api/tts/health') >= 0) seenUrl11 = String(u); return realFetch11(u, fo); };
+    p11.dom.reconfigure({ url: 'https://tts--aven-tts-demo.modal.run/#/settings' });
+    await sleep(200); // jsdom reconfigure: даём событийному циклу settle до клика
+    p11.click(p11.q('[data-action="set-cat"][data-id="voice"]'));
+    await p11.waitFor(() => { const el = p11.q('#tts-server-status'); return el && el.textContent.indexOf('подключён') >= 0; }, 6000, 'same-origin status');
+    ok('S11 same-origin (…modal.run): пустое поле → относительный /api/tts/health, «подключён»',
+      seenUrl11 === '/api/tts/health' && p11.q('#tts-server-status').textContent.indexOf('подключён') >= 0,
+      'seenUrl=' + seenUrl11);
+    p11.dom.window.close();
+
     // S9: кнопка «Проверить backend» — health + НАСТОЯЩИЙ синтез пробной фразы vd17-design
     const p9 = await load('#/settings', 'ok');
     p9.setNatural();
