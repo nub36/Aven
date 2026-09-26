@@ -1,0 +1,15 @@
+# Aven TTS runtime — Qwen3-TTS VoiceDesign (experimental, НЕ production).
+# Веса (≈4,5 ГБ) качаются с Hugging Face при первом запуске, в git НЕ попадают.
+# Установка: см. README.md этого каталога (шаги 1–2). Сначала torch (CUDA-сборка для GPU),
+# затем:  pip install -r research/tts/runtime/requirements.txt
+#
+# Версии — те, на которых движок реально прогонялся в GitHub Actions (CPU-раннеры,
+# research/tts/results/*.json, сентябрь 2026). Обновление — осознанно, с прогоном.
+
+qwen-tts==0.1.1      # Python API Qwen3-TTS (Apache-2.0); streaming этот пакет не даёт (TTS_RESEARCH §12.5)
+numpy>=1.26,<3       # wav_bytes() в server.py
+soundfile>=0.12      # используется генераторами research/tts (gen_qwen3*.py)
+silero-stress>=0.2   # только если включаете движок Silero CIS (SILERO_MODEL=…); для одного Qwen3 не обязателен
+# torch — НЕ дублируем здесь: ставится отдельной командой (CPU/GPU-сборки различаются,
+# см. README §«Быстрый старт», шаг 2). Проверено с torch 2.x (GitHub Actions, CPU).
+# flash-attn — опционально (ускорение на GPU): pip install flash-attn + AVEN_TTS_QWEN3_FA2=1

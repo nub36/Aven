@@ -1,4 +1,4 @@
-# TTS_RESEARCH — Натуральный женский голос Aven (исследование: этап 1 + этап 2)
+# TTS_RESEARCH — Натуральный женский голос Aven (исследование: этапы 1, 2, 2.1, 3)
 
 > Статус: **исследование + прототип**, не production. Голос **не утверждён** — выбор делает владелец на слух.
 > ADR не создавался (по инструкции). Системный `speechSynthesis` **не удалён** и остаётся бесплатным fallback.
@@ -6,7 +6,9 @@
 > сценарный прогон фаворита владельца `qwen3/vd17-design`, вопросы GPU/latency, варианты подключения
 > к Web Aven и план lip-sync. **Этап 2.1 (§16, 2026-09-25):** мини-прогон **способов произношения «Авен»**
 > (орфография / подсказка в промпте / in-context learning клоном Base) + новая объективная метрика имени.
-> Всё это **не** production-архитектура.
+> **Этап 3 (§17, 2026-09-26):** Natural Voice **runtime** — аудит HTTP 404, Qwen3 VoiceDesign как движок
+> сервера `research/tts/server.py`, health-контракт, контролируемый CORS, таймауты и честные статусы во
+> frontend. Всё это **не** production-архитектура.
 > Дата: 2026-09-25. Ветки `arena/01a0d9d2-aven` (этапы 1–2), `arena/01a0da18-aven` (этап 2.1).
 >
 > ⚠️ **Произношение и качество оценивает только владелец на слух.** Мы не можем слушать аудио:
@@ -712,3 +714,80 @@ Fallback (обязателен): сервер недоступен/таймау�
 - **Подсказка в промпте (n06/n07) не может стать «бесплатной правкой»:** если владелец выберет её,
   голос придётся переслушать целиком и, возможно, пересобрать эталон для клона.
 - Голос **не внедрён**: `speechSynthesis` остаётся движком по умолчанию и fallback, ADR не создавался.
+
+---
+
+## 17. Этап 3 (2026-09-26): Natural Voice runtime — Qwen3-движок в сервере, честный frontend
+
+**Задача владельца:** Natural Voice `vd17-design` должен реально звучать из основного интерфейса
+(Главная → «Что у меня сегодня?»), а при недоступности сервера — честный fallback на системный голос.
+Этот этап — про **runtime и contract**, не про новый подбор движков: голос не менялся, широкий поиск TTS
+не перезапускался, ADR не создавался.
+
+### 17.1. Аудит: почему был HTTP 404
+
+| Вопрос | Ответ (по коду) |
+|---|---|
+| Какие TTS provider существуют | `SystemTTSProvider` (speechSynthesis) + `NaturalTTSProviderExperimental` + менеджер `AvenTTS` — `prototype/js/tts/providers.js` |
+| Где вызывается speechSynthesis | только внутри `SystemTTSProvider.speak` |
+| Где выбранный engine | `settings.voice.engine` (`system`/`natural`), дефолт `system`, localStorage `aven-proto-v1` (`prototype/js/data.js`) |
+| Где выбранный голос | `settings.voice.natural.voice` (напр. `qwen3/vd17-design`) / `settings.voice.voiceURI` (system) |
+| Откуда `192.168.1.10` | это **placeholder** поля ввода (`settings.js`); реальное значение владелец вписал руками — живёт в его localStorage, в git его нет |
+| Endpoint/метод/body/ответ frontend | было: `GET {base}/api/tts/voices`; синтез: `POST {base}/api/tts/synthesize` `{text, voice, rate}` → `audio/wav`. Стало: health — `GET {base}/api/tts/health` (см. §17.2), синтез — без изменений |
+| Почему HTTP 404 | 404 = сервер **ответил**, путь не найден → по адресу работал **другой** сервер, не `research/tts/server.py` (наш всегда отвечал бы 200 JSON на `/api/tts/voices`). Вероятно, Qwen3-TTS-подобный сервер с другими путями (`/v1/audio/speech` и т. п.). Mixed content дал бы `TypeError: Failed to fetch`, а не код 404 |
+| Существует ли prototype TTS server | да — `research/tts/server.py` (не `prototype/server.py`) |
+| Второй mismatch | в `server.py` **не было Qwen3-движка** (только RHVoice/Silero/Supertonic/Piper) — `vd17-design` не мог на нём появиться: frontend затем отдал бы образцы T1–T10 и System TTS на произвольный текст |
+
+### 17.2. Что сделано
+
+- **Сервер `research/tts/server.py` (v0.3.0):** движок **Qwen3 VoiceDesign** (`AVEN_TTS_QWEN3=1`),
+  голос `qwen3/vd17-design`, промпт — общий `DESIGN_PROMPT` (из `common.py`, иначе тембр другой);
+  модель держится загруженной, есть `--warmup`; `GET /api/tts/health` расширен
+  (`{ok, status, server, version, engines{model, device, dtype, load_s}, voices, uptime_s, max_chars}`),
+  старый `/api/tts/voices` сохранён (совместимость); `X-Rate-Applied: ignored`, когда движок скорость
+  не применяет (честно, а не молча); CORS — allowlist `https://nub36.github.io` + localhost +
+  `AVEN_TTS_ORIGINS` (не `*`), preflight **Private Network Access**; тексты запросов по-прежнему
+  не логируются (лог — IP, метод, путь, число символов, секунды синтеза).
+- **GPU-запуск для владельца** — `research/tts/runtime/`: README (venv → torch CUDA →
+  requirements → `AVEN_TTS_QWEN3=1 python research/tts/server.py --warmup` → curl-проверки →
+  подключение прототипа → LAN/HTTPS/mixed content → troubleshooting) и `requirements.txt`
+  (qwen-tts==0.1.1 — та версия, что прогонялась в Actions; torch ставится отдельно под CUDA/CPU).
+  Веса (≈4,5 ГБ) качаются с Hugging Face владельцем, в git не попадают.
+- **Frontend `prototype/js/tts/providers.js`:** health-check по реальному endpoint (fallback на
+  `/api/tts/voices` для старых серверов), latency в статусе; честные причины недоступности —
+  HTTP-код (404 с подсказкой «по адресу НЕ Aven TTS server»), timeout (3 с), **mixed content**
+  (https-страница → http-сервер — определяется сразу, не ждёт TypeError), сеть/CORS;
+  **таймаут синтеза** `natural.timeoutSec` (по умолчанию **10 с**: GPU отвечает за доли секунды,
+  CPU-проверка — поднять до ~120); ошибка `NaturalTimeout` отделена от отмены пользователем
+  (отмена → тишина, таймаут → fallback); у Natural-провайдера теперь `health()/getStatus()/getVoice()`
+  поверх прежних `available()/speak()/stop()`.
+- **Честность в UI:** presence-подписи «Говорю · Natural» / «Говорю · системный голос»; тосты
+  «Natural Voice недоступен (причина) — используется системный голос» и «Natural Voice не ответил
+  вовремя — используется системный голос»; статус сервера в Настройках → Голос показывает
+  «подключён · aven-tts-research 0.3.0 · qwen3 · голосов: N · N мс» или конкретную причину.
+- **Assistant:** фраза «Какой пробег?» теперь попадает в автомобильный demo-ответ (regex + `пробег`).
+- **Тесты:** `prototype/tests/tts-proto-check.js` — **37 jsdom-проверок** сценариев владельца A–J
+  (Главная → Natural → нормализация → состояния; деньги «3 420 ₽» и «104 520 км» словами;
+  «Говорю · Natural»; fallback при сети/404/таймауте; stop; прерывание новой речью);
+  `research/tts/tests/dryrun_server_qwen3.py` — **19 проверок** настоящего HTTP-контракта сервера
+  (заглушка qwen_tts + реальный ThreadingHTTPServer): health/voices/synthesize/400/404/CORS/PNA/warmup.
+  Регресс: stage1-proto-check **140/140**, normalize **26/26**, check.py **0/0**.
+
+### 17.3. Статусы честно (что реально проверено, а что нет)
+
+| Статус | Сейчас |
+|---|---|
+| Frontend integration ready | **ДА** — 37/37 jsdom-проверок сценариев A–J, включая Главную |
+| Backend contract ready | **ДА** — 19/19 HTTP-проверок сервера v0.3.0 (модель заглушена) |
+| Local runtime ready (код) | **ДА** — Qwen3-движок + инструкция + requirements; локальная проверка контракта без модели |
+| GPU runtime tested | **НЕТ** — в песочнице нет GPU, HuggingFace заблокирован; запуск на машине владельца по runtime/README |
+| Public HTTPS runtime tested | **НЕТ** — GitHub Pages статичен; нужен HTTPS endpoint (вариант владельца: reverse-proxy TLS / туннель) |
+| Main Aven end-to-end tested | частично: связка «Главная → Natural → playback/состояния» проверена в jsdom со стабом транспорта; с живой моделью — после поднятия GPU |
+
+**Это НЕ объявление «Natural Voice работает».** Реальный звук `vd17-design` из основного интерфейса
+появится после запуска сервера на GPU-машине владельца (≈15–20 минут + скачивание весов).
+Ожидаемая latency на GPU по опубликованным данным (§12.2, **не наши измерения**): доли секунды до
+начала звука; измерить на целевом железе — следующий шаг после запуска.
+
+**Streaming** сознательно отложен (§12.5): сначала стабильный request → audio → playback;
+vLLM-Omni/чанкинг — отдельная оптимизация после подтверждения работы на железе.

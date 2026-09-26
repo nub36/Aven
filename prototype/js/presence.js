@@ -17,11 +17,12 @@ window.AvenPresence = (function () {
   };
 
   let cur = 'idle';
+  let curLabel = null; // точная подпись вместо LABELS[cur] (например «Говорю · Natural» — TTS знает источник голоса)
   let timer = null;
 
   function apply() {
     document.querySelectorAll('.aven-state').forEach((el) => {
-      el.textContent = '● ' + LABELS[cur];
+      el.textContent = '● ' + (curLabel || LABELS[cur]);
       el.dataset.state = cur;
     });
     const hero = document.querySelector('.hero');
@@ -29,14 +30,17 @@ window.AvenPresence = (function () {
     document.body.dataset.avenState = cur;
   }
 
-  /* opts.hold — миллисекунды, после которых состояние вернётся в idle */
+  /* opts.hold — миллисекунды, после которых состояние вернётся в idle;
+     opts.label — точная подпись состояния (честный источник голоса: «Говорю · Natural» /
+     «Говорю · системный голос»), сбрасывается при следующем set() */
   function set(st, opts) {
     if (!LABELS[st]) st = 'idle';
     if (timer) { clearTimeout(timer); timer = null; }
     cur = st;
+    curLabel = (opts && opts.label) || null;
     apply();
     const hold = opts && opts.hold;
-    if (hold) timer = setTimeout(() => { cur = 'idle'; apply(); }, hold);
+    if (hold) timer = setTimeout(() => { cur = 'idle'; curLabel = null; apply(); }, hold);
   }
 
   function flash(st, hold) { set(st, { hold: hold || 2600 }); }
