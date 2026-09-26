@@ -1,0 +1,136 @@
+# Aven — LIVE-тест Silero ru_aigul на реальном server.py (этап 6, docs/TTS_RESEARCH.md §19).
+#
+# Запуск вручную (Actions → Silero Aigul Live → Run workflow), через repository_dispatch,
+# или триггер-файлом в рабочей ветке (как vps-tts-compare.yml — workflow_dispatch недоступен
+# для ветки до попадания на main).
+#
+# Что делает (всё на ОДНОМ ядре taskset -c 0 — честные цифры для VPS 1 CPU):
+#   1) ставит torch CPU + numpy + silero-stress, скачивает v5_cis_base.pt (MIT)
+#      с models.silero.ai в research/tts/models/silero/ (gitignored — веса в git НЕ попадают);
+#   2) поднимает НАСТОЯЩИЙ research/tts/server.py в production-like режиме VPS
+#      (AVEN_TTS_HEALTH=minimal, AVEN_TTS_DEFAULT_VOICE=silero_cis_mit/ru_aigul);
+#   3) гоняет research/tts/tests/live_server_silero.py: health minimal, синтез фраз владельца
+#      (произвольный текст, «Авен», числа, время, даты, рубли, километры, литры, короткие/
+#      длинные, тестовая фраза успеха «Авен проверяет натуральный голос…»), лимиты 413/400,
+#      rate limit 429 на отдельном инстансе;
+#   4) publish-джоб ботом коммитит в ветку: MP3 фраз → review/silero-aigul-live/mp3/
+#      (прослушивание владельцем), silero_live.json → review/silero-aigul-live/.
+#      Полные WAV и логи — только в артефакте (14 дней).
+#
+# Платные сервисы и ключи не используются. GPU не нужен.
+
+name: Silero Aigul Live
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [silero-aigul-live]
+  push:
+    branches: [arena/01a0dc3a-aven-silero-aigul]
+    paths: ['.github/triggers/silero-aigul-live.txt']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: silero-aigul-live-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+  SILERO_URL: 'https://models.silero.ai/models/tts/ru/v5_cis_base.pt'
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Зависимости (torch CPU, silero-stress, ffmpeg)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install numpy silero-stress
+          ffmpeg -version | head -1
+
+      - name: Модель Silero v5 CIS base (MIT)
+        run: |
+          mkdir -p research/tts/models/silero
+          if [ ! -f research/tts/models/silero/v5_cis_base.pt ]; then
+            curl -fsSL "$SILERO_URL" -o research/tts/models/silero/v5_cis_base.pt
+          fi
+          ls -la research/tts/models/silero/
+          sha256sum research/tts/models/silero/v5_cis_base.pt
+
+      - name: Dry-run контракт без движка (быстрая проверка перед живым прогоном)
+        run: python research/tts/tests/dryrun_server_silero.py
+
+      - name: LIVE-тест (taskset -c 0 — одно ядро, как на VPS)
+        run: |
+          set -eo pipefail   # иначе `| tee` проглотит падение python (проверено прогоном 36238856773)
+          mkdir -p research/tts/out/logs
+          taskset -c 0 python research/tts/tests/live_server_silero.py \
+            --model research/tts/models/silero/v5_cis_base.pt \
+            --out research/tts/out/silero-live 2>&1 | tee research/tts/out/logs/silero-live.log
+          echo '--- silero_live.json ---'
+          cat research/tts/out/silero-live/silero_live.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: silero-aigul-live
+          path: |
+            research/tts/out/silero-live/
+            research/tts/out/logs/
+          if-no-files-found: error
+
+  publish:
+    needs: live
+    if: needs.live.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: silero-aigul-live
+          path: artifacts
+
+      - name: MP3 + JSON → review/silero-aigul-live
+        run: |
+          set -e
+          # download-artifact@v4 с одиночным name распаковывает прямо в path; на случай
+          # смены поведения допускаем и подкаталог artifacts/silero-live/
+          if [ -d artifacts/silero-live ]; then SRC=artifacts/silero-live; else SRC=artifacts; fi
+          echo "SRC=$SRC"; find artifacts -maxdepth 3 -type f | sort | head -40
+          DST=review/silero-aigul-live
+          rm -rf "$DST"
+          mkdir -p "$DST/mp3"
+          find "$SRC/mp3" -name '*.mp3' -exec cp -f {} "$DST/mp3/" \;
+          find "$SRC" -maxdepth 1 -name 'silero_live.json' -exec cp -f {} "$DST/" \;
+          test -f "$DST/silero_live.json" || { echo "нет silero_live.json"; exit 1; }
+          test "$(find "$DST/mp3" -name '*.mp3' | wc -l)" -gt 0 || { echo "нет MP3"; exit 1; }
+          find "$DST" -type f | sort
+          du -sh "$DST"
+
+      - name: Commit results to branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add review/silero-aigul-live
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git commit -m "research(tts): live-прогон Silero ru_aigul на server.py 0.4.0 — MP3 + метрики (run ${{ github.run_id }})"
+          for i in 1 2 3 4 5; do
+            git pull --rebase -X theirs origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            sleep 10
+          done
+          exit 1

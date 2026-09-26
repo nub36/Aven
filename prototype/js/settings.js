@@ -30,13 +30,14 @@
       const el = document.getElementById('tts-server-status');
       if (el) {
         if (st.ok) {
+          // minimal health (VPS) не отдаёт список движков — не показываем «движков нет»
           const eng = st.info && st.info.engines ? Object.keys(st.info.engines) : [];
           el.textContent = 'подключён · ' + ((st.info && st.info.server) || 'сервер') +
             (st.info && st.info.version ? ' ' + st.info.version : '') +
-            (eng.length ? ' · ' + eng.join(', ') : ' · движков нет') +
+            (eng.length ? ' · ' + eng.join(', ') : '') +
             ' · голосов: ' + st.voices.length + (st.latencyMs != null ? ' · ' + st.latencyMs + ' мс' : '');
         } else {
-          el.textContent = 'недоступен — ' + (st.error || 'нет ответа');
+          el.textContent = 'сервер недоступен — ответы озвучатся системным голосом · ' + (st.error || 'нет ответа');
         }
         el.className = 'pill ' + (st.ok ? 'ok' : '');
       }
@@ -51,15 +52,15 @@
     }
   });
 
-  /* натуральные голоса, сгруппированные по источнику/движку */
+  /* голоса Natural с сервера владельца, сгруппированные по движку */
   function natGroups(list, sel) {
     const groups = {};
     list.forEach((v) => {
-      const g = v.privacy === 'self-hosted' ? 'Self-hosted сервер' : ((v.meta && v.meta.engineTitle) || 'Образцы') + (v.meta && v.meta.commercial && v.meta.commercial !== 'yes' ? ' — только сравнение' : '');
+      const g = (v.meta && v.meta.engineTitle) || 'Голоса сервера';
       (groups[g] = groups[g] || []).push(v);
     });
     return Object.keys(groups).map((g) => `<optgroup label="${A.esc(g)}">${groups[g].map((v) =>
-      `<option value="${A.esc(v.id)}" ${v.id === sel ? 'selected' : ''}>${A.esc(v.privacy === 'self-hosted' ? v.label : ((v.meta && v.meta.voice) || v.label) + (v.meta && v.meta.sampleNote ? ' · ' + v.meta.sampleNote : ''))}</option>`).join('')}</optgroup>`).join('');
+      `<option value="${A.esc(v.id)}" ${v.id === sel ? 'selected' : ''}>${A.esc(v.label)}</option>`).join('')}</optgroup>`).join('');
   }
 
   function setRow(title, sub, control) {
@@ -140,7 +141,10 @@
       const engine = V.engine || 'system';
       const NV = V.natural || {};
       const natVoices = T ? T.providers.natural.voices() : [];
-      const natSel = NV.voice && natVoices.some((x) => x.id === NV.voice) ? NV.voice : (natVoices[0] && natVoices[0].id) || '';
+      const srvDef = (T && T.server() && T.server().defaultVoice) || '';
+      const natSel = NV.voice && natVoices.some((x) => x.id === NV.voice)
+        ? NV.voice
+        : (srvDef && natVoices.some((x) => x.id === srvDef) ? srvDef : (natVoices[0] && natVoices[0].id) || '');
       const priv = T ? T.privacyInfo(engine, engine === 'natural' ? natSel : V.voiceURI) : null;
       const licPill = (m) => {
         if (!m) return '';
@@ -160,27 +164,27 @@
         ${setRow('Движок речи', 'системный голос остаётся всегда доступным запасным вариантом',
           `<select data-action="set-voice-engine" style="width:240px">
             <option value="system" ${engine === 'system' ? 'selected' : ''}>Системный (браузер / ОС)</option>
-            <option value="natural" ${engine === 'natural' ? 'selected' : ''}>Натуральный · эксперимент</option>
+            <option value="natural" ${engine === 'natural' ? 'selected' : ''}>Natural Voice (Silero · свой сервер)</option>
           </select>`)}
         ${engine === 'system' ? setRow('Голос', sysVoices.length ? 'системные голоса: «на устройстве» — локально, «онлайн» — текст уходит поставщику' : 'системные голоса не найдены — демо',
           `<select data-action="set-voice" style="width:240px">${sysVoices.length ? sysVoices.map((v) => `<option value="${A.esc(v.id)}" ${v.id === V.voiceURI ? 'selected' : ''}>${A.esc(v.label)} · ${v.privacy === 'device' ? 'на устройстве' : 'онлайн'}</option>`).join('') : '<option>Системный (по умолчанию)</option>'}</select>`) : ''}
-        ${engine === 'natural' ? setRow('Натуральный голос', 'кандидаты исследования TTS · выбор — за владельцем после прослушивания',
-          `<select data-action="set-natural-voice" style="width:240px">${natVoices.length ? natGroups(natVoices, natSel) : '<option value="">образцов пока нет</option>'}</select>`) : ''}
+        ${engine === 'natural' ? setRow('Голос', 'голоса вашего TTS-сервера · произвольный текст синтезируется на сервере',
+          `<select data-action="set-natural-voice" style="width:240px">${natVoices.length ? natGroups(natVoices, natSel) : '<option value="">сервер не подключён</option>'}</select>`) : ''}
         ${engine === 'natural' && natMeta ? setRow('Лицензия голоса', A.esc(natMeta.license || ''), licPill(natMeta)) : ''}
-        ${engine === 'natural' ? setRow('Self-hosted TTS-сервер', 'research/tts/server.py · пусто — тот же адрес, что у страницы',
-          `<div style="display:flex;gap:6px;align-items:center"><input type="text" value="${A.esc(NV.serverUrl || '')}" placeholder="http://192.168.1.10:8080" style="width:190px" data-action="set-natural-server"><button class="btn small" data-action="tts-check-server">Проверить</button></div>`) : ''}
+        ${engine === 'natural' ? setRow('Self-hosted TTS-сервер', 'адрес VPS с research/tts/server.py · пусто — тот же адрес, что у страницы',
+          `<div style="display:flex;gap:6px;align-items:center"><input type="text" value="${A.esc(NV.serverUrl || '')}" placeholder="https://tts.ваш-домен.ru" style="width:190px" data-action="set-natural-server"><button class="btn small" data-action="tts-check-server">Проверить</button></div>`) : ''}
         ${engine === 'natural' ? setRow('Статус сервера', '', '<span class="pill" id="tts-server-status">проверяю…</span>') : ''}
         ${engine === 'natural' ? setRow('Кэш озвучки', 'только память вкладки; фразы с цифрами и именами не кэшируются', sw('settings.voice.natural.cache', NV.cache !== false)) : ''}
-        ${engine === 'natural' ? setRow('Таймаут Natural, сек', 'сервер не ответил за это время → честный переход на системный голос (здоровый GPU отвечает за доли секунды; для CPU-проверки своего сервера поднимите до ~120)',
+        ${engine === 'natural' ? setRow('Таймаут Natural, сек', 'сервер не ответил за это время → честный переход на системный голос · VPS 1 CPU (Silero) отвечает за доли секунды, значения по умолчанию (10 с) достаточно',
           `<input type="number" min="2" max="600" step="1" value="${A.esc(NV.timeoutSec != null ? NV.timeoutSec : 10)}" style="width:80px" data-action="set-natural-timeout">`) : ''}
         ${priv ? `<div class="tts-priv ${priv.ok ? '' : 'warn'}"><span class="pill ${priv.ok ? 'ok' : ''}">${A.esc(priv.tag)}</span><span>${A.esc(priv.text)}</span></div>` : ''}
         ${engine === 'system' ? setRow('Скорость', '', `<div class="slider-row" style="width:240px"><input type="range" min="0.5" max="2" step="0.1" value="${V.rate}" data-action="set-slider" data-path="settings.voice.rate"><span class="val">${V.rate}</span></div>`) : ''}
         ${engine === 'system' ? setRow('Высота', '', `<div class="slider-row" style="width:240px"><input type="range" min="0.5" max="1.5" step="0.1" value="${V.pitch}" data-action="set-slider" data-path="settings.voice.pitch"><span class="val">${V.pitch}</span></div>`) : ''}
         ${setRow('Громкость', '', `<div class="slider-row" style="width:240px"><input type="range" min="0" max="1" step="0.1" value="${V.volume}" data-action="set-slider" data-path="settings.voice.volume"><span class="val">${V.volume}</span></div>`)}
-        ${setRow('Прослушать', 'тестовая фраза T1 · Esc или повторное нажатие — стоп',
+        ${setRow('Прослушать', engine === 'natural' ? 'тестовая фраза владельца: имя, время, числа, километры · Esc или повторное нажатие — стоп' : 'тестовая фраза T1 · Esc или повторное нажатие — стоп',
           `<div style="display:flex;gap:6px"><button class="btn primary" data-action="voice-test">▶ Прослушать</button><button class="btn" data-action="tts-stop">■ Стоп</button></div>`)}
         ${setRow('Последний запуск', 'время до начала звука · источник', `<span class="pill" id="tts-last">${stats.lastLatencyMs != null ? stats.lastLatencyMs + ' мс · ' + A.esc(stats.lastSource || stats.lastEngine) : '—'}</span>`)}
-        ${setRow('Сравнить голоса', 'A/B-прослушивание одинаковых фраз всеми кандидатами, слепой режим', '<a class="btn" href="voice-lab.html" target="_blank" rel="noopener">Открыть сравнение ↗</a>')}
+        ${setRow('Лаборатория голосов', 'исследование: A/B-прослушивание готовых образцов кандидатов, слепой режим', '<a class="btn" href="voice-lab.html" target="_blank" rel="noopener">Открыть лабораторию ↗</a>')}
         ${setRow('Поддержка браузера', 'честный статус возможностей', `<span class="pill ${ttsOn ? 'ok' : ''}">TTS: ${ttsOn ? 'да' : 'нет'}</span> <span class="pill ${sttOn ? 'ok' : ''}">STT: ${sttOn ? 'да' : 'нет'}</span>`)}
         ${setRow('Голосовой ввод (STT)', 'экспериментально · SpeechRecognition', sttOn ? sw('settings.voice.stt.enabled', ST.enabled) : '<span class="pill">недоступно</span>')}
         ${sttOn && ST.enabled ? setRow('Промежуточный текст', 'показывать распознанное по мере речи', sw('settings.voice.stt.interim', ST.interim)) : ''}
@@ -432,7 +436,7 @@
       if (window.AvenTTS) window.AvenTTS.stop();
       s().settings.voice.engine = el.value === 'natural' ? 'natural' : 'system';
       S.save(); A.render();
-      if (el.value === 'natural') A.toast('Натуральный голос — эксперимент: без сервера доступны только тестовые фразы, остальное — системным голосом');
+      if (el.value === 'natural') A.toast('Natural Voice: произвольный текст озвучивается вашим TTS-сервером (Silero Aigul на VPS). Без сервера — системный голос');
     },
     'set-natural-voice': (el) => { s().settings.voice.natural.voice = el.value; S.save(); A.render(); },
     'set-natural-server': (el) => { s().settings.voice.natural.serverUrl = el.value.trim(); S.save(); },
@@ -459,8 +463,12 @@
     'set-textsize': (el) => { s().settings.textSize = el.value; S.save(); A.applyEnv(); },
     'set-theme': (el) => { s().settings.theme = el.value; S.save(); A.applyEnv(); A.render(); },
     'voice-test': (el) => {
-      // T1 из research/tts/phrases.json — у натуральных голосов для неё есть готовый образец
-      const phrase = 'Здравствуйте. Я Aven, ваш персональный помощник. Чем могу помочь?';
+      // Для Natural — тестовая фраза владельца (этап 6): имя «Авен», время, числа, километры.
+      // Для системного движка — T1 из research/tts/phrases.json.
+      const V = (s().settings && s().settings.voice) || {};
+      const phrase = (V.engine === 'natural')
+        ? 'Авен проверяет натуральный голос. Сейчас 18 часов 43 минуты, пробег автомобиля 104520 километров.'
+        : 'Здравствуйте. Я Aven, ваш персональный помощник. Чем могу помочь?';
       const upd = (st) => { const o = document.getElementById('tts-last'); if (o && st) o.textContent = (st.lastLatencyMs != null ? st.lastLatencyMs + ' мс · ' : '') + (st.lastSource || st.lastEngine || ''); };
       if (window.AvenVoice) window.AvenVoice.speak(phrase, el, { charProfile: true, onStart: upd, onEnd: (ok, st) => upd(st) });
       else A.speak(phrase, null);

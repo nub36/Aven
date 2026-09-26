@@ -1,8 +1,8 @@
-/* Aven prototype — абстракция TTS-провайдеров (docs/TTS_RESEARCH.md §7–10). Не production.
+/* Aven prototype — абстракция TTS-провайдеров (docs/TTS_RESEARCH.md §7–10, §19). Не production.
  *
  *   TTSProvider = {
  *     id, label,
- *     privacy(voiceId) → 'device' | 'browser-online' | 'self-hosted' | 'bundled',
+ *     privacy(voiceId) → 'device' | 'browser-online' | 'self-hosted',
  *     voices() → [{ id, label, privacy, meta }],
  *     available() → Promise<boolean>,
  *     speak(speechText, { voice, rate, pitch, volume, signal, onStart }) → Promise (resolve по окончании),
@@ -11,13 +11,17 @@
  *   }
  *
  *   SystemTTSProvider — браузерный speechSynthesis (ВСЕГДА остаётся как бесплатный fallback).
- *   NaturalTTSProviderExperimental — нейросетевые голоса из исследования:
- *       1) self-hosted сервер (research/tts/server.py):
- *          GET {base}/api/tts/health → проверка, POST {base}/api/tts/synthesize → WAV;
- *       2) если сервера нет — заранее сгенерированные образцы (только тестовые фразы T1–T10);
- *       3) иначе — честная ошибка → менеджер говорит системным голосом
- *          («Natural Voice недоступен… — используется системный голос»), а не делает вид,
- *          что звучит Natural (ADR-010).
+ *   NaturalTTSProviderExperimental — Natural Voice через СОБСТВЕННЫЙ сервер владельца
+ *   (этап 6, Silero ru_aigul на VPS, docs/TTS_RESEARCH.md §19):
+ *       1) self-hosted сервер (research/tts/server.py 0.4.0):
+ *          GET {base}/api/tts/health (minimal/full), GET /api/tts/voices,
+ *          POST {base}/api/tts/synthesize → WAV;
+ *       2) сервер недоступен / не ответил / голоса нет — честная ошибка
+ *          → менеджер говорит системным голосом («Natural Voice недоступен… —
+ *          используется системный голос»), а не делает вид, что звучит Natural (ADR-010).
+ *   Готовые MP3-образцы исследования БОЛЬШЕ НЕ участвуют в основном сценарии
+ *   (готовый файл ≠ Natural Voice): сравнение голосов живёт отдельно в voice-lab*.html
+ *   на собственных данных (window.AvenVoiceSamples там читается напрямую).
  *
  * Менеджер window.AvenTTS: normalize → provider → presence (preparing → speaking → idle),
  * stop() в любой момент, сессионный кэш аудио, замер задержки до начала звука,
@@ -113,15 +117,12 @@
     stop: function () { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* noop */ } }
   };
 
-  /* ---------------- Natural (эксперимент) ---------------- */
-  var SAMPLES_BASE = 'assets/voice-samples/';
+  /* ---------------- Natural (Silero ru_aigul на сервере владельца) ---------------- */
   var HEALTH_TIMEOUT_MS = 3000;   // проверка сервера — быстрая
   var audioEl = null;
-  var serverState = { checked: 0, ok: false, voices: [], base: null, error: '', kind: '', latencyMs: null, info: null };
+  var serverState = { checked: 0, ok: false, voices: [], base: null, error: '', kind: '', latencyMs: null, info: null, defaultVoice: '' };
 
-  function samples() { return window.AvenVoiceSamples || { phrases: {}, voices: {} }; }
   function serverBase() { return (cfg().natural.serverUrl || '').replace(/\/+$/, ''); }
-  function canon(t) { return String(t || '').toLowerCase().replace(/ё/g, 'е').replace(/[^а-яa-z0-9]+/g, ' ').trim(); }
 
   /* Таймаут ответа сервера на синтез (§13): по умолчанию 10 с — здоровый GPU-сервер отвечает
    * за доли секунды (TTS_RESEARCH §12.2: RTF 0,29–0,46), зависший не должен вешать Aven.
@@ -178,16 +179,16 @@
       if (Array.isArray(j.voices)) {
         serverState = {
           checked: Date.now(), ok: true, voices: j.voices, base: base, error: '', kind: '',
-          latencyMs: latency,
+          latencyMs: latency, defaultVoice: j.default_voice || '',
           info: { server: j.server || 'aven-tts', version: j.version || '?', engines: j.engines || {} }
         };
         return serverState;
       }
-      // старый сервер: health есть, но списка голосов в нём нет → добираем /api/tts/voices
+      // сервер в режиме minimal health (VPS): списка голосов в health нет → добираем /api/tts/voices
       return fetch(base + '/api/tts/voices', { signal: ctl.signal, cache: 'no-store' })
         .then(function (r) { if (!r.ok) { var e = new Error('HTTP ' + r.status); e.kind = 'http'; e.httpStatus = r.status; throw e; } return r.json(); })
         .then(function (j2) {
-          serverState = { checked: Date.now(), ok: true, voices: j2.voices || [], base: base, error: '', kind: '', latencyMs: latency, info: { server: j.server || 'aven-tts', version: j.version || '?', engines: j.engines || {} } };
+          serverState = { checked: Date.now(), ok: true, voices: j2.voices || [], base: base, error: '', kind: '', latencyMs: latency, defaultVoice: j.default_voice || '', info: { server: j.server || 'aven-tts', version: j.version || '?', engines: j.engines || {} } };
           return serverState;
         });
     }
@@ -246,65 +247,42 @@
 
   var NaturalTTSProviderExperimental = {
     id: 'natural',
-    label: 'Натуральный голос (эксперимент)',
+    label: 'Natural Voice (свой сервер · Silero)',
     lastSource: '',
+    /* Основной сценарий (§19): ТОЛЬКО голоса self-hosted сервера. Готовые MP3-образцы
+     * исследования сюда больше не подмешиваются — воспроизведение файла ≠ Natural Voice.
+     * Сравнение кандидатов живёт отдельно: voice-lab*.html (свои данные, свой код). */
     voices: function () {
-      var list = [];
-      var seen = {};
-      serverState.voices.forEach(function (v) {
-        seen[v.id] = 1;
-        list.push({ id: v.id, label: v.label || v.id, privacy: 'self-hosted', meta: v });
+      return serverState.voices.map(function (v) {
+        return { id: v.id, label: v.label || v.id, privacy: 'self-hosted', meta: v };
       });
-      var sv = samples().voices;
-      var order = { shortlist: 0, baseline: 1, reference: 2, 'not-for-product': 3 };
-      Object.keys(sv).filter(function (k) {
-        // eSpeak — эталон «робота», не вариант; nameTestOnly — клипы мини-прогона произношения имени,
-        // для озвучки реплик Aven они не подходят (нет образцов T1–T10).
-        return !sv[k].catalogueOnly && !sv[k].nameTestOnly && !seen[k] && sv[k].engine !== 'espeak';
-      }).sort(function (a, b) {
-        return ((order[sv[a].status] != null ? order[sv[a].status] : 9) - (order[sv[b].status] != null ? order[sv[b].status] : 9)) || a.localeCompare(b);
-      }).forEach(function (k) {
-        list.push({ id: k, label: sv[k].title, privacy: 'bundled', meta: sv[k] });
-      });
-      return list;
     },
     privacy: function (voice) {
-      return serverState.ok && serverState.voices.some(function (v) { return v.id === voice; }) ? 'self-hosted' : 'bundled';
+      return 'self-hosted';
     },
     available: function () {
-      return checkServer().then(function (st) { return st.ok || Object.keys(samples().voices).length > 0; });
+      return checkServer().then(function (st) { return st.ok; });
     },
     /* capabilities (§9): реальный health endpoint, статус, выбранный голос */
     health: function () { return checkServer(true); },
     getStatus: function () { return serverState; },
     getVoice: function () { return cfg().natural.voice || ''; },
-    sampleFor: function (voice, speechText) {
-      var man = samples();
-      var v = man.voices[voice];
-      if (!v) return null;
-      var c = canon(speechText);
-      var pid = Object.keys(man.phrases).find(function (id) {
-        return canon(man.phrases[id].speech) === c || canon(man.phrases[id].text) === c;
-      });
-      return pid && v.phrases.indexOf(pid) >= 0 ? SAMPLES_BASE + voice + '/' + pid + '.mp3' : null;
-    },
     speak: function (text, o) {
       var self = this;
       var key = [o.voice, o.rate, text].join('|');
       var cached = o.cacheable ? Cache.get(key) : null;
       if (cached) { self.lastSource = 'кэш сессии'; return playUrl(cached, o); }
       return checkServer().then(function (st) {
-        var onServer = st.ok && st.voices.some(function (v) { return v.id === o.voice; });
-        if (onServer) {
+        if (st.ok && st.voices.some(function (v) { return v.id === o.voice; })) {
           self.lastSource = 'self-hosted сервер';
           return synthesizeFetch(text, {
             voice: o.voice, rate: o.rate, volume: o.volume, signal: o.signal,
             onStart: o.onStart, cacheable: o.cacheable, cacheKey: key
           });
         }
-        var sample = self.sampleFor(o.voice, text);
-        if (sample) { self.lastSource = 'готовый образец (исследование)'; return playUrl(sample, o); }
-        var err = new Error(st.ok ? 'этого голоса нет на сервере, а готового образца для фразы нет' : 'сервер TTS недоступен (' + (st.error || 'нет ответа') + '), а готового образца для этой фразы нет');
+        var err = new Error(st.ok
+          ? 'голоса «' + (o.voice || '?') + '» нет на сервере'
+          : 'сервер Natural Voice недоступен (' + (st.error || 'нет ответа') + ')');
         err.name = 'NaturalUnavailable';
         throw err;
       });
@@ -368,10 +346,13 @@
     stats.lastFallback = '';
     if (engine === 'natural') {
       if (P()) P().set('preparing');
-      // сохранённый голос мог быть удалён из набора образцов — берём первый доступный
+      // сохранённый голос мог пропасть с сервера — берём default_voice сервера, иначе первый
       var natList = NaturalTTSProviderExperimental.voices();
       var natVoice = o.voice || v.natural.voice;
-      if (!natList.some(function (x) { return x.id === natVoice; }) && natList.length) natVoice = natList[0].id;
+      if (!natList.some(function (x) { return x.id === natVoice; }) && natList.length) {
+        var dv = serverState.defaultVoice;
+        natVoice = (dv && natList.some(function (x) { return x.id === dv; })) ? dv : natList[0].id;
+      }
       run = NaturalTTSProviderExperimental.speak(speechText, {
         voice: natVoice, rate: v.natural.rate || 1, volume: v.volume,
         signal: ctl.signal, onStart: started('natural', 'Говорю · Natural'), cacheable: Cache.cacheable(displayText)
@@ -404,8 +385,7 @@
     return {
       device: { tag: 'Локально', ok: true, text: 'Речь синтезируется на этом устройстве, текст никуда не отправляется.' },
       'browser-online': { tag: 'Онлайн-голос браузера', ok: false, text: 'Этот системный голос облачный: браузер отправляет текст поставщику (Google / Microsoft / Apple). Для личных данных выберите голос с пометкой «на устройстве».' },
-      'self-hosted': { tag: 'Self-hosted', ok: true, text: 'Текст уходит только на ваш собственный TTS-сервер (' + (serverBase() || location.host) + '). Внешние облака не используются.' },
-      bundled: { tag: 'Готовые образцы', ok: true, text: 'Воспроизводятся заранее записанные файлы из прототипа. Произвольный текст без сервера озвучивается системным голосом.' }
+      'self-hosted': { tag: 'Self-hosted', ok: true, text: 'Текст уходит только на ваш собственный TTS-сервер (' + (serverBase() || location.host) + '). Внешние облака не используются.' }
     }[p];
   }
 

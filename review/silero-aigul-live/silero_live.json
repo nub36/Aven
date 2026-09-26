@@ -1,0 +1,89 @@
+{
+ "phrases": [
+  {
+   "id": "owner",
+   "chars": 97,
+   "synth_s": 0.433,
+   "audio_s": 7.22,
+   "rtf": 0.0599
+  },
+  {
+   "id": "arbitrary",
+   "chars": 87,
+   "synth_s": 0.45,
+   "audio_s": 7.54,
+   "rtf": 0.0597
+  },
+  {
+   "id": "name",
+   "chars": 65,
+   "synth_s": 0.347,
+   "audio_s": 6.15,
+   "rtf": 0.0564
+  },
+  {
+   "id": "numbers",
+   "chars": 71,
+   "synth_s": 0.275,
+   "audio_s": 4.81,
+   "rtf": 0.0571
+  },
+  {
+   "id": "time",
+   "chars": 63,
+   "synth_s": 0.25,
+   "audio_s": 4.39,
+   "rtf": 0.057
+  },
+  {
+   "id": "date",
+   "chars": 84,
+   "synth_s": 0.397,
+   "audio_s": 6.99,
+   "rtf": 0.0568
+  },
+  {
+   "id": "units",
+   "chars": 93,
+   "synth_s": 0.412,
+   "audio_s": 7.29,
+   "rtf": 0.0565
+  },
+  {
+   "id": "short",
+   "chars": 7,
+   "synth_s": 0.069,
+   "audio_s": 0.97,
+   "rtf": 0.0708
+  },
+  {
+   "id": "long",
+   "chars": 470,
+   "synth_s": 2.397,
+   "audio_s": 37.79,
+   "rtf": 0.0634
+  }
+ ],
+ "limits": {
+  "retry_after_s": "60",
+  "rate_codes": [
+   200,
+   200,
+   200,
+   429
+  ]
+ },
+ "health": {
+  "ok": true,
+  "status": "ok",
+  "server": "aven-tts-research",
+  "version": "0.4.0",
+  "max_chars": 600,
+  "default_voice": "silero_cis_mit/ru_aigul"
+ },
+ "server_uptime_s": 11.9,
+ "pass": 25,
+ "fail": 0,
+ "voice": "silero_cis_mit/ru_aigul",
+ "server_version": "0.4.0"
+}
