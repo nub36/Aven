@@ -10,7 +10,8 @@ NaturalTTSProviderExperimental (prototype/js/tts/providers.js):
 Формат ответа — PCM WAV: фронт играет его <audio>-элементом без перекодирования;
 MP3/Opus требовали бы кодека на сервере и ничего не дали бы на LAN-скоростях.
 
-Приватность: текст запросов НЕ пишется в лог и на диск (логируются только длина и время).
+Приватность: текст запросов НЕ пишется в лог и на диск (логируются только длина и время);
+управляющие символы из текста вырезаются (sanitize_text).
 Лицензии: по умолчанию включаются только голоса с ясной лицензией, допускающей коммерцию.
 Голоса с неясной/NC-лицензией — только с AVEN_TTS_ALLOW_UNCLEAR=1 (для прослушивания).
 
@@ -20,6 +21,16 @@ CORS: контролируемый, НЕ "*". Разрешены https://nub36.g
 curl) заголовков CORS не получают и не нуждаются в них. Поддержан preflight
 Private Network Access (Access-Control-Allow-Private-Network) — нужен Chrome, когда
 публичная страница обращается к адресу в частной сети.
+
+Production-like режим для VPS (этап 6, Silero ru_aigul — выбранный Natural Voice,
+docs/TTS_RESEARCH.md §19):
+  AVEN_TTS_HEALTH=minimal        health без engines/voices/uptime (не раскрывает лишнее)
+  AVEN_TTS_DEFAULT_VOICE=id      health.default_voice — фронт подставляет выбранный голос
+  AVEN_TTS_RATE_N / _WINDOW_S    rate limit на /api/tts/synthesize по IP (429 + Retry-After;
+                                 по умолчанию 12 запросов / 60 с; 0 = выключить)
+  AVEN_TTS_BUSY_TIMEOUT_S        сколько ждать освобождения движка (1 CPU), затем 503 (20 с)
+  Тело > 20 КБ → 413; текст > 600 символов → 413; пустой текст/неизвестный голос → 400;
+  PUT/DELETE/PATCH и POST не на synthesize → 405 с Allow.
 
 Движки подключаются, если доступны:
   Qwen3 VoiceDesign — AVEN_TTS_QWEN3=1; pip install qwen-tts torch; НУЖЕН GPU ≥8 ГБ VRAM
@@ -42,6 +53,7 @@ import argparse
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -57,8 +69,56 @@ HERE = Path(__file__).resolve().parent
 STATIC = HERE.parent.parent / "prototype"
 ALLOW_UNCLEAR = os.environ.get("AVEN_TTS_ALLOW_UNCLEAR") == "1"
 MAX_CHARS = 600
-VERSION = "0.3.0"
+MAX_BODY = 20_000          # байт JSON-тела synthesize; больше — 413
+VERSION = "0.4.0"
 STARTED = time.time()
+
+# --- production-like режим (этап 6: Silero ru_aigul как Natural Voice) ---
+# Health: full (исследование — все детали) | minimal (VPS: ok/status/server/version,
+# без engines/voices/uptime — endpoint не раскрывает лишнего).
+HEALTH_MINIMAL = os.environ.get("AVEN_TTS_HEALTH", "full") == "minimal"
+# Голос по умолчанию для фронта (health.default_voice), например silero_cis_mit/ru_aigul.
+DEFAULT_VOICE = os.environ.get("AVEN_TTS_DEFAULT_VOICE", "")
+# Rate limit ТОЛЬКО на дорогой /api/tts/synthesize: не более N запросов с одного IP
+# за окно в секундах. 0 — выключен. Пер-IP скользящее окно, без внешних зависимостей.
+RATE_N = int(os.environ.get("AVEN_TTS_RATE_N", "12"))
+RATE_WINDOW_S = float(os.environ.get("AVEN_TTS_RATE_WINDOW_S", "60"))
+# Таймаут ожидания освободившегося движка (1 CPU: синтез сериализован локом движка).
+BUSY_TIMEOUT_S = float(os.environ.get("AVEN_TTS_BUSY_TIMEOUT_S", "20"))
+
+_CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def sanitize_text(text: str) -> str:
+    """Управляющие символы (кроме \t\n\r) вырезаются; текст только на синтез и в лог не попадает."""
+    return _CTRL_RE.sub("", text).strip()
+
+
+class RateLimiter:
+    """Скользящее окно по IP для /api/tts/synthesize. Память — только активные IP."""
+
+    def __init__(self, n: int, window_s: float):
+        self.n = max(0, int(n))
+        self.window = float(window_s)
+        self._hits: dict[str, list[float]] = {}
+        self._lock = threading.Lock()
+
+    def allow(self, ip: str) -> tuple[bool, float]:
+        """(разрешено, через сколько секунд можно повторить)."""
+        if self.n <= 0:
+            return True, 0.0
+        now = time.time()
+        with self._lock:
+            q = [t for t in self._hits.get(ip, []) if now - t < self.window]
+            if len(q) >= self.n:
+                self._hits[ip] = q
+                return False, max(0.1, self.window - (now - q[0]))
+            q.append(now)
+            self._hits[ip] = q
+            return True, 0.0
+
+
+RATE_LIMITER = RateLimiter(RATE_N, RATE_WINDOW_S)
 
 
 def wav_bytes(audio: np.ndarray, sr: int) -> bytes:
@@ -186,7 +246,14 @@ class SileroCIS(Engine):
         self.speakers = [s for s in env.split(",") if s] or sorted(s for s in self.model.speakers if s.startswith("ru_"))
 
     def voices(self):
-        return [{"id": f"silero_cis_mit/{s}", "label": f"Silero CIS · {s}", "engine": self.name, "license": "MIT", "commercial": "yes"} for s in self.speakers]
+        # Понятная подпись для основного сценария: «Aigul · Silero CIS» (ru_aigul —
+        # выбранный владельцем Natural Voice, docs/TTS_RESEARCH.md §19)
+        out = []
+        for s in self.speakers:
+            pretty = s.replace("ru_", "").capitalize()
+            out.append({"id": f"silero_cis_mit/{s}", "label": f"{pretty} · Silero CIS",
+                        "engine": self.name, "license": "MIT", "commercial": "yes"})
+        return out
 
     def synth(self, text, voice, rate):
         audio = self.model.apply_tts(text=self.accentor(text), speaker=voice, sample_rate=24000)
@@ -297,12 +364,14 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):  # без текста запросов — только путь и код
         sys.stderr.write("[http] %s %s %s\n" % (self.client_address[0], self.command, self.path.split("?")[0]))
 
-    def _json(self, code, obj):
+    def _json(self, code, obj, extra_headers: dict | None = None):
         body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        for k, v in (extra_headers or {}).items():
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(body)
 
@@ -326,38 +395,79 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.startswith("/api/tts/health"):
-            return self._json(200, {
+            payload = {
                 "ok": True,
                 "status": "ok",
                 "server": "aven-tts-research",
                 "version": VERSION,
-                "engines": {name: dict(voices=[v["id"] for v in e.voices()],
-                                       supports_rate=e.supports_rate, **e.info())
-                            for name, e in ENGINES.items()},
-                "voices": voice_list(),
-                "uptime_s": round(time.time() - STARTED, 1),
                 "max_chars": MAX_CHARS,
-            })
+            }
+            if DEFAULT_VOICE:
+                payload["default_voice"] = DEFAULT_VOICE
+            if not HEALTH_MINIMAL:  # полный исследовательский режим; VPS работает в minimal
+                payload["engines"] = {name: dict(voices=[v["id"] for v in e.voices()],
+                                                 supports_rate=e.supports_rate, **e.info())
+                                      for name, e in ENGINES.items()}
+                payload["voices"] = voice_list()
+                payload["uptime_s"] = round(time.time() - STARTED, 1)
+            return self._json(200, payload)
         if self.path.startswith("/api/tts/voices"):
             return self._json(200, {"voices": voice_list()})
         return super().do_GET()
 
+    def _api_method_not_allowed(self):
+        if self.path.startswith("/api/"):
+            return self._json(405, {"error": "method not allowed", "allow": "GET, POST, OPTIONS"},
+                              {"Allow": "GET, POST, OPTIONS"})
+        return super().do_GET()  # не API — стандартное поведение статики
+
+    def do_PUT(self):
+        return self._api_method_not_allowed()
+
+    def do_DELETE(self):
+        return self._api_method_not_allowed()
+
+    def do_PATCH(self):
+        return self._api_method_not_allowed()
+
     def do_POST(self):
+        if self.path.startswith("/api/tts/health") or self.path.startswith("/api/tts/voices"):
+            return self._json(405, {"error": "method not allowed", "allow": "GET, OPTIONS"},
+                              {"Allow": "GET, OPTIONS"})
         if not self.path.startswith("/api/tts/synthesize"):
             return self._json(404, {"error": "not found"})
+        # Rate limit ДО чтения тела: дорогое действие — дешёвый отказ (429 + Retry-After)
+        allowed, retry_s = RATE_LIMITER.allow(self.client_address[0])
+        if not allowed:
+            self.send_response(429)
+            self.send_header("Retry-After", str(int(retry_s) + 1))
+            return self._json(429, {"error": "rate limit exceeded", "retry_after_s": round(retry_s, 1)})
         try:
             n = int(self.headers.get("Content-Length") or 0)
-            req = json.loads(self.rfile.read(min(n, 20000)) or b"{}")
-            text = str(req.get("text", "")).strip()[:MAX_CHARS]
+            if n > MAX_BODY:
+                return self._json(413, {"error": "request body too large", "max_body_bytes": MAX_BODY})
+            req = json.loads(self.rfile.read(n) or b"{}")
+            text = sanitize_text(str(req.get("text", "")))
             vid = str(req.get("voice", ""))
             rate = float(req.get("rate") or 1.0)
+            if not text:
+                return self._json(400, {"error": "empty text"})
+            if len(text) > MAX_CHARS:
+                return self._json(413, {"error": "text too long", "max_chars": MAX_CHARS})
             engine_name, _, voice = vid.partition("/")
             eng = ENGINES.get(engine_name)
-            if not text or not eng or vid not in {v["id"] for v in eng.voices()}:
-                return self._json(400, {"error": "unknown voice or empty text"})
+            if not eng or vid not in {v["id"] for v in eng.voices()}:
+                return self._json(400, {"error": "unknown voice"})
+            if not (0.5 <= rate <= 2.0):
+                rate = 1.0
             t = time.perf_counter()
-            with eng.lock:
+            # 1 CPU: синтез сериализован локом движка; занятость дольше таймаута — честный 503
+            if not eng.lock.acquire(timeout=BUSY_TIMEOUT_S):
+                return self._json(503, {"error": "server busy, try again later"})
+            try:
                 data = eng.synth(text, voice, rate)
+            finally:
+                eng.lock.release()
             dt = time.perf_counter() - t
             sys.stderr.write(f"[tts] {vid} chars={len(text)} synth={dt:.3f}s\n")
             self.send_response(200)
