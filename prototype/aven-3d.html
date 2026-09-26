@@ -13,9 +13,15 @@
     .v3d-warn { margin: 10px 0 14px; }
     .v3d-layout { display: grid; grid-template-columns: minmax(320px, 1.2fr) minmax(280px, 1fr); gap: 14px; }
     @media (max-width: 900px) { .v3d-layout { grid-template-columns: 1fr; } }
+    /* Нейтральный светлый фон (viewer для ОЦЕНКИ качества): на нём читаются тёмные
+       волосы и одежда; никаких цветных glow-эффектов, маскирующих недостатки модели. */
     .v3d-stage { position: relative; border-radius: 14px; overflow: hidden; min-height: 460px;
-                 background: radial-gradient(120% 90% at 50% 15%, #2b3350 0%, #171c2e 55%, #10131f 100%); }
+                 background: linear-gradient(180deg, #d6d8dd 0%, #c2c5cc 55%, #aeb2bb 100%); }
     .v3d-stage canvas { display: block; width: 100%; height: 100%; }
+    .v3d-stage .fallback { color: #23262e; }
+    .v3d-viewbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 4px; }
+    .v3d-viewbar button.active { outline: 2px solid var(--accent); }
+    .v3d-viewbar .pill { font-size: .82rem; }
     .v3d-stage .fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: 18px; text-align: center; }
     /* [hidden] должен реально скрывать fallback: правило display:grid выше иначе
        перебивает браузерное [hidden]{display:none} — из-за этого PNG-fallback
@@ -69,6 +75,24 @@
           </div>
         </div>
       </div>
+      <!-- Пресеты камеры для объективной оценки модели + честный статус текущего вида.
+           «Слева»/«Справа» — стороны ПЕРСОНАЖА (левый/правый профиль). -->
+      <div class="v3d-viewbar" id="viewbar">
+        <button class="btn small" data-view="front">Спереди</button>
+        <button class="btn small" data-view="left">Слева</button>
+        <button class="btn small" data-view="right">Справа</button>
+        <button class="btn small" data-view="back">Сзади</button>
+        <button class="btn small" id="viewReset">Сброс вида</button>
+        <span class="pill" id="viewStatus">Вид: —</span>
+      </div>
+      <div class="muted" style="margin:0 0 6px;font-size:.8rem">
+        1 палец — вращение (360° вокруг вертикали), pinch — zoom; «Слева/Справа» = левый/правый
+        профиль персонажа. После ручного вращения статус — «Свободный вид».
+      </div>
+      <label class="muted" style="display:block;margin:0 0 6px">
+        <input type="checkbox" id="animToggle"> анимация состояний (по умолчанию выключена,
+        чтобы микродвижения головы не мешали оценивать ракурсы)
+      </label>
       <div class="v3d-statebar" id="statebar"></div>
       <div class="v3d-desc muted" id="stateDesc"></div>
       <div class="row" style="margin:8px 0">
