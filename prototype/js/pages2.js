@@ -11,11 +11,15 @@
     const catMax = Math.max.apply(null, st.finCats.map((x) => x.v));
     const html = `
     <div class="page-head">
-      <div><h1>Финансы</h1><div class="sub">Работает через обычные формы, независимо от Command Engine · демо</div></div>
-      <button class="btn primary" data-action="fin-add">＋ Операция</button>
+      <div><h1>Финансы</h1><div class="sub">Работает через обычные формы, независимо от Command Engine · демо · MVP_SCOPE §5.6</div></div>
+      <div class="btn-row">
+        <button class="btn" data-action="fin-export-csv" title="Выгрузить операции в CSV (MVP_SCOPE §5.6, приёмка 5)">Экспорт CSV</button>
+        <button class="btn primary" data-action="fin-add">＋ Операция</button>
+      </div>
     </div>
     <div class="grid cols-3" style="margin-bottom:16px">
-      <div class="card stat"><div class="l">Баланс</div><div class="v">${A.money(st.finMonth.balance)}</div><div class="d">демо-значение</div></div>
+      <div class="card stat"><div class="l">Баланс</div><div class="v ${st.finMonth.balance < 0 ? 'neg' : ''}">${A.money(st.finMonth.balance)}</div>
+        <div class="d">${st.finMonth.balance < 0 ? '<span class="pill warn">отрицательный баланс — показан, не запрещён (§5.6)</span>' : 'пересчитывается при операциях'}</div></div>
       <div class="card stat"><div class="l">Расходы месяца</div><div class="v neg">${A.money(st.finMonth.expense)}</div><div class="d">сентябрь (демо)</div></div>
       <div class="card stat"><div class="l">Доходы месяца</div><div class="v pos">${A.money(st.finMonth.income)}</div><div class="d">сентябрь (демо)</div></div>
     </div>
@@ -38,18 +42,27 @@
         </div>`).join('')}
       </div>
       <div class="card">
-        <h3>Последние операции</h3>
+        <h3>Операции</h3>
         <table class="tbl">
-          <tr><th>Что</th><th>Категория</th><th>Когда</th><th class="num">Сумма</th></tr>
+          <tr><th>Что</th><th>Категория</th><th>Когда</th><th class="num">Сумма</th><th title="Удаление с подтверждением и Undo">⋯</th></tr>
           ${st.ops.map((o) => `
           <tr>
             <td>${A.esc(o.title)}</td>
             <td><span class="pill">${A.esc(o.cat)}</span></td>
             <td class="s" style="color:var(--muted)">${A.esc(o.date)}</td>
             <td class="num ${o.type === 'income' ? 'pos' : 'neg'}">${o.type === 'income' ? '+' : '−'}${A.money(o.amount)}</td>
+            <td><button class="btn small" data-action="fin-del" data-id="${A.esc(o.id)}" title="Удалить операцию: подтверждение + Undo, итоги пересчитаются">Удалить</button></td>
           </tr>`).join('')}
         </table>
         <div style="color:var(--muted);font-size:.82rem;margin-top:10px">Категории: Авто · Продукты · Дом · Подписки · Другое · Доход</div>
+        <div class="tts-priv" style="margin-top:12px"><span>🧮</span>
+          <div><b>Точность денег (SECURITY §5, MVP_SCOPE §5.6, приёмка 1):</b> суммы хранятся целыми
+          в минимальных единицах валюты, поэтому <code>0.1 + 0.2 = ${A.money(A.sumMoney(0.1, 0.2))}</code>
+          (в копейках <code>${A.minor(0.1)} + ${A.minor(0.2)} = ${A.minor(0.1) + A.minor(0.2)}</code>), а не
+          <code>${0.1 + 0.2}</code>, как получилось бы при сложении float. Итоги месяца и баланс
+          пересчитываются при добавлении и удалении операции; удаление требует подтверждения и отменяется
+          через Undo (§5.6, приёмка 4).</div>
+        </div>
       </div>
     </div>`;
     return { html };
@@ -376,11 +389,87 @@
           <div class="field"><label>Комментарий</label><input type="text" name="comment"></div>`,
         onSubmit: (v) => {
           const st = S.s();
-          const amt = +v.amount || 0;
-          st.ops.unshift({ id: S.id('o'), type: v.type, cat: v.cat, title: v.comment || v.cat, amount: amt, date: 'сегодня', comment: '' });
-          if (v.type === 'expense') st.finMonth.expense += amt; else st.finMonth.income += amt;
-          S.save(); A.closeModal(); A.render(); A.demoToast('Операция добавлена (демо)');
+          const amt = A.minor(v.amount) / 100;           /* целые копейки, без float-артефактов */
+          if (!(amt > 0)) { A.toast('Введите сумму больше нуля'); return; }
+          const op = { id: S.id('o'), type: v.type, cat: v.cat, title: v.comment || v.cat, amount: amt,
+                       date: v.date || 'сегодня', comment: v.comment || '' };
+          st.ops.unshift(op);
+          if (v.type === 'expense') {
+            st.finMonth.expense = A.sumMoney(st.finMonth.expense, amt);
+            st.finMonth.balance = A.sumMoney(st.finMonth.balance, -amt);
+          } else {
+            st.finMonth.income = A.sumMoney(st.finMonth.income, amt);
+            st.finMonth.balance = A.sumMoney(st.finMonth.balance, amt);
+          }
+          S.save();
+          A.logAction({
+            action: v.type === 'expense' ? 'finance.expense.create' : 'finance.income.create',
+            title: (v.type === 'expense' ? 'Расход' : 'Доход') + ' добавлен', object: op.title + ' · ' + A.money(amt),
+            objectType: v.type === 'expense' ? 'expense' : 'income', undoable: true,
+            changes: [
+              { field: 'Сумма', from: '—', to: A.money(amt) + ' (' + A.minor(amt) + ' мин. ед.)' },
+              { field: 'Категория', from: '—', to: op.cat },
+              { field: 'Дата', from: '—', to: op.date },
+              { field: v.type === 'expense' ? 'Расходы месяца' : 'Доходы месяца',
+                from: A.money(v.type === 'expense' ? st.finMonth.expense - amt : st.finMonth.income - amt),
+                to: A.money(v.type === 'expense' ? st.finMonth.expense : st.finMonth.income) }
+            ],
+            undo: { type: 'remove', list: 'ops', id: op.id, adjust: v.type === 'expense'
+              ? [{ path: 'finMonth.expense', delta: -amt }, { path: 'finMonth.balance', delta: amt }]
+              : [{ path: 'finMonth.income', delta: -amt }, { path: 'finMonth.balance', delta: -amt }] }
+          });
+          A.closeModal(); A.render(); A.toast('Операция записана · итоги пересчитаны · можно отменить');
         }
+      });
+    },
+
+    /* удаление операции: подтверждение + пересчёт итогов + Undo (MVP_SCOPE §5.6, приёмка 4) */
+    'fin-del': (el) => {
+      const list = S.s().ops;
+      const i0 = A.indexOfId(list, el.dataset.id);
+      const it = list[i0];
+      if (!it) { A.toast('Операция не найдена'); return; }
+      A.confirmModal('Удалить операцию «' + it.title + '» на ' + A.money(it.amount) +
+        '? Итоги месяца и баланс пересчитаются. Отмена (Undo) останется в истории действий.', () => {
+        const st = S.s();
+        const i = A.indexOfId(st.ops, el.dataset.id);
+        const op = st.ops[i];
+        if (!op) { A.toast('Операция не найдена'); return; }
+        st.ops.splice(i, 1);
+        const balDelta = op.type === 'expense' ? op.amount : -op.amount;
+        if (op.type === 'expense') st.finMonth.expense = A.sumMoney(st.finMonth.expense, -op.amount);
+        else st.finMonth.income = A.sumMoney(st.finMonth.income, -op.amount);
+        st.finMonth.balance = A.sumMoney(st.finMonth.balance, balDelta);
+        S.save();
+        A.logAction({
+          action: op.type === 'expense' ? 'finance.expense.delete' : 'finance.income.delete',
+          title: 'Операция удалена', object: op.title + ' · ' + A.money(op.amount),
+          objectType: op.type === 'expense' ? 'expense' : 'income', undoable: true, danger: true,
+          changes: [
+            { field: 'Состояние', from: 'в списке', to: 'Удалена' },
+            { field: 'Баланс', from: A.money(st.finMonth.balance - balDelta), to: A.money(st.finMonth.balance) }
+          ],
+          undo: { type: 'restore', list: 'ops', index: i, item: JSON.parse(JSON.stringify(op)),
+                  adjust: [{ path: op.type === 'expense' ? 'finMonth.expense' : 'finMonth.income', delta: op.amount },
+                           { path: 'finMonth.balance', delta: -balDelta }] }
+        });
+        A.render(); A.toast('Операция удалена, итоги пересчитаны — можно отменить');
+      });
+    },
+
+    /* экспорт операций в CSV (MVP_SCOPE §5.6, приёмка 5). BOM — чтобы Excel корректно открыл UTF-8. */
+    'fin-export-csv': () => {
+      const st = S.s();
+      const rows = [['Дата', 'Тип', 'Категория', 'Название', 'Сумма', 'Сумма в минимальных единицах', 'Комментарий']];
+      (st.ops || []).forEach((o) => rows.push([o.date, o.type === 'income' ? 'доход' : 'расход', o.cat, o.title,
+        (A.minor(o.amount) / 100).toFixed(2), A.minor(o.amount), o.comment || '']));
+      const csv = '\uFEFF' + rows.map((r) => r.map((c) => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"').join(';')).join('\r\n');
+      A.confirmModal('Выгрузить операции в CSV? Файл содержит данные о расходах и доходах — это приватные данные, поэтому выгрузка подтверждается (MVP_SCOPE §7).', () => {
+        A.closeModal();
+        if (!A.downloadFile('aven-finance-demo.csv', csv, 'text/csv;charset=utf-8')) return;
+        A.toast('Операции выгружены в CSV: ' + (st.ops || []).length + ' строк');
+        A.logAction({ action: 'data.export', title: 'Экспорт данных', object: 'Финансы · CSV (' + (st.ops || []).length + ' операций)',
+          objectType: 'system', undoable: false, sensitive: true });
       });
     },
 
@@ -396,8 +485,16 @@
           </div>`,
         onSubmit: (v) => {
           const st = S.s();
-          st.car.expenses.unshift({ id: S.id('ce'), title: v.title || 'Расход', amount: +v.amount || 0, date: 'сегодня' });
-          S.save(); A.closeModal(); A.render(); A.demoToast('Расход по авто добавлен (демо)');
+          const it = { id: S.id('ce'), title: v.title || 'Расход', amount: A.minor(v.amount) / 100, date: 'сегодня' };
+          st.car.expenses.unshift(it);
+          S.save();
+          A.logAction({
+            action: 'car.expense.create', title: 'Расход по авто добавлен', object: it.title + ' · ' + A.money(it.amount),
+            objectType: 'car', undoable: true,
+            changes: [{ field: 'Что', from: '—', to: it.title }, { field: 'Сумма', from: '—', to: A.money(it.amount) }],
+            undo: { type: 'remove', list: 'car.expenses', id: it.id }
+          });
+          A.closeModal(); A.render(); A.toast('Расход по авто добавлен · раздел Stage 1.1, запись в истории есть');
         }
       });
     },
@@ -413,8 +510,17 @@
           <div class="field"><label>Пробег, км</label><input type="number" name="km" value="${s().car.mileage}"></div>`,
         onSubmit: (v) => {
           const st = S.s();
-          st.car.service.unshift({ id: S.id('cs'), title: v.title || 'Работа', date: 'сегодня', cost: +v.cost || 0, km: +v.km || 0 });
-          S.save(); A.closeModal(); A.render(); A.demoToast('Обслуживание добавлено (демо)');
+          const it = { id: S.id('cs'), title: v.title || 'Работа', date: 'сегодня', cost: A.minor(v.cost) / 100, km: +v.km || 0 };
+          st.car.service.unshift(it);
+          S.save();
+          A.logAction({
+            action: 'car.service.create', title: 'Обслуживание добавлено', object: it.title + ' · ' + A.money(it.cost),
+            objectType: 'car', undoable: true,
+            changes: [{ field: 'Работа', from: '—', to: it.title }, { field: 'Стоимость', from: '—', to: A.money(it.cost) },
+                      { field: 'Пробег', from: '—', to: it.km + ' км' }],
+            undo: { type: 'remove', list: 'car.service', id: it.id }
+          });
+          A.closeModal(); A.render(); A.toast('Обслуживание добавлено · раздел Stage 1.1, запись в истории есть');
         }
       });
     },
@@ -424,8 +530,16 @@
         body: `<div class="field"><label>Текущий пробег, км</label><input type="number" name="km" value="${s().car.mileage}"></div>`,
         onSubmit: (v) => {
           const st = S.s();
-          st.car.mileage = +v.km || st.car.mileage;
-          S.save(); A.closeModal(); A.render(); A.demoToast('Пробег обновлён (демо)');
+          const was = st.car.mileage;
+          const km = +v.km || was;
+          st.car.mileage = km;
+          S.save();
+          A.logAction({
+            action: 'car.mileage.update', title: 'Пробег обновлён', object: km + ' км', objectType: 'car',
+            undoable: true, changes: [{ field: 'Пробег, км', from: String(was), to: String(km) }],
+            undo: { type: 'value', path: 'car.mileage', value: was }
+          });
+          A.closeModal(); A.render(); A.toast('Пробег обновлён · можно отменить в истории');
         }
       });
     },
@@ -444,8 +558,17 @@
         onSubmit: (v) => {
           const st = S.s();
           const fmt = (iso) => { if (!iso) return '—'; const p = iso.split('-'); return p[2] + '.' + p[1] + '.' + p[0]; };
-          st.purchases.unshift({ id: S.id('p'), name: v.name || 'Покупка', emoji: '📦', price: +v.price || 0, date: fmt(v.date), warranty: fmt(v.warranty), sn: v.sn, status: 'в собственности' });
-          S.save(); A.closeModal(); A.render(); A.demoToast('Покупка добавлена (демо)');
+          const it = { id: S.id('p'), name: v.name || 'Покупка', emoji: '📦', price: A.minor(v.price) / 100, date: fmt(v.date), warranty: fmt(v.warranty), sn: v.sn, status: 'в собственности' };
+          st.purchases.unshift(it);
+          S.save();
+          A.logAction({
+            action: 'purchase.create', title: 'Покупка добавлена', object: it.name + ' · ' + A.money(it.price),
+            objectType: 'purchase', undoable: true,
+            changes: [{ field: 'Название', from: '—', to: it.name }, { field: 'Цена', from: '—', to: A.money(it.price) },
+                      { field: 'Гарантия до', from: '—', to: it.warranty }],
+            undo: { type: 'remove', list: 'purchases', id: it.id }
+          });
+          A.closeModal(); A.render(); A.toast('Покупка добавлена · раздел Stage 1.1, запись в истории есть');
         }
       });
     },
@@ -466,7 +589,18 @@
 
     'auto-toggle': (el) => {
       const a = s().automations.find((x) => x.id === el.dataset.id);
-      if (a) { a.enabled = el.checked; S.save(); A.toast(a.name + ': ' + (a.enabled ? 'включена (демо)' : 'выключена (демо)')); }
+      if (!a) return;
+      const was = a.enabled;
+      a.enabled = el.checked;
+      S.save();
+      A.logAction({
+        action: 'automation.update', title: a.enabled ? 'Автоматизация включена' : 'Автоматизация выключена',
+        object: a.name, objectType: 'system', undoable: true,
+        changes: [{ field: 'Состояние', from: was ? 'включена' : 'выключена', to: a.enabled ? 'включена' : 'выключена' }],
+        undo: { type: 'fields', list: 'automations', id: a.id, fields: { enabled: was } }
+      });
+      A.render();
+      A.toast(a.name + ': ' + (a.enabled ? 'включена (демо)' : 'выключена (демо)') + ' · раздел Stage 4');
     },
     'auto-add': () => {
       A.openModal({
@@ -478,8 +612,17 @@
           <div class="s" style="color:var(--muted);font-size:.8rem">Полный Canvas — Stage 4; здесь — упрощённое демо.</div>`,
         onSubmit: (v) => {
           const st = S.s();
-          st.automations.push({ id: S.id('a'), name: v.name || 'Моя автоматизация', icon: '⚡', trigger: v.trigger, enabled: false, last: '—', next: '—' });
-          S.save(); A.closeModal(); A.render(); A.demoToast('Автоматизация создана выключенной (демо)');
+          const it = { id: S.id('a'), name: v.name || 'Моя автоматизация', icon: '⚡', trigger: v.trigger, enabled: false, last: '—', next: '—' };
+          st.automations.push(it);
+          S.save();
+          A.logAction({
+            action: 'automation.create', title: 'Автоматизация создана (выключена)', object: it.name,
+            objectType: 'system', undoable: true,
+            changes: [{ field: 'Название', from: '—', to: it.name }, { field: 'Триггер', from: '—', to: it.trigger },
+                      { field: 'Состояние', from: '—', to: 'выключена' }],
+            undo: { type: 'remove', list: 'automations', id: it.id }
+          });
+          A.closeModal(); A.render(); A.toast('Автоматизация создана выключенной · раздел Stage 4, запись в истории есть');
         }
       });
     },

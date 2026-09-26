@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aven — произношение «Aven / Авен»: мини-прогон способов</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body { padding: 20px; max-width: 1100px; margin: 0 auto; }
+    .lab-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .lab-head h1 { margin: 0; font-size: 1.35rem; }
+    .lab-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 16px; }
+    .lab-section { margin: 26px 0 10px; font-size: 1.05rem; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .n-card { padding: 14px 16px; border-radius: 14px; margin-bottom: 12px; }
+    .n-card.playing { outline: 2px solid var(--accent); }
+    .n-top { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+    .n-text { font-size: 1.02rem; font-weight: 600; }
+    .n-speech { font-size: .84rem; color: var(--muted); margin-top: 2px; }
+    .n-speech b { color: var(--warn, #c98a00); font-weight: 600; }
+    .n-note { font-size: .82rem; color: var(--muted); margin-top: 6px; }
+    .n-meta { font-size: .78rem; color: var(--muted); margin-top: 6px; }
+    .n-card audio { width: 100%; height: 34px; margin-top: 8px; }
+    .stars { white-space: nowrap; flex-shrink: 0; }
+    .stars button { background: none; border: 0; font-size: 1.15rem; cursor: pointer; color: var(--muted); padding: 0 1px; }
+    .stars button.on { color: #e6a700; }
+    .pill.lic-yes { background: rgba(40,170,90,.15); color: var(--ok); }
+    .pill.ok { background: rgba(40,170,90,.15); color: var(--ok); }
+    .pill.bad { background: rgba(200,60,60,.14); color: #c0392b; }
+    .muted { color: var(--muted); font-size: .84rem; }
+    .group-note { font-size: .84rem; color: var(--muted); margin: -4px 0 10px; }
+    textarea { width: 100%; min-height: 130px; font-family: inherit; }
+    table.pron { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    table.pron th, table.pron td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border, rgba(0,0,0,.08)); }
+    table.pron td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div class="lab-head">
+    <div>
+      <h1>Произношение «Aven / Авен» — мини-прогон способов</h1>
+      <div class="muted">Проверка способов, которые в этапе 2 были только описаны (docs/TTS_RESEARCH.md §11.2 → §16).
+        Это исследование, <b>не</b> утверждённая архитектура: System TTS (<code>speechSynthesis</code>) остаётся
+        движком по умолчанию и fallback, голос не внедрён.</div>
+    </div>
+    <div class="row">
+      <a class="btn" href="voice-lab-vd17.html">← Расширенный тест vd17</a>
+      <a class="btn" href="voice-lab.html">Сравнение голосов</a>
+      <a class="btn" href="index.html#/settings">Прототип</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="lab-bar">
+      <span class="pill">на экране всегда: <b id="nameScreen">Aven</b></span>
+      <span class="pill">хотим услышать: <b id="nameTarget">Авен</b></span>
+      <span class="pill lic-yes" title="Apache-2.0 — код и веса Qwen3-TTS">коммерция: да</span>
+      <button class="btn small" id="playAll">▶ Проиграть всё подряд</button>
+      <button class="btn small" id="stopAll">■ Стоп</button>
+      <label><input type="checkbox" id="withSystem"> после каждого образца — системный голос</label>
+    </div>
+    <div class="lab-bar" id="byTextBar" style="margin-top:0">
+      <span class="muted">Сравнить способы на одной фразе:</span>
+      <select id="byText"></select>
+      <button class="btn small" id="playText">▶ Проиграть варианты фразы</button>
+    </div>
+    <div class="muted" id="envinfo"></div>
+    <div class="muted" id="hint" style="margin-top:6px"></div>
+    <div class="muted" style="margin-top:6px">
+      ASR — не ухо: совпадение букв «авен» не доказывает правильное ударение, а расхождение не всегда означает ошибку
+      (Whisper сам пишет с ошибками). Числа ниже — объективный ориентир и способ отсортировать варианты;
+      решение принимает владелец прослушиванием.
+    </div>
+  </div>
+
+  <div id="groups"></div>
+
+  <h2 class="lab-section">Кто как говорит «Авен» — по данным ASR (клипы T1 всех прогонов)</h2>
+  <div class="card">
+    <div class="muted" style="margin-bottom:8px">
+      Метрика <code>name_lwer</code>: буквы имени, вырезанные из гипотезы Whisper, сравниваются с «авен»
+      (0% — побуквенно точно). Считается по уже сохранённым гипотезам, поэтому охватывает и голоса,
+      чьи MP3 не хранятся в git по лицензии (вариант Б).
+    </div>
+    <table class="pron">
+      <thead><tr><th>Голос</th><th class="num">Точно «авен»</th><th class="num">Среднее name_lwer</th><th class="num">Клипов</th><th>Образцы в git</th></tr></thead>
+      <tbody id="pronBody"></tbody>
+    </table>
+  </div>
+
+  <h2 class="lab-section">Мои оценки</h2>
+  <div class="card">
+    <div class="muted">Оценки хранятся только в этом браузере (localStorage). Кнопка копирует их текстом — можно вставить
+      в сообщение агенту. Общие ★ за голоса-участники (vd17-design, base06-clone, base17-clone) пишутся в тот же ключ,
+      что и в <a href="voice-lab.html">сравнении голосов</a>.</div>
+    <div id="voiceStars" class="row" style="flex-wrap:wrap;gap:14px;margin:10px 0"></div>
+    <textarea id="notes" readonly></textarea>
+    <div class="row" style="margin-top:8px"><button class="btn" id="copy">Скопировать оценки</button></div>
+  </div>
+
+  <script src="js/tts/normalize.js"></script>
+  <script src="assets/voice-samples/manifest.js"></script>
+  <script>
+  (function () {
+    'use strict';
+    var M = window.AvenVoiceSamples || { phrases: {}, voices: {}, name: null };
+    var NM = M.name || {};
+    var LS = 'aven-voice-lab-name-v1';
+    var LS_MAIN = 'aven-voice-lab-v1';                    // общие оценки голосов (как в voice-lab.html)
+    var st = JSON.parse(localStorage.getItem(LS) || '{}'); st.ratings = st.ratings || {};
+    var main = JSON.parse(localStorage.getItem(LS_MAIN) || '{}'); main.ratings = main.ratings || {};
+    var save = function () { localStorage.setItem(LS, JSON.stringify(st)); };
+    var saveMain = function () { localStorage.setItem(LS_MAIN, JSON.stringify(main)); };
+    var $ = function (id) { return document.getElementById(id); };
+    var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>\"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+    var fmt = function (x, d) { return x == null ? '—' : Number(x).toFixed(d == null ? 2 : d); };
+    var pct = function (x) { return x == null ? '—' : Math.round(x * 100) + '%'; };
+    var phrases = NM.phrases || {};
+    var order = Object.keys(phrases).sort();
+    var voiceKey = function (pid) { return NM.engine + '/' + phrases[pid].voice; };
+
+    // короткая подпись модели: «1.7B VoiceDesign», «0.6B-Base · клон», «1.7B-Base · клон»
+    function modelTag(pid) {
+      var mdl = phrases[pid].model || '';
+      var short = mdl.replace('Qwen3-TTS-12Hz-', '').replace(' (voice clone of n00)', ' · клон n00');
+      return short;
+    }
+
+    $('nameScreen').textContent = NM.name_screen || 'Aven';
+    $('nameTarget').textContent = NM.name_target || 'Авен';
+
+    var env = NM.env || {};
+    $('envinfo').textContent = env.cpu
+      ? 'Синтез измерен на: ' + [env.cpu, env.cores + ' ядер', env.ram_gb + ' ГБ RAM', env.gpu === 'none' ? 'без GPU' : env.gpu].filter(Boolean).join(' · ') +
+        '. Это исследовательский CPU-прогон: для диалога Qwen3 нужен GPU (docs/TTS_RESEARCH.md §12).'
+      : 'Сведения о среде прогона появятся после генерации образцов.';
+    $('hint').textContent = order.length
+      ? 'Вариантов: ' + order.length + '. ★ ставится каждому варианту; «Проиграть варианты фразы» сравнивает способы на одном тексте.'
+      : 'Образцы мини-прогона ещё не сгенерированы: запустите Actions → TTS Research → engines: qwen3-name ' +
+        '(или дождитесь прогона из ветки). Метрики произношения по прежним клипам при этом уже посчитаны — таблица ниже.';
+
+    /* ---------- выбор фразы для сравнения способов ---------- */
+    (function () {
+      var texts = {};
+      order.forEach(function (pid) { (texts[phrases[pid].text] = texts[phrases[pid].text] || []).push(pid); });
+      var keys = Object.keys(texts).filter(function (t) { return texts[t].length > 1; });
+      if (!keys.length) { $('byTextBar').style.display = 'none'; return; }
+      keys.forEach(function (t) {
+        var o = document.createElement('option');
+        o.value = t; o.textContent = t + '  (' + texts[t].length + ' варианта)';
+        $('byText').appendChild(o);
+      });
+    })();
+
+    function starSpan(key, value, onSet) {
+      var s = document.createElement('span');
+      s.className = 'stars'; s.dataset.k = key;
+      s.innerHTML = [1, 2, 3, 4, 5].map(function (n) {
+        return '<button data-n="' + n + '" class="' + (n <= value ? 'on' : '') + '" title="' + n + ' из 5">★</button>';
+      }).join('');
+      s.addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        onSet(+b.dataset.n);
+      });
+      return s;
+    }
+
+    function asrLine(pid) {
+      var a = (NM.asr || {})[pid];
+      if (!a || !a.hyp) return 'ASR: ещё не посчитан';
+      var nm = a.name || {};
+      var out = 'Whisper услышал: «' + esc(a.hyp) + '»';
+      if (nm.letters) {
+        out += '<br>имя в гипотезе: <b>«' + esc(nm.letters) + '»</b> против «' + esc(nm.target || 'авен') + '» · name_lwer ' + pct(nm.lwer);
+      } else if (nm.error) {
+        out += '<br>имя не вырезано: ' + esc(nm.error);
+      }
+      out += ' · буквы всей фразы (lwer) ' + pct(a.lwer);
+      if (a.twer != null && a.wer != null && a.twer !== a.wer) out += ' · WER ' + pct(a.wer) + ' (против поданного текста) / ' + pct(a.twer) + ' (против желаемого)';
+      return out;
+    }
+
+    function namePill(pid) {
+      var a = (NM.asr || {})[pid];
+      var nm = a && a.name;
+      if (!nm || nm.lwer == null) return '';
+      if (nm.lwer === 0) return '<span class="pill ok" title="Побуквенно совпало с «авен» по гипотезе Whisper">имя: точно «авен»</span>';
+      if (nm.lwer <= 0.25) return '<span class="pill" title="Одна буква расхождения">имя: почти «авен» (' + esc(nm.letters) + ')</span>';
+      return '<span class="pill bad" title="Заметное расхождение с «авен»">имя: «' + esc(nm.letters) + '»</span>';
+    }
+
+    function card(pid) {
+      var p = phrases[pid];
+      var m = (NM.metrics || {})[pid] || {};
+      var differs = p.speech !== p.target;
+      var d = document.createElement('div');
+      d.className = 'card n-card';
+      d.dataset.pid = pid;
+      d.innerHTML =
+        '<div class="n-top"><div style="flex:1 1 320px">' +
+          '<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:4px">' +
+            '<span class="pill">' + esc(pid) + '</span>' +
+            '<span class="pill" title="Модель и голос">' + esc(modelTag(pid)) + '</span>' +
+            '<span class="pill" title="Каталог образцов">' + esc(p.voice) + '</span>' +
+            (p.instruct === 'hint' ? '<span class="pill bad" title="Промпт описания голоса изменён — тембр может отличаться, голос нужно переслушать">промпт изменён</span>' : '') +
+            namePill(pid) +
+          '</div>' +
+          '<div class="n-text">' + esc(p.text) + '</div>' +
+          '<div class="n-speech">в TTS подано: ' + (differs ? '<b>' + esc(p.speech) + '</b>' : esc(p.speech)) +
+            (differs ? ' · хотим услышать: ' + esc(p.target) : '') + '</div>' +
+          (p.note ? '<div class="n-note">' + esc(p.note) + '</div>' : '') +
+        '</div></div>' +
+        '<audio controls preload="none" src="assets/voice-samples/' + esc(voiceKey(pid)) + '/' + pid + '.mp3"></audio>' +
+        '<div class="n-meta">' +
+          'длительность ' + fmt(m.audio_s) + ' с · синтез на CPU ' + fmt(m.synth_s) + ' с' +
+          (m.rtf ? ' · RTF ' + fmt(m.rtf) : '') + (m.first_call ? ' (первый, «холодный» вызов)' : '') +
+          (m.f0_median_hz ? ' · F0 ≈ ' + Math.round(m.f0_median_hz) + ' Гц' : '') +
+          '<br>' + asrLine(pid) +
+        '</div>' +
+        '<div class="row" style="margin-top:8px"><button class="btn small" data-sys="1">▶ Системный голос</button></div>';
+      var top = d.querySelector('.n-top');
+      var holder = document.createElement('div');
+      holder.appendChild(starSpan(pid, st.ratings[pid] || 0, function (n) {
+        st.ratings[pid] = n; save(); render();
+      }));
+      top.appendChild(holder);
+      return d;
+    }
+
+    function pronTable() {
+      var body = $('pronBody'); body.innerHTML = '';
+      var rows = Object.keys(NM.namePronunciation || {}).map(function (k) {
+        return { key: k, v: NM.namePronunciation[k] };
+      }).filter(function (r) { return r.v && r.v.n; })
+        .sort(function (a, b) { return a.v.mean_name_lwer - b.v.mean_name_lwer || a.key.localeCompare(b.key); });
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="5" class="muted">Метрика ещё не посчитана (python research/tts/asr_eval.py --derive).</td></tr>';
+        return;
+      }
+      rows.forEach(function (r) {
+        var tr = document.createElement('tr');
+        var inGit = !!(M.voices || {})[r.key];
+        tr.innerHTML = '<td>' + esc(r.key) + '</td>' +
+          '<td class="num">' + (r.v.exact || 0) + ' из ' + r.v.n + '</td>' +
+          '<td class="num">' + pct(r.v.mean_name_lwer) + '</td>' +
+          '<td class="num">' + r.v.n + '</td>' +
+          '<td>' + (inGit ? '<a href="voice-lab.html">да</a>' : '<span class="muted">нет (лицензия)</span>') + '</td>';
+        body.appendChild(tr);
+      });
+    }
+
+    function voiceStars() {
+      var wrap = $('voiceStars'); wrap.innerHTML = '';
+      var seen = {};
+      order.forEach(function (pid) {
+        var key = voiceKey(pid);
+        if (seen[key]) return;
+        seen[key] = 1;
+        var row = document.createElement('div');
+        row.className = 'row';
+        var label = document.createElement('span');
+        label.textContent = key + ':';
+        row.appendChild(label);
+        row.appendChild(starSpan(key, main.ratings[key] || 0, function (n) {
+          main.ratings[key] = n; saveMain(); render();
+        }));
+        wrap.appendChild(row);
+      });
+      if (!order.length) wrap.innerHTML = '<span class="muted">Голоса-участники появятся после прогона.</span>';
+    }
+
+    function render() {
+      var wrap = $('groups'); wrap.innerHTML = '';
+      (NM.groups || []).forEach(function (g) {
+        var ids = order.filter(function (pid) { return phrases[pid].kind === g.id; });
+        if (!ids.length) return;
+        var h = document.createElement('h2');
+        h.className = 'lab-section';
+        h.innerHTML = esc(g.title) + ' <button class="btn small" data-group="' + esc(g.id) + '">▶ Проиграть группу</button>';
+        wrap.appendChild(h);
+        if (g.note) {
+          var n = document.createElement('div');
+          n.className = 'group-note';
+          n.textContent = g.note;
+          wrap.appendChild(n);
+        }
+        ids.forEach(function (pid) { wrap.appendChild(card(pid)); });
+      });
+      if (!order.length) {
+        wrap.innerHTML = '<div class="card muted">Образцов мини-прогона пока нет — ниже доступны только метрики произношения по прежним клипам.</div>';
+      }
+      pronTable();
+      voiceStars();
+      notes();
+    }
+
+    function notes() {
+      var lines = ['Оценки произношения «Авен» (мини-прогон способов), ' + new Date().toISOString().slice(0, 10) + ':'];
+      var seen = {};
+      order.forEach(function (pid) {
+        var key = voiceKey(pid);
+        if (!seen[key] && main.ratings[key]) { seen[key] = 1; lines.push('★' + main.ratings[key] + '  ' + key + ' — общая оценка голоса'); }
+      });
+      order.forEach(function (pid) {
+        if (st.ratings[pid]) {
+          var a = (NM.asr || {})[pid] || {};
+          var nm = a.name || {};
+          lines.push('★' + st.ratings[pid] + '  ' + pid + ' · ' + phrases[pid].voice + ' · подано «' + phrases[pid].speech + '»' +
+            (nm.letters ? ' · ASR: «' + nm.letters + '»' : '') + ' · ' + phrases[pid].text);
+        }
+      });
+      $('notes').value = lines.join('\n');
+    }
+
+    function stopAll() {
+      document.querySelectorAll('audio').forEach(function (a) { a.pause(); });
+      if (window.speechSynthesis) speechSynthesis.cancel();
+      document.querySelectorAll('.n-card').forEach(function (c) { c.classList.remove('playing'); });
+    }
+
+    function playSeq(ids, afterSystem) {
+      stopAll();
+      var i = 0;
+      function next() {
+        if (i >= ids.length) return;
+        var pid = ids[i++];
+        var el = document.querySelector('.n-card[data-pid="' + pid + '"]');
+        var audio = el && el.querySelector('audio');
+        if (!audio) { next(); return; }
+        document.querySelectorAll('.n-card').forEach(function (c) { c.classList.toggle('playing', c === el); });
+        audio.currentTime = 0;
+        audio.onended = function () {
+          audio.onended = null;
+          if (afterSystem) speakSystem(pid, next); else next();
+        };
+        audio.play().catch(function () { next(); });
+      }
+      next();
+    }
+
+    function speakSystem(pid, done) {
+      if (!window.speechSynthesis) { done(); return; }
+      speechSynthesis.cancel();
+      var p = phrases[pid];
+      var u = new SpeechSynthesisUtterance(window.AvenSpeechText ? window.AvenSpeechText.normalize(p.text) : p.speech);
+      u.lang = 'ru-RU';
+      var v = speechSynthesis.getVoices().filter(function (x) { return /^ru/i.test(x.lang); });
+      if (v.length) u.voice = v.find(function (x) { return x.localService; }) || v[0];
+      u.onend = done; u.onerror = done;
+      speechSynthesis.speak(u);
+    }
+
+    document.addEventListener('play', function (e) {
+      document.querySelectorAll('audio').forEach(function (a) { if (a !== e.target) a.pause(); });
+      if (window.speechSynthesis) speechSynthesis.cancel();
+      document.querySelectorAll('.n-card').forEach(function (c) { c.classList.toggle('playing', c.contains(e.target)); });
+    }, true);
+
+    document.addEventListener('click', function (e) {
+      var g = e.target.closest('[data-group]');
+      if (g) {
+        playSeq(order.filter(function (pid) { return phrases[pid].kind === g.dataset.group; }), $('withSystem').checked);
+        return;
+      }
+      if (e.target.closest('[data-sys]')) {
+        var el = e.target.closest('.n-card');
+        stopAll();
+        speakSystem(el.dataset.pid, function () {});
+      }
+    });
+    $('playAll').onclick = function () { playSeq(order.slice(), $('withSystem').checked); };
+    $('playText').onclick = function () {
+      var t = $('byText').value;
+      playSeq(order.filter(function (pid) { return phrases[pid].text === t; }), $('withSystem').checked);
+    };
+    $('stopAll').onclick = stopAll;
+    $('copy').onclick = function () { $('notes').select(); try { navigator.clipboard.writeText($('notes').value); } catch (e) { document.execCommand('copy'); } };
+    render();
+  })();
+  </script>
+</body>
+</html>

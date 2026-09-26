@@ -177,7 +177,7 @@ body.assistant-mode .content { padding: 0; max-width: none; }
 .btn.block { width: 100%; justify-content: center; }
 .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
 
-input[type="text"], input[type="number"], input[type="date"], input[type="time"], input[type="password"], input[type="search"], select, textarea {
+input[type="text"], input[type="number"], input[type="date"], input[type="time"], input[type="password"], input[type="search"], input[type="email"], input[type="tel"], input[type="url"], select, textarea {
   width: 100%; padding: 9px 12px;
   border: 1px solid var(--border); border-radius: 10px;
   background: var(--panel-2); color: var(--text);
@@ -596,3 +596,74 @@ html[data-theme="dark"] .cal-ev { color: var(--accent-strong); }
 .pill.lic-yes { background: rgba(40, 170, 90, .15); color: var(--ok); }
 .pill.lic-unclear { background: rgba(230, 160, 0, .15); color: var(--warn); }
 .pill.lic-no { background: rgba(220, 60, 60, .13); color: var(--danger); }
+
+/* ================= Срез Stage 1.0: аккаунт, история действий, админка =================
+   Добавлено 2026-09-26 вместе с js/auth.js, js/history.js, js/admin.js.
+   Спецификации: docs/MVP_SCOPE.md §4.1 (п.1, 9, 11), §5.1, §5.9; docs/ADMIN.md. */
+
+.grow { flex: 1; min-width: 0; }
+
+/* метки этапов в меню и настройках: честно показывают, что НЕ входит в срез 1.0 (MVP_SCOPE §4.3, §8) */
+.stage-badge {
+  margin-left: auto; font-size: .66rem; line-height: 1.5; padding: 1px 6px; border-radius: 999px;
+  border: 1px solid var(--border); color: var(--muted); white-space: nowrap;
+  background: var(--surface-2, rgba(127, 127, 127, .08));
+}
+.stage-badge.next { color: var(--warn); border-color: var(--warn); }
+.stage-badge.later { color: var(--muted); }
+
+/* ---- экраны аккаунта: без сайдбара и топбара ---- */
+body.auth-mode .sidebar,
+body.auth-mode .topbar { display: none; }
+body.auth-mode .main { width: 100%; }
+body.auth-mode .content { max-width: 480px; padding: 0 16px; margin: 6vh auto; }
+.auth-wrap { display: flex; justify-content: center; }
+.auth-card { width: 100%; padding: 26px; }
+.auth-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.auth-title { font-size: 1.25rem; margin: 0 0 4px; }
+.auth-sub { color: var(--muted); font-size: .9rem; margin-bottom: 12px; }
+.auth-body { display: flex; flex-direction: column; gap: 2px; }
+.auth-body .btn.block { margin-top: 10px; }
+.auth-field { margin-bottom: 10px; }
+.auth-field > span:first-child { display: block; font-size: .82rem; color: var(--muted); margin-bottom: 4px; }
+.auth-field .s { display: block; font-size: .76rem; color: var(--muted); margin-top: 4px; }
+.auth-field input { width: 100%; }
+.auth-field.invalid input { border-color: var(--danger); }
+.auth-err { display: block; color: var(--danger); font-size: .8rem; margin-top: 4px; }
+.auth-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.auth-demo {
+  margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border);
+  color: var(--muted); font-size: .78rem; line-height: 1.5;
+}
+
+/* ---- история действий и Undo ---- */
+.hist-list { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.hist-item { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; }
+.hist-item.undone { opacity: .6; }
+.hist-item.undone .hist-object { text-decoration: line-through; }
+.hist-ico { font-size: 1.15rem; line-height: 1.5; }
+.hist-top { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: .95rem; }
+.hist-object { font-size: .88rem; margin-top: 3px; }
+.hist-meta { color: var(--muted); font-size: .8rem; margin-top: 5px; }
+.hist-meta code, .set-row code, .tbl code { font-size: .78rem; color: var(--muted); }
+.hist-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+.hist-filters { margin-top: 14px; }
+.hist-filters .field { margin-bottom: 0; }
+.hist-filters .field > span { display: block; font-size: .78rem; color: var(--muted); margin-bottom: 4px; }
+.hist-filters select, .hist-filters input { width: 100%; }
+.hist-note { margin-top: 14px; }
+.hist-note ul li { margin-bottom: 5px; }
+
+/* ---- административная область ---- */
+.adm-principle { margin-bottom: 14px; }
+.adm-principle .set-row { border-bottom: none; padding: 4px; align-items: flex-start; }
+
+/* ---- адаптивность новых экранов (вопрос №34: одна колонка на малых экранах) ---- */
+@media (max-width: 860px) {
+  body.auth-mode .content { margin: 3vh auto; }
+  .hist-item { flex-wrap: wrap; }
+  .hist-actions { flex-direction: row; width: 100%; align-items: center; }
+  .hist-filters .field-row { flex-direction: column; gap: 10px; }
+  .adm-principle .set-row { flex-direction: column; align-items: flex-start; }
+  .tbl { display: block; overflow-x: auto; }
+}

@@ -27,6 +27,17 @@ PROBE = DATA["latency_probe"]
 # Базовый phrases.json НЕ меняется — иначе теряется сравнимость движков этапа 1.
 EXT = json.loads((HERE / "phrases_vd17.json").read_text(encoding="utf-8"))
 EXT_PHRASES = EXT["phrases"]
+# Мини-прогон способов произношения «Авен» (этап 2.1). Тоже отдельный файл:
+# в нём у каждой фразы свой голос и свой способ (орфография / подсказка в промпте / клон Base).
+NAME = json.loads((HERE / "phrases_name.json").read_text(encoding="utf-8"))
+NAME_PHRASES = NAME["phrases"]
+# Подсказка о произношении имени для способа 2 (добавляется к DESIGN_PROMPT).
+# Честное ограничение: instruct у VoiceDesign влияет и на тембр, поэтому такие клипы
+# нельзя молча считать «тем же голосом» — их переслушивают отдельно.
+NAME_HINT = (
+    " Pronounce the assistant's name «Авен» with the stress on the FIRST syllable, "
+    "as «А-вен» ([ˈa.vʲɪn]); never as «Айвен» (Iven) and never with the stress on the second syllable."
+)
 # ЕДИНЫЙ описательный промпт для 1.7B-VoiceDesign: от него зависит тембр «vd17-design».
 # Менять нельзя — иначе это будет другой голос. Один источник для gen_qwen3.py и gen_qwen3_vd17.py.
 DESIGN_PROMPT = (
@@ -121,7 +132,7 @@ class Metrics:
         v["info"].update(info)
         return v
 
-    def phrase(self, voice_id: str, pid: str, synth_s: float, audio_s: float, first_call: bool = False):
+    def phrase(self, voice_id: str, pid: str, synth_s: float, audio_s: float, first_call: bool = False, **extra):
         v = self.voice(voice_id)
         v["phrases"][pid] = {
             "synth_s": round(synth_s, 3),
@@ -129,6 +140,7 @@ class Metrics:
             "rtf": round(synth_s / audio_s, 3) if audio_s else None,
             "first_call": first_call,
         }
+        v["phrases"][pid].update(extra)
 
     def error(self, msg: str):
         print("ERROR:", msg, flush=True)
@@ -139,11 +151,12 @@ class Metrics:
         # сводка по голосам (тёплые вызовы, без первого). t* — базовый набор, x* — расширенный (этап 2).
         for v in self.data["voices"].values():
             warm = [p for pid, p in v["phrases"].items()
-                    if (pid.startswith("t") or pid.startswith("x")) and not p["first_call"]]
+                    if pid[:1] in ("t", "x", "n") and not p["first_call"]]
             if warm:
+                rtfs = [p["rtf"] for p in warm if p["rtf"]]
                 v["summary"] = {
                     "median_synth_s": round(float(np.median([p["synth_s"] for p in warm])), 3),
-                    "median_rtf": round(float(np.median([p["rtf"] for p in warm if p["rtf"]])), 3),
+                    "median_rtf": round(float(np.median(rtfs)), 3) if rtfs else None,
                     "max_synth_s": round(max(p["synth_s"] for p in warm), 3),
                 }
         path = OUT / "metrics" / f"{self.engine}.json"
