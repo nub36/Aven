@@ -6,6 +6,72 @@
 
 ---
 
+## 2026-09-26 — XXV. Починка 3D viewer, часть 2: настоящая причина — отсутствующий `three.core.min.js`
+
+- **Дата:** 2026-09-26 (новая сессия, main = cd5e3c4, PR #11 уже смёржен).
+- **Задача (владелец):** после предыдущей правки (XXIV) `https://nub36.github.io/Aven/aven-3d.html`
+  на реальном Android Chrome всё равно показывает «GLB недоступен — 3D-модель не загружена» /
+  «Не загрузился модуль js/aven3d.js». Найти объективную причину заново (не по старым отчётам),
+  проверить полный ES-module graph и публичные HTTP URL, исправить. TTS/Silero/VPS/Modal не
+  трогать, новую 3D-модель/лицо/rig/lip-sync не делать, Главную и Female Aven PNG не менять.
+
+### Объективная причина
+
+Правка XXIV добавила отсутствовавший `BufferGeometryUtils.js`, но не заметила ВТОРОЙ, более
+фундаментальный дефект того же вендоринга: начиная с three.js r150 минифицированная сборка
+разбита на два файла — `three.module.min.js` (реэкспорт) относительным путём импортирует
+`./three.core.min.js` (весь код библиотеки). В репозиторий был закоммичен только
+`three.module.min.js`; `three.core.min.js` не существовал НИ В ОДНОЙ ревизии репозитория.
+Публичный `https://nub36.github.io/Aven/assets/vendor/three/three.core.min.js` отдавал 404 →
+падал сам импорт `'three'` → весь граф модулей `js/aven3d.js` не исполнялся → браузер бросал
+`error` на `<script type=module src="js/aven3d.js">` (ровно то сообщение, которое видел
+владелец) → PNG-fallback. Проверено побайтовым сравнением: все уже вендоренные файлы
+(`three.module.min.js`, `GLTFLoader.js`, `OrbitControls.js`, `BufferGeometryUtils.js`) —
+100% идентичны официальным файлам `three@0.180.0` с npm; отсутствовал только один файл.
+
+### Что сделано
+
+- Добавлен `prototype/assets/vendor/three/three.core.min.js` — байт-в-байт из
+  `registry.npmjs.org/three/-/three-0.180.0.tgz` (sha1 тарболла сверен с `dist.shasum`
+  npm-registry перед распаковкой).
+- `prototype/js/aven3d.js` + `prototype/aven-3d.html`: диагностика `window.__aven3d` теперь
+  всегда объект с полями `moduleLoaded`, `rendererCreated`, `glbLoaded`, `meshCount` (плюс
+  прежние status/meshes/triangles/vertices/morphs/error), обновляемыми по стадиям.
+- Комментарий в `aven-3d.html` у importmap объясняет разделение `three.module.min.js` /
+  `three.core.min.js`, чтобы не повторить дефект при апгрейде версии.
+- `docs/AVATAR_3D_RESEARCH.md`: раздел «Исправление viewer, часть 2» — полная разборка.
+
+### Файлы
+
+- `prototype/assets/vendor/three/three.core.min.js` (новый)
+- `prototype/aven-3d.html`, `prototype/js/aven3d.js`
+- `docs/AVATAR_3D_RESEARCH.md`, `docs/WORK_LOG.md`
+
+### Что проверено
+
+- Локальный HTTP-сервер из `prototype/`: 200 для ВСЕХ файлов graph'а, включая новый
+  `three.core.min.js`, оба GLB, stats.json, turntable.mp4, оба MP3, оба PNG/JPG.
+- Публично на GitHub Pages (до исправления): `three.core.min.js` → 404 (файла не было).
+- Реальный Node.js ESM-загрузчик с `node_modules/three`, собранным 1:1 как в браузере
+  (bare specifier `'three'` + подпапки `loaders/controls/utils`): импорт `THREE`,
+  `GLTFLoader`, `OrbitControls`, `BufferGeometryUtils` — всё резолвится,
+  `THREE.REVISION === '180'`. Реальный `GLTFLoader.parse()` на настоящем
+  `aven-bust-experimental-master.glb` → 1 mesh, 119 999 треугольников, 62 943 вершины
+  (совпадает с `stats.json`).
+- Headless Chromium/WebGL по-прежнему недоступны в песочнице (`playwright install` →
+  ECONNRESET на `cdn.playwright.dev`; сборка `headless-gl` → ECONNRESET на `nodejs.org`) —
+  честно зафиксировано, визуальный рендер в реальном браузере не проверен автоматически.
+
+### Что рекомендуется делать следующим
+
+1. Merge PR (владельцем) → Pages пересоберётся из `main` → `three.core.min.js` станет
+   публично доступен.
+2. Владелец открывает `aven-3d.html` на реальном Android Chrome, в консоли смотрит
+   `window.__aven3d` (ожидается `moduleLoaded/rendererCreated/glbLoaded: true`, `meshCount: 1`)
+   и визуально решает: похожа ли модель на утверждённую Female Aven.
+
+---
+
 ## 2026-09-26 — XXIV. Починка 3D viewer: GLB реально загружается в `aven-3d.html`
 
 - **Дата:** 2026-09-26

@@ -18,6 +18,17 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/controls/OrbitControls.js';
 
+/* ---------------- честная диагностика для проверки (window.__aven3d) ----------------
+ * Объект существует всегда (базовый каркас создаётся ИНЛАЙН-скриптом в aven-3d.html
+ * ДО этого модуля — на случай, если сам модуль не выполнится). Здесь он только
+ * дополняется по мере реального прохождения этапов, чтобы снаружи (DevTools/тесты)
+ * было объективно видно, что именно произошло, а не только факт ошибки/успеха.
+ */
+function diag(patch) {
+  window.__aven3d = Object.assign({}, window.__aven3d, patch);
+}
+diag({ moduleLoaded: true, rendererCreated: false, glbLoaded: false, meshCount: 0 });
+
 /* ---------------- состояния (параметры + описания для UI) ---------------- */
 const STATES = {
   idle:      { label: 'idle',      desc: 'Спокойно: моргание (если есть blendshapes), лёгкое дыхание, микродвижения головы и глаз.',
@@ -54,6 +65,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 stage.appendChild(renderer.domElement);
+diag({ rendererCreated: true });
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 50);
@@ -87,7 +99,7 @@ function loadModel(url) {
   document.getElementById('fallback').hidden = true;
   const stats = document.getElementById('modelStats');
   if (stats) stats.textContent = 'Загрузка GLB: ' + url + ' …';
-  window.__aven3d = { url, status: 'loading', meshes: 0, triangles: 0 };
+  diag({ url, status: 'loading', meshes: 0, triangles: 0, glbLoaded: false, meshCount: 0 });
   new GLTFLoader().load(url, (gltf) => {
   modelRoot = gltf.scene;
   const box = new THREE.Box3().setFromObject(modelRoot);
@@ -124,11 +136,12 @@ function loadModel(url) {
     ` (${Object.keys(morphs).slice(0, 6).join(', ')}${Object.keys(morphs).length > 6 ? '…' : ''})` : '');
   console.log('[aven3d] morphs:', Object.keys(morphs));
   // Успешная загрузка: fallback обязан быть выключен (PNG не подменяет 3D).
-  document.getElementById('fallback').hidden = true;
+  const fb = document.getElementById('fallback');
+  fb.hidden = true;
   let meshes = 0;
   modelRoot.traverse((o) => { if (o.isMesh) meshes++; });
-  window.__aven3d = { url, status: 'loaded', meshes, triangles: Math.round(tris), vertices: verts,
-                      morphs: Object.keys(morphs).length };
+  diag({ url, status: 'loaded', meshes, meshCount: meshes, triangles: Math.round(tris), vertices: verts,
+         morphs: Object.keys(morphs).length, glbLoaded: true, fallbackHidden: fb.hidden });
   console.log('[aven3d] GLB загружен:', url, meshes, 'mesh,', Math.round(tris), 'треугольников');
 }, (ev) => {
   if (ev && ev.total) {
@@ -137,8 +150,10 @@ function loadModel(url) {
   }
 }, (err) => {
   console.warn('[aven3d] GLB не загрузился:', err);
-  window.__aven3d = { url, status: 'error', error: String(err && (err.message || err)) };
-  document.getElementById('fallback').hidden = false;
+  diag({ url, status: 'error', error: String(err && (err.message || err)), glbLoaded: false, meshCount: 0 });
+  const fb = document.getElementById('fallback');
+  fb.hidden = false;
+  diag({ fallbackHidden: fb.hidden });
   document.getElementById('fbReason').textContent =
     'Файл ' + new URL(url, location.href).href + ' не загрузился: ' +
     String(err && (err.message || err)) + '.';

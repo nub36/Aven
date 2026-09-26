@@ -150,3 +150,88 @@ PNG-персонаж не затрагиваются.
 Публичный URL модели: `https://nub36.github.io/Aven/assets/3d/aven-bust-experimental-master.glb`
 (4 991 172 байт). Обратите внимание: в публичном URL **нет** префикса `prototype/` —
 GitHub Pages публикует содержимое `prototype/` как корень сайта.
+
+## Исправление viewer, часть 2 (2026-09-26, новая сессия) — настоящая причина
+
+После правки выше (`BufferGeometryUtils.js`) страница **всё ещё** показывала «GLB недоступен»
+на реальном Android Chrome. Разбор полного module graph (не по старым отчётам, а заново, с
+проверкой каждого публичного URL) нашёл ВТОРОЙ, более фундаментальный дефект, который правка
+выше не покрывала:
+
+- Начиная с three.js r150 минифицированная сборка **разделена на два файла**:
+  `three.module.min.js` (маленький реэкспорт) реально содержит
+  `import{...}from"./three.core.min.js"` — весь код библиотеки лежит именно в
+  `three.core.min.js`, подключаемом ОТНОСИТЕЛЬНЫМ путём (importmap на него не влияет).
+- В репозитории был провендорен только `three.module.min.js`; `three.core.min.js` **никогда
+  не коммитился** (проверено `git log --all` — файла нет ни в одной ревизии).
+- Публичный URL `https://nub36.github.io/Aven/assets/vendor/three/three.core.min.js` отдавал
+  честный 404 GitHub Pages («File not found»), поэтому сам импорт `'three'` падал ещё до
+  выполнения `js/aven3d.js` — GLTFLoader/OrbitControls/сцена вообще не создавались.
+- Побочно (не основная причина, самоустранилось за время сессии): в момент первой проверки
+  `assets/vendor/three/utils/BufferGeometryUtils.js` тоже на короткое время отдавал 404 при
+  прямом запросе без cache-bust, хотя файл существует в репозитории и в дереве последнего
+  коммита — похоже на краткое отставание кэша CDN GitHub Pages (Fastly) от нового деплоя;
+  повторная проверка через несколько минут без каких-либо изменений в репозитории уже
+  показывала 200. Файл не трогался — доказанной причины «отсутствует» для него нет.
+
+### Что сделано
+
+- Довендорен `prototype/assets/vendor/three/three.core.min.js` — байт-в-байт из официального
+  npm-пакета `three@0.180.0` (`build/three.core.min.js`); совпадение SHA-256 с содержимым
+  тарболла проверено (`registry.npmjs.org/three/-/three-0.180.0.tgz`, sha1 тарболла сверен
+  с `dist.shasum` из `registry.npmjs.org/three/0.180.0`). Уже вендоренные
+  `three.module.min.js`, `GLTFLoader.js`, `OrbitControls.js`, `BufferGeometryUtils.js`
+  сверены тем же способом — побайтово идентичны официальным файлам three@0.180.0.
+- `prototype/js/aven3d.js` и `prototype/aven-3d.html`: расширена диагностика
+  `window.__aven3d` — теперь всегда объект (базовый каркas ставится инлайн-скриптом ДО
+  модуля) с полями `moduleLoaded`, `rendererCreated`, `glbLoaded`, `meshCount` (плюс прежние
+  `status/meshes/triangles/vertices/morphs/error`), обновляемыми по мере реального
+  прохождения этапов — снаружи объективно видно, где именно остановилась загрузка.
+- Комментарий в `aven-3d.html` рядом с importmap объясняет разделение
+  `three.module.min.js` / `three.core.min.js`, чтобы дефект не повторился при будущем
+  обновлении версии three.js.
+
+### Как проверен полный module graph (без реального браузера — см. ограничение ниже)
+
+- Локальный HTTP-сервер из `prototype/`: 200 и корректный ненулевой размер для
+  `aven-3d.html`, `js/aven3d.js`, `three.module.min.js`, **`three.core.min.js`**,
+  `GLTFLoader.js`, `OrbitControls.js`, `BufferGeometryUtils.js`, обоих GLB, stats.json,
+  turntable.mp4, PNG-fallback, reference JPG, обоих MP3 speaking-сэмплов.
+- Публично (GitHub Pages, `https://nub36.github.io/Aven/...`) до исправления:
+  `three.core.min.js` → 404 (файла никогда не было); после добавления файла и планируемого
+  деплоя — не задеплоено на момент проверки в этой сессии (см. «Что рекомендуется»).
+- Реальный **Node.js ESM-загрузчик** (не мок): собран `node_modules/three` из вендоренных
+  файлов 1:1 как в браузере (bare specifier `'three'` → `three.module.min.js`, поддиректории
+  `loaders/`, `controls/`, `utils/`), импортированы `THREE`, `GLTFLoader`, `OrbitControls`,
+  `BufferGeometryUtils` — все резолвятся, `THREE.REVISION === '180'`. Затем реальным
+  `GLTFLoader.parse()` (тем же кодом, что выполняется в браузере) распарсен настоящий файл
+  `assets/3d/aven-bust-experimental-master.glb`: результат — 1 mesh, 119 999 треугольников,
+  62 943 вершины, что совпадает с `aven-bust-experimental-master.stats.json`. Ошибка
+  декодирования PNG-текстуры в этом тесте (`self`/`Image` недоступны в Node) — ожидаема и не
+  относится к дефекту: в реальном браузере эти API есть.
+
+### Граница проверки (честно, как и в прошлый раз)
+
+- Headless Chromium/WebGL по-прежнему недоступен в этом окружении: `playwright install`
+  падает на сетевом уровне (`cdn.playwright.dev` → ECONNRESET), сборка `headless-gl` из
+  исходников тоже (`nodejs.org` заголовки → ECONNRESET) — песочница агента не имеет доступа
+  к этим хостам (доступны точечно `registry.npmjs.org`, `api.github.com`, прокси
+  `fetch_page`/`web_search`). Поэтому реальный WebGL-рендеринг в браузере в этой сессии
+  визуально не проверялся — как и в прошлой сессии, финальная визуальная проверка (действительно
+  ли рисуется mesh, включая на Android Chrome) — за владельцем после мержа и передеплоя Pages.
+- Все URL, доступные без браузера (сырые HTTP-запросы к файлам, разбор ES-module graph,
+  реальный парсинг GLB тем же кодом three.js), проверены и дают объективно положительный
+  результат.
+
+### Что рекомендуется делать следующим
+
+1. Merge PR (владельцем) → workflow `Prototype Pages` пересоберёт сайт из `main` →
+   `three.core.min.js` появится по адресу
+   `https://nub36.github.io/Aven/assets/vendor/three/three.core.min.js`.
+2. Открыть `https://nub36.github.io/Aven/aven-3d.html` на реальном Android Chrome, в
+   DevTools/консоли выполнить `window.__aven3d` — должно быть
+   `{ moduleLoaded: true, rendererCreated: true, glbLoaded: true, meshCount: 1, ... }`,
+   PNG-fallback скрыт (`hidden` атрибут на `#fallback`).
+3. Если после передеплоя Pages что-то из вендоренных файлов вновь отдаёт 404 при первой
+   проверке — подождать несколько минут и повторить (см. заметку о кэше CDN выше) прежде
+   чем считать это новым дефектом кода.
