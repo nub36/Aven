@@ -187,9 +187,91 @@ window.AvenDemo = (function () {
       ],
 
       sessions: [
-        { device: 'Chrome · Windows', where: 'Москва (демо)', when: 'текущая сессия', current: true },
-        { device: 'Aven Demo App · Android', where: 'Москва (демо)', when: '2 дня назад', current: false }
-      ]
+        { device: 'Chrome · Windows', where: 'Москва (демо)', when: 'текущая сессия', current: true, id: 'sess-1' },
+        { device: 'Aven Demo App · Android', where: 'Москва (демо)', when: '2 дня назад', current: false, id: 'sess-2' }
+      ],
+
+      /* Вход выполнен (демо). Экраны входа/регистрации/2FA — js/auth.js; «Выйти» в топбаре. */
+      auth: {
+        logged: true,
+        name: 'Алексей',
+        email: 'alexey@demo.aven',
+        role: 'owner',
+        twoFactor: true,          // TOTP включён — вход через код (демо: любой 6-значный код)
+        registrationsOpen: true,
+        recoveryNote: 'Email-провайдер не выбран (открытый вопрос №16) — восстановление доступа в срезе 1.0 ограничено'
+      },
+
+      /* История действий — сквозной слой среза 1.0 (MVP_SCOPE §5.9, ADR-005/ADR-010). */
+      history: [
+        { id: 'h1', when: 'сегодня, 09:12', actor: 'вы', action: 'expense.create', title: 'Создан расход',
+          object: 'Расход «АЗС Лукойл» · 3 200 ₽', objectType: 'expense', source: 'ui', undoable: true, danger: false,
+          changes: [{ field: 'Сумма', from: '—', to: '3 200 ₽' }, { field: 'Категория', from: '—', to: 'Авто' }] },
+        { id: 'h2', when: 'сегодня, 08:47', actor: 'вы', action: 'expense.update', title: 'Изменён расход',
+          object: 'Расход «Пятёрочка»', objectType: 'expense', source: 'ui', undoable: true, danger: false,
+          changes: [{ field: 'Сумма', from: '1 350 ₽', to: '1 450 ₽' }] },
+        { id: 'h3', when: 'сегодня, 08:31', actor: 'вы', action: 'task.create', title: 'Создана задача',
+          object: 'Задача «Позвонить в сервис»', objectType: 'task', source: 'ui', undoable: true, danger: false,
+          changes: [{ field: 'Срок', from: '—', to: 'сегодня, 18:00' }, { field: 'Приоритет', from: '—', to: 'высокий' }] },
+        { id: 'h4', when: 'вчера, 21:04', actor: 'вы', action: 'note.create', title: 'Создана заметка',
+          object: 'Заметка «Идея: учёт расхода по месяцам»', objectType: 'note', source: 'ui', undoable: true, danger: false,
+          changes: [{ field: 'Папка', from: '—', to: 'Идеи' }] },
+        { id: 'h5', when: 'вчера, 19:58', actor: 'вы', action: 'task.delete', title: 'Удалена задача',
+          object: 'Задача «Купить подарок»', objectType: 'task', source: 'ui', undoable: true, danger: true,
+          changes: [{ field: 'Статус', from: 'Открыта', to: 'Удалена' }] },
+        { id: 'h6', when: 'вчера, 18:20', actor: 'вы', action: 'settings.update', title: 'Изменена настройка',
+          object: 'Настройки → Приватность', objectType: 'settings', source: 'ui', undoable: true, danger: false,
+          sensitive: true, changes: [{ field: 'Видимость сумм', from: 'показывать', to: 'скрывать в уведомлениях' }] },
+        { id: 'h7', when: 'вчера, 09:02', actor: 'вы', action: 'auth.login', title: 'Вход в аккаунт',
+          object: 'Chrome · Windows · Москва (демо)', objectType: 'session', source: 'ui', undoable: false, danger: false,
+          changes: [{ field: '2FA', from: '—', to: 'код подтверждён' }] },
+        { id: 'h8', when: '2 дня назад, 03:00', actor: 'система', action: 'backup.create', title: 'Создан бэкап',
+          object: 'Бэкап b-2026-09-24 · 47 МБ', objectType: 'system', source: 'system', undoable: false, danger: false,
+          changes: [] }
+      ],
+
+      /* Административная область /admin — отдельно от /settings (ADR-012). Данные демо. */
+      admin: {
+        users: [
+          { id: 'u1', name: 'Алексей (вы)', email: 'alexey@demo.aven', role: 'owner', status: 'активен', last: 'сейчас', twoFactor: true },
+          { id: 'u2', name: 'Мария Соколова', email: 'maria@demo.aven', role: 'user', status: 'активен', last: '2 дня назад', twoFactor: false },
+          { id: 'u3', name: 'Иван Петров', email: 'ivan@demo.aven', role: 'admin', status: 'заблокирован', last: 'месяц назад', twoFactor: true }
+        ],
+        roles: [
+          { id: 'owner', name: 'Владелец', users: 1, perms: 'все права, удаление аккаунта, назначение ролей' },
+          { id: 'admin', name: 'Администратор', users: 1, perms: 'пользователи, аудит, миграции, бэкап, флаги' },
+          { id: 'user', name: 'Пользователь', users: 1, perms: 'только свои данные' }
+        ],
+        audit: [
+          { id: 'a1', when: 'сегодня, 08:55', actor: 'alexey@demo.aven', action: 'user.block', object: 'Иван Петров', result: 'ok' },
+          { id: 'a2', when: 'вчера, 03:00', actor: 'система', action: 'backup.create', object: 'b-2026-09-25', result: 'ok' },
+          { id: 'a3', when: '2 дня назад, 11:20', actor: 'alexey@demo.aven', action: 'migration.apply', object: '0008_finance_accounts', result: 'ok' },
+          { id: 'a4', when: '3 дня назад, 14:02', actor: 'alexey@demo.aven', action: 'flag.set', object: 'exp_canvas = off', result: 'ok' },
+          { id: 'a5', when: '4 дня назад, 09:41', actor: 'ivan@demo.aven', action: 'user.role.set', object: 'Мария Соколова = user', result: 'denied' }
+        ],
+        migrations: [
+          { id: '0007_history_undo', name: 'История действий и Undo', status: 'применена', at: '2026-09-20 03:12' },
+          { id: '0008_finance_accounts', name: 'Счета и категории финансов', status: 'применена', at: '2026-09-24 11:20' },
+          { id: '0009_feature_flags', name: 'Флаги функций', status: 'ожидает', at: '—' }
+        ],
+        health: {
+          uptime: '12 д 4 ч', version: '0.0.0-demo', db: 'PostgreSQL (демо)', dbSize: '48 МБ',
+          queue: '0 в работе · 12 за сутки', lastBackup: 'сегодня, 03:00', errors24h: 0, storage: '1.2 ГБ из 10 ГБ'
+        },
+        backups: [
+          { id: 'b-2026-09-26', at: 'сегодня, 03:00', size: '48 МБ', kind: 'автоматический', verified: false },
+          { id: 'b-2026-09-25', at: 'вчера, 03:00', size: '47 МБ', kind: 'автоматический', verified: true },
+          { id: 'b-manual-1', at: '2 дня назад, 12:40', size: '47 МБ', kind: 'ручной', verified: true }
+        ],
+        flags: [
+          { id: 'exp_canvas', name: 'Automation Canvas', stage: 'Stage 4', on: false },
+          { id: 'exp_aiRouter', name: 'AI Router', stage: 'опция (ADR-002)', on: false },
+          { id: 'voice_natural', name: 'Натуральный TTS (self-hosted)', stage: 'Stage 3', on: false },
+          { id: 'notify_email', name: 'Email-уведомления', stage: 'Stage 1.1', on: false },
+          { id: 'files_attachments', name: 'Вложения и чеки', stage: 'Stage 1.1', on: false }
+        ],
+        emergency: { readonly: false, registrationsClosed: false, maintenance: false }
+      }
     };
   }
 

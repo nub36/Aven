@@ -5,14 +5,18 @@
   const s = () => S.s();
   let cat = 'profile';
 
+  /* четвёртый элемент — метка этапа: раздел не входит в срез Stage 1.0 (docs/MVP_SCOPE.md §8).
+     Пустая метка = входит в 1.0. Метки честные: раздел показан как прототип, но помечен. */
   const cats = [
-    ['profile', 'Профиль', '👤'], ['aven', 'Aven', '🤖'], ['character', 'Персонаж', '🧍'], ['voice', 'Голос', '🎙️'],
-    ['notify', 'Уведомления', '🔔'], ['commands', 'Команды', '⌨️'], ['dict', 'Словарь', '📖'],
-    ['memory', 'Память', '🧠'], ['home', 'Главная', '🏠'], ['modules', 'Модули', '🧩'],
-    ['automations', 'Автоматизации', '⚡'], ['integrations', 'Интеграции', '🔌'],
-    ['sync', 'Синхронизация', '🔄'], ['files', 'Файлы', '🗂️'], ['privacy', 'Приватность', '🔐'],
-    ['security', 'Безопасность', '🛡️'], ['a11y', 'Доступность', '♿'], ['exp', 'Экспериментальные', '🧪']
+    ['profile', 'Профиль', '👤', ''], ['aven', 'Aven', '🤖', '1.1'], ['character', 'Персонаж', '🧍', 'опция (ADR-014)'],
+    ['voice', 'Голос', '🎙️', 'Stage 3'], ['notify', 'Уведомления', '🔔', 'частично 1.0'],
+    ['commands', 'Команды', '⌨️', 'Stage 2'], ['dict', 'Словарь', '📖', 'Stage 2'],
+    ['memory', 'Память', '🧠', '1.1'], ['home', 'Главная', '🏠', ''], ['modules', 'Модули', '🧩', ''],
+    ['automations', 'Автоматизации', '⚡', 'Stage 4'], ['integrations', 'Интеграции', '🔌', '1.1'],
+    ['sync', 'Синхронизация', '🔄', 'перспектива'], ['files', 'Файлы', '🗂️', '1.1'], ['privacy', 'Приватность', '🔐', ''],
+    ['security', 'Безопасность', '🛡️', ''], ['a11y', 'Доступность', '♿', ''], ['exp', 'Экспериментальные', '🧪', '']
   ];
+  const stageOf = (id) => (cats.filter((c) => c[0] === id)[0] || [])[3] || '';
 
   /* статус self-hosted TTS-сервера (асинхронно, без перерисовки всей страницы) */
   let lastServerKey = null;
@@ -55,10 +59,12 @@
   }
 
   A.pages.settings = function () {
-    const nav = cats.map(([id, label, ico]) =>
-      `<button class="nav-item ${cat === id ? 'active' : ''}" data-action="set-cat" data-id="${id}"><span class="ico">${ico}</span>${label}</button>`).join('');
+    const nav = cats.map(([id, label, ico, stage]) =>
+      `<button class="nav-item ${cat === id ? 'active' : ''}" data-action="set-cat" data-id="${id}"
+         ${stage ? `title="Не входит в срез Stage 1.0: ${A.esc(stage)} (docs/MVP_SCOPE.md §8)"` : ''}><span class="ico">${ico}</span>${label}${stage ? `<span class="stage-badge ${stage === '1.1' ? 'next' : 'later'}">${A.esc(stage)}</span>` : ''}</button>`).join('');
     const html = `
-    <div class="page-head"><div><h1>Настройки</h1><div class="sub">/settings — настройки конкретного пользователя · демо, переключения локальные</div></div></div>
+    <div class="page-head"><div><h1>Настройки</h1><div class="sub">/settings — настройки конкретного пользователя (ADR-012: отдельно от /admin) · демо, переключения локальные · метки «1.1», «Stage 2–4» означают, что раздел не входит в срез Stage 1.0 (docs/MVP_SCOPE.md §8)</div></div>
+    ${stageOf(cat) ? `<div class="card"><div class="tts-priv warn">Раздел «${A.esc((cats.filter((c) => c[0] === cat)[0] || [])[1] || cat)}» не входит в срез Stage 1.0 (${A.esc(stageOf(cat))}). В прототипе он показан для проектирования; в реализации 1.0 такого раздела не будет — заглушки запрещены (ADR-010).</div></div>` : ''}
     <div class="set-layout">
       <div class="set-nav">${nav}</div>
       <div>${renderCat()}</div>
@@ -304,24 +310,35 @@
         ${setRow('Экспорт данных', 'весь аккаунт — в перспективе', '<button class="btn" data-action="export-state">⬇ Экспорт прототипа</button>')}
         ${setRow('Удаление данных', 'delete account — в перспективе', '<button class="btn danger" data-action="privacy-reset">Сбросить демо-данные</button>')}
         ${setRow('Диагностические данные', 'управление телеметрией (вопрос №22)', sw('privacy.diag', false))}
-        ${setRow('История действий', 'что Aven сделал', '<a href="#/day">открывается в «Дне» (демо)</a>')}
+        ${setRow('История действий', 'что сделано и что можно отменить (Undo)', '<a class="btn small" href="#/history">Открыть историю</a>')}
+        ${setRow('Экспорт истории', 'JSON-выгрузка записей истории', '<a class="btn small" href="#/history">История → Экспорт JSON</a>')}
         ${setRow('Постоянная память', 'управление тем, что разрешено сохранять', '<a href="#/settings" data-action="set-cat-link" data-id="memory">раздел «Память»</a>')}
       </div>`;
 
     if (cat === 'security') return `
-      <h2 class="set-h">Безопасность</h2><p class="set-sub">Пароль · 2FA · сессии · устройства · демо (настоящая авторизация не нужна)</p>
+      <h2 class="set-h">Безопасность</h2>
+      <p class="set-sub">Пароль · 2FA (TOTP) · сессии и устройства · входит в срез Stage 1.0 (MVP_SCOPE §5.1, §8)</p>
       <div class="card">
-        ${setRow('Пароль', 'изменение пароля', '<button class="btn" data-action="demo-stub">Изменить…</button>')}
-        ${setRow('Двухфакторная аутентификация', '2FA — политика по ролям уточняется', '<span class="pill warn">не включена</span>')}
-        ${st.sessions.map((x) => setRow('🖥 ' + A.esc(x.device), A.esc(x.where) + ' · ' + A.esc(x.when), x.current ? '<span class="pill accent">текущая</span>' : `<button class="btn small" data-action="demo-stub">Завершить</button>`)).join('')}
-        ${setRow('Security history', 'журнал событий безопасности', '<span class="pill">пусто (демо)</span>')}
+        ${setRow('Пароль', 'изменение пароля — опасное действие, требует подтверждения', '<button class="btn" data-action="sec-password">Изменить…</button>')}
+        ${setRow('Двухфакторная аутентификация (TOTP)', 'следующий вход потребует 6-значный код',
+          `<label class="switch"><input type="checkbox" ${st.auth.twoFactor ? 'checked' : ''} data-action="auth-2fa-enable"><span class="slider"></span></label>`)}
+        ${setRow('Резервные коды', 'выдаются при включении 2FA (в реальной системе)', st.auth.twoFactor ? '<span class="pill ok">10 кодов (демо)</span>' : '<span class="pill">2FA выключена</span>')}
+        ${setRow('Активные сессии', 'завершение других устройств — опасное действие', '<button class="btn small" data-action="auth-sessions-kill">Завершить другие</button>')}
+        ${st.sessions.map((x) => setRow('🖥 ' + A.esc(x.device), A.esc(x.where) + ' · ' + A.esc(x.when), x.current ? '<span class="pill accent">текущая</span>' : '<button class="btn small" data-action="sec-session-end" data-id="' + A.esc(x.id || '') + '">Завершить</button>')).join('')}
+        ${setRow('Журнал безопасности', 'входы, выходы, изменения 2FA — в общей истории действий', '<a class="btn small" href="#/history">Открыть историю</a>')}
+        ${setRow('Политика 2FA по ролям', 'обязательность для администраторов', '<span class="pill warn">открытый вопрос (SECURITY §11.3)</span>')}
+        ${setRow('Экраны входа, 2FA и восстановления', 'в демо вход уже выполнен; чтобы посмотреть экраны аккаунта — выйдите', '<button class="btn small" data-action="logout">Выйти и показать экран входа</button>')}
       </div>`;
 
     if (cat === 'a11y') return `
       <h2 class="set-h">Доступность</h2><p class="set-sub">Размер текста · тема · анимации (демо)</p>
       <div class="card">
         ${setRow('Размер текста', '', `<select data-action="set-textsize"><option value="sm" ${st.settings.textSize === 'sm' ? 'selected' : ''}>Мелкий</option><option value="md" ${st.settings.textSize === 'md' ? 'selected' : ''}>Обычный</option><option value="lg" ${st.settings.textSize === 'lg' ? 'selected' : ''}>Крупный</option></select>`)}
-        ${setRow('Тема', '', `<select data-action="set-theme"><option value="light" ${st.settings.theme === 'light' ? 'selected' : ''}>Светлая</option><option value="dark" ${st.settings.theme === 'dark' ? 'selected' : ''}>Тёмная</option></select>`)}
+        ${setRow('Тема оформления', 'вопрос №32: светлая / тёмная / как в системе', `<select data-action="set-theme">
+            <option value="light" ${st.settings.theme === 'light' ? 'selected' : ''}>Светлая</option>
+            <option value="dark" ${st.settings.theme === 'dark' ? 'selected' : ''}>Тёмная</option>
+            <option value="system" ${(st.settings.theme === 'system' || st.settings.theme === 'auto') ? 'selected' : ''}>Как в системе</option>
+          </select>`)}
         ${setRow('Уменьшить анимации', 'reduced motion', sw('settings.reduceMotion', st.settings.reduceMotion))}
         ${setRow('Управление с клавиатуры', 'базовая навигация Tab/Enter работает в прототипе', '<span class="pill ok">включено</span>')}
       </div>`;
@@ -417,7 +434,7 @@
     },
     'set-char-name': (el) => { s().settings.character.name = el.value; S.save(); A.render(); if (window.AvenChar) window.AvenChar.mountFloat(); },
     'set-textsize': (el) => { s().settings.textSize = el.value; S.save(); A.applyEnv(); },
-    'set-theme': (el) => { s().settings.theme = el.value; S.save(); A.applyEnv(); },
+    'set-theme': (el) => { s().settings.theme = el.value; S.save(); A.applyEnv(); A.render(); },
     'voice-test': (el) => {
       // T1 из research/tts/phrases.json — у натуральных голосов для неё есть готовый образец
       const phrase = 'Здравствуйте. Я Aven, ваш персональный помощник. Чем могу помочь?';
@@ -441,6 +458,24 @@
       } catch (e) { A.toast('Экспорт недоступен в этом браузере'); }
     },
     'demo-stub': () => A.toast('Демо: в прототипе действие не выполняется'),
+    'sec-password': () => {
+      A.confirmModal('Сменить пароль? В реальной системе это опасное действие: оно требует текущего пароля и записывается в историю.', () => {
+        if (A.logAction) A.logAction({ action: 'auth.password.set', title: 'Пароль изменён (демо)', object: 'Настройки → Безопасность',
+          objectType: 'settings', undoable: false, danger: true, sensitive: true, changes: [] });
+        A.closeModal(); A.toast('Пароль изменён (демо) · запись в истории'); A.render();
+      });
+    },
+    'sec-session-end': (el) => {
+      const st = s();
+      const x = (st.sessions || []).filter((q) => (q.id || '') === el.dataset.id)[0];
+      if (!x) { A.toast('Сессия не найдена (демо)'); return; }
+      A.confirmModal('Завершить сессию «' + x.device + '»? Потребуется повторный вход.', () => {
+        st.sessions = (st.sessions || []).filter((q) => q !== x); S.save();
+        if (A.logAction) A.logAction({ action: 'session.end', title: 'Сессия завершена', object: x.device,
+          objectType: 'session', undoable: true, danger: true, changes: [] });
+        A.closeModal(); A.toast('Сессия завершена (демо)'); A.render();
+      });
+    },
 
     'cmd-toggle': (el) => {
       const [, id] = el.dataset.action.split(':');

@@ -15,7 +15,8 @@
       <header class="topbar">
         <div class="title" id="page-title">Aven</div>
         <span class="demo-badge">ДЕМО · ПРОТОТИП</span>
-        <button class="icon-btn" id="theme-btn" data-action="theme-toggle" title="Светлая/тёмная тема">🌙</button>
+        <button class="icon-btn" id="theme-btn" data-action="theme-toggle" title="Тема: светлая / тёмная / как в системе">🌙</button>
+        <button class="icon-btn" id="logout-btn" data-action="logout" title="Выйти из аккаунта (демо)">⎋</button>
         <button class="avatar" data-action="nav" data-id="profile" title="Профиль: Алексей (демо)">А</button>
       </header>
       <main class="content" id="page"></main>
@@ -41,6 +42,10 @@
   <script src="js/pages2.js"></script>
   <script src="js/tools.js"></script>
   <script src="js/settings.js"></script>
+  <!-- Срез Stage 1.0: история действий (даёт A.logAction), админка, экраны аккаунта. Порядок важен. -->
+  <script src="js/history.js"></script>
+  <script src="js/admin.js"></script>
+  <script src="js/auth.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
