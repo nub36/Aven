@@ -306,7 +306,7 @@
   };
 
   /* ================= действия ================= */
-  const confirmDelete = 'Демо: элемент будет удалён только локально в прототипе. Удалить?';
+  const confirmDelete = 'Элемент будет удалён локально в прототипе. Удалить? Отмена (Undo) останется доступна в истории действий.';
 
   /* экспериментальный STT в поле Главной: state → listening, interim-текст в поле */
   function homeMic() {
@@ -359,8 +359,15 @@
     'toggle-task': (el) => {
       const t = s().tasks.find((x) => x.id === el.dataset.id);
       if (!t) return;
+      const was = t.done;
       t.done = !t.done;
       S.save();
+      A.logAction({
+        action: 'task.update', title: t.done ? 'Задача выполнена' : 'Задача снова открыта', object: t.title,
+        objectType: 'task', undoable: true,
+        changes: [{ field: 'Статус', from: was ? 'Выполнена' : 'Открыта', to: t.done ? 'Выполнена' : 'Открыта' }],
+        undo: { type: 'fields', list: 'tasks', id: t.id, fields: { done: was } }
+      });
       A.render();
     },
 
@@ -374,9 +381,19 @@
     'task-add': () => taskForm(),
     'task-del': (el, ev) => {
       A.confirmModal(confirmDelete, () => {
-        const st = S.s();
-        st.tasks = st.tasks.filter((t) => t.id !== el.dataset.id);
-        S.save(); A.render(); A.toast('Задача удалена (демо)');
+        const list = S.s().tasks;
+        const i = A.indexOfId(list, el.dataset.id);
+        const item = list[i];
+        if (!item) { A.toast('Задача не найдена'); return; }
+        list.splice(i, 1);
+        S.save();
+        A.logAction({
+          action: 'task.delete', title: 'Задача удалена', object: item.title, objectType: 'task',
+          undoable: true, danger: true,
+          changes: [{ field: 'Состояние', from: item.done ? 'Выполнена' : 'Открыта', to: 'Удалена' }],
+          undo: { type: 'restore', list: 'tasks', index: i, item: JSON.parse(JSON.stringify(item)) }
+        });
+        A.render(); A.toast('Задача удалена — можно отменить в истории');
       });
     },
 
@@ -407,13 +424,33 @@
     },
     'note-pin': (el) => {
       const n = s().notes.find((x) => x.id === el.dataset.id);
-      if (n) { n.pinned = !n.pinned; S.save(); A.render(); }
+      if (!n) return;
+      const was = n.pinned;
+      n.pinned = !n.pinned;
+      S.save();
+      A.logAction({
+        action: 'note.update', title: n.pinned ? 'Заметка закреплена' : 'Закрепление снято', object: n.title,
+        objectType: 'note', undoable: true,
+        changes: [{ field: 'Закрепление', from: was ? 'закреплена' : 'обычная', to: n.pinned ? 'закреплена' : 'обычная' }],
+        undo: { type: 'fields', list: 'notes', id: n.id, fields: { pinned: was } }
+      });
+      A.render();
     },
     'note-del': (el) => {
       A.confirmModal(confirmDelete, () => {
-        const st = S.s();
-        st.notes = st.notes.filter((n) => n.id !== el.dataset.id);
-        S.save(); A.render(); A.toast('Заметка удалена (демо)');
+        const list = S.s().notes;
+        const i = A.indexOfId(list, el.dataset.id);
+        const item = list[i];
+        if (!item) { A.toast('Заметка не найдена'); return; }
+        list.splice(i, 1);
+        S.save();
+        A.logAction({
+          action: 'note.delete', title: 'Заметка удалена', object: item.title, objectType: 'note',
+          undoable: true, danger: true, sensitive: true,
+          changes: [{ field: 'Состояние', from: 'в списке', to: 'Удалена' }],
+          undo: { type: 'restore', list: 'notes', index: i, item: JSON.parse(JSON.stringify(item)) }
+        });
+        A.render(); A.toast('Заметка удалена — можно отменить в истории');
       });
     }
   });
@@ -434,8 +471,20 @@
           <select name="project"><option>Личное</option><option>Дом</option><option>Авто</option><option>Работа</option><option>Здоровье</option><option>Покупки</option></select></div>`,
       onSubmit: (v) => {
         const st = S.s();
-        st.tasks.unshift({ id: S.id('t'), title: v.title || 'Без названия', desc: v.desc, date: v.date === todayISO() ? 'today' : 'soon', prio: v.prio, project: v.project, done: false });
-        S.save(); A.closeModal(); A.render(); A.demoToast('Задача добавлена (демо)');
+        const t = { id: S.id('t'), title: v.title || 'Без названия', desc: v.desc, date: v.date === todayISO() ? 'today' : 'soon', prio: v.prio, project: v.project, done: false };
+        st.tasks.unshift(t);
+        S.save();
+        A.logAction({
+          action: 'task.create', title: 'Задача создана', object: t.title, objectType: 'task', undoable: true,
+          changes: [
+            { field: 'Название', from: '—', to: t.title },
+            { field: 'Приоритет', from: '—', to: t.prio },
+            { field: 'Проект', from: '—', to: t.project },
+            { field: 'Срок', from: '—', to: v.date || 'не указан' }
+          ],
+          undo: { type: 'remove', list: 'tasks', id: t.id }
+        });
+        A.closeModal(); A.render(); A.toast('Задача добавлена · запись в истории, можно отменить');
       }
     });
   }
@@ -451,7 +500,13 @@
         </div>
         <div class="field"><label>Важность</label><select name="prio"><option>обычное</option><option>важное</option><option>критическое (насколько позволяет платформа)</option></select></div>
         <div class="s" style="color:var(--muted);font-size:.8rem">Демо: день — ${A.esc(dayLabel || 'Сегодня')}</div>`,
-      onSubmit: (v) => { A.closeModal(); A.demoToast('Событие «' + (v.title || 'Без названия') + '» сохранено (демо)'); }
+      onSubmit: (v) => {
+        /* Честно (ADR-010): события в прототипе пока не сохраняются — календарь и «День» работают на
+           статичном демо-наборе (data.js → eventsByDay/day). Реальное создание с повторениями,
+           пересечением по времени и Undo — следующая задача по MVP_SCOPE §5.4. */
+        A.closeModal();
+        A.toast('Демо: событие «' + (v.title || 'Без названия') + '» НЕ сохранено — раздел событий в прототипе ещё на статичных данных (MVP_SCOPE §5.4)');
+      }
     });
   }
 
@@ -464,16 +519,37 @@
         <div class="field"><label>Текст</label><textarea name="body">${A.esc(existing ? existing.body : '')}</textarea></div>`,
       onSubmit: (v) => {
         const st = S.s();
+        const tags = v.tags.split(',').map((x) => x.trim()).filter(Boolean);
         if (existing) {
+          const prev = { title: existing.title, tags: existing.tags.slice(), body: existing.body, updated: existing.updated };
           existing.title = v.title || existing.title;
-          existing.tags = v.tags.split(',').map((x) => x.trim()).filter(Boolean);
+          existing.tags = tags;
           existing.body = v.body;
           existing.updated = 'только что';
+          S.save();
+          const changes = [];
+          if (prev.title !== existing.title) changes.push({ field: 'Заголовок', from: prev.title, to: existing.title });
+          if (prev.tags.join(', ') !== tags.join(', ')) changes.push({ field: 'Теги', from: prev.tags.join(', ') || '—', to: tags.join(', ') || '—' });
+          if (prev.body !== existing.body) changes.push({ field: 'Текст', from: prev.body ? prev.body.slice(0, 60) + (prev.body.length > 60 ? '…' : '') : '—', to: existing.body ? existing.body.slice(0, 60) + (existing.body.length > 60 ? '…' : '') : '—' });
+          A.logAction({
+            action: 'note.update', title: 'Заметка изменена', object: existing.title, objectType: 'note',
+            undoable: true, sensitive: true, changes: changes.length ? changes : [{ field: 'Изменений нет', from: '—', to: '—' }],
+            undo: { type: 'fields', list: 'notes', id: existing.id, fields: prev }
+          });
+          A.closeModal(); A.render(); A.toast('Заметка сохранена · запись в истории');
         } else {
-          st.notes.unshift({ id: S.id('n'), title: v.title || 'Без названия', tags: v.tags.split(',').map((x) => x.trim()).filter(Boolean), body: v.body, pinned: false, updated: 'только что' });
-          noteId = st.notes[0].id;
+          const n = { id: S.id('n'), title: v.title || 'Без названия', tags: tags, body: v.body, pinned: false, updated: 'только что' };
+          st.notes.unshift(n);
+          noteId = n.id;
+          S.save();
+          A.logAction({
+            action: 'note.create', title: 'Заметка создана', object: n.title, objectType: 'note',
+            undoable: true, sensitive: true,
+            changes: [{ field: 'Заголовок', from: '—', to: n.title }, { field: 'Теги', from: '—', to: tags.join(', ') || '—' }],
+            undo: { type: 'remove', list: 'notes', id: n.id }
+          });
+          A.closeModal(); A.render(); A.toast('Заметка создана · можно отменить в истории');
         }
-        S.save(); A.closeModal(); A.render(); A.demoToast('Заметка сохранена (демо)');
       }
     });
   }
@@ -509,8 +585,17 @@
         <div class="field"><label>Пробег, км</label><input type="number" name="km" value="${s().car.mileage}"></div>`,
       onSubmit: (v) => {
         const st = S.s();
-        st.car.fuel.unshift({ id: S.id('f'), liters: +v.liters || 0, sum: +v.sum || 0, km: +v.km || st.car.mileage, date: 'сегодня' });
-        S.save(); A.closeModal(); A.render(); A.demoToast('Заправка добавлена (демо)');
+        const f = { id: S.id('f'), liters: +v.liters || 0, sum: +v.sum || 0, km: +v.km || st.car.mileage, date: 'сегодня' };
+        st.car.fuel.unshift(f);
+        S.save();
+        A.logAction({
+          action: 'car.fuel.create', title: 'Заправка добавлена', object: f.liters + ' л · ' + A.money(f.sum),
+          objectType: 'car', undoable: true,
+          changes: [{ field: 'Литры', from: '—', to: String(f.liters) }, { field: 'Сумма', from: '—', to: A.money(f.sum) },
+                    { field: 'Пробег', from: '—', to: f.km + ' км' }],
+          undo: { type: 'remove', list: 'car.fuel', id: f.id }
+        });
+        A.closeModal(); A.render(); A.toast('Заправка добавлена · запись в истории (раздел Stage 1.1)');
       }
     });
   }

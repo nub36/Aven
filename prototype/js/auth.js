@@ -65,6 +65,8 @@
       html: shell('Вход',
         'Аккаунт обязателен: данные принадлежат пользователю, а не системе (ADR-008)',
         `<div class="auth-body">
+           ${st.auth.deletedNote ? `<div class="tts-priv warn">${A.esc(st.auth.deletedNote)}</div>
+             <button class="btn block" data-action="auth-restore-demo" title="Вернуть исходный демо-набор прототипа">Вернуть демо-данные прототипа</button>` : ''}
            ${field('login-email', 'Email', 'email', '', `value="${A.esc(st.auth.email)}"`)}
            ${field('login-pass', 'Пароль', 'password', 'Демо: пароль не проверяется')}
            <label class="check-row"><input type="checkbox" id="login-remember" checked> Запомнить это устройство</label>
@@ -240,12 +242,44 @@
 
     'auth-2fa-enable': (el) => {
       const st = s();
-      st.auth.twoFactor = el.checked; S.save();
-      if (A.logAction) A.logAction({ action: 'settings.update', title: st.auth.twoFactor ? '2FA включена' : '2FA отключена',
-        object: 'Настройки → Безопасность', objectType: 'settings', undoable: true, sensitive: true,
-        changes: [{ field: '2FA (TOTP)', from: st.auth.twoFactor ? 'выкл' : 'вкл', to: st.auth.twoFactor ? 'вкл' : 'выкл' }] });
-      A.toast(st.auth.twoFactor ? '2FA включена: следующий вход потребует код (демо)' : '2FA отключена (демо)');
-      A.render();
+      const want = !!el.checked;
+      const apply = (how) => {
+        st.auth.twoFactor = want; S.save();
+        if (A.logAction) A.logAction({
+          action: 'settings.update', title: want ? '2FA включена' : '2FA отключена',
+          object: 'Настройки → Безопасность', objectType: 'settings', undoable: true, sensitive: true,
+          danger: !want,
+          changes: [{ field: '2FA (TOTP)', from: want ? 'выкл' : 'вкл', to: want ? 'вкл' : 'выкл' }]
+        });
+        A.toast(want ? '2FA включена: следующий вход потребует код (демо)' : '2FA отключена — подтверждено паролем (демо)');
+        A.render();
+      };
+      if (want) { apply('confirm'); return; }
+      /* Отключение 2FA — опасное действие: требуется «подтвердите паролем сейчас»
+         (MVP_SCOPE §5.1 приёмка 4, §7; механизм re-auth — открытый вопрос №21). */
+      A.openModal({
+        title: 'Отключить двухфакторную аутентификацию?',
+        body: `<div class="tts-priv warn">⚠️ Без 2FA для входа будет достаточно пароля. Действие чувствительное,
+                 поэтому требуется повторная аутентификация (MVP_SCOPE §7).</div>
+               <div class="field"><label>Текущий пароль</label>
+                 <input type="password" name="pass" placeholder="••••••••" autocomplete="current-password">
+                 <div class="s">Демо: пароль не проверяется по-настоящему, принимается «demo-pass-123».</div></div>`,
+        submitText: 'Отключить 2FA',
+        onSubmit: (v) => {
+          if (String(v.pass || '') !== 'demo-pass-123') {
+            A.toast('Повторная аутентификация не пройдена — 2FA осталась включённой');
+            A.closeModal(); A.render();     /* возвращаем переключатель к сохранённому состоянию */
+            return;
+          }
+          A.closeModal(); apply('reauth');
+        }
+      });
+      A.render();   /* до подтверждения переключатель показывает сохранённое значение, а не клик */
+    },
+    /* возврат демо-данных после сценария удаления аккаунта */
+    'auth-restore-demo': () => {
+      S.reset(); A.applyEnv(); location.hash = '#/home'; A.render();
+      A.toast('Демо-данные прототипа возвращены');
     }
   });
 })();

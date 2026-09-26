@@ -121,18 +121,17 @@
   };
 
   /* делегирование кликов по data-action */
+  /* Делегирование действий.
+     Важно: чекбоксы и радиокнопки обрабатываются ТОЛЬКО событием change (ниже).
+     В браузере клик по <label> с чекбоксом порождает два click-события — по самой метке и
+     синтетическое по чекбоксу, — из-за чего действие выполнялось бы дважды (задача «отмечалась»
+     и тут же «размечалась», а в истории появлялись две записи). Событие change приходит ровно один
+     раз независимо от того, кликнули по чекбоксу или по подписи рядом с ним. */
   document.addEventListener('click', (e) => {
     const el = e.target.closest('[data-action]');
     if (!el) return;
-    if (el.tagName === 'INPUT' && el.type === 'checkbox') {
-      // чекбокс-тогглы обрабатываются своим событием change ниже;
-      // здесь — только "действия-чекбоксы" (например toggle-task)
-      const name = el.dataset.action.split(':')[0];
-      if (name === 'toggle-task') { A.act(name, el, e); }
-      return;
-    }
-    if (el.tagName === 'INPUT') return; // инпуты без действий не трогаем
-    if (el.tagName === 'SELECT') return; // выпадающие списки — по событию change (ниже), не по клику при открытии
+    if (el.tagName === 'INPUT' || el.tagName === 'SELECT') return;  // по клику не трогаем: только change
+    if (el.tagName === 'LABEL' && el.querySelector('input[type="checkbox"],input[type="radio"]')) return;
     const raw = el.dataset.action;
     const name = raw.split(':')[0];
     if (A.actions[name]) {
@@ -141,13 +140,15 @@
     }
   });
 
-  /* тогглы-переключатели (switch) и чекбоксы действий */
+  /* тогглы-переключатели (switch), чекбоксы действий и выпадающие списки */
   document.addEventListener('change', (e) => {
-    const el = e.target.closest('[data-action]');
-    if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'SELECT')) return;
-    const raw = el.dataset.action;
-    if (raw === 'toggle-task') return; // уже обработан кликом
-    const name = raw.split(':')[0];
+    const t = e.target;
+    const el = t.closest('[data-action]');   // у чекбокса задачи data-action на <label>, у переключателя — на самом input
+    if (!el) return;
+    const isControl = el.tagName === 'INPUT' || el.tagName === 'SELECT';
+    const isLabeledBox = el.tagName === 'LABEL' && (t.type === 'checkbox' || t.type === 'radio');
+    if (!isControl && !isLabeledBox) return;
+    const name = el.dataset.action.split(':')[0];
     if (A.actions[name]) A.actions[name](el, e);
   });
 

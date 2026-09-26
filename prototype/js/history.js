@@ -15,6 +15,45 @@
 
   /** Запись действия в историю. Вызывается из любого места прототипа.
    *  e: {action, title, object, objectType, source, undoable, danger, sensitive, changes:[{field,from,to}]} */
+  /* ============ Общие помощники среза 1.0 — используются всеми разделами ============ */
+
+  /* Реальная выгрузка файла в браузере (MVP_SCOPE §6.5 «экспорт данных», §5.6 приёмка 5).
+     Возвращает false, если окружение не поддерживает Blob/URL — тогда вызывающий код
+     честно сообщает об этом вместо имитации (ADR-010). */
+  A.downloadFile = function (filename, text, mime) {
+    if (typeof Blob === 'undefined' || typeof URL === 'undefined' || !URL.createObjectURL) {
+      A.toast('Выгрузка файла недоступна в этом окружении (нет Blob/URL.createObjectURL)');
+      return false;
+    }
+    try {
+      const url = URL.createObjectURL(new Blob([text], { type: mime || 'text/plain;charset=utf-8' }));
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return true;
+    } catch (e) {
+      A.toast('Выгрузка не удалась: ' + e.message);
+      return false;
+    }
+  };
+
+  /* Деньги: целые в минимальных единицах валюты (SECURITY §5, MVP_SCOPE §5.6 приёмка 1:
+     0.1 + 0.2 должно давать ровно 0.3, без float-артефактов). */
+  A.minor = function (v) { return Math.round((Number(v) || 0) * 100); };
+  A.sumMoney = function () {
+    let m = 0;
+    for (let i = 0; i < arguments.length; i++) m += A.minor(arguments[i]);
+    return m / 100;
+  };
+
+  /* Индекс элемента в списке — чтобы Undo вернул запись на прежнее место. */
+  A.indexOfId = function (list, id) {
+    const arr = list || [];
+    for (let i = 0; i < arr.length; i++) if (arr[i] && arr[i].id === id) return i;
+    return 0;
+  };
+
   A.logAction = function (e) {
     const st = s();
     if (!Array.isArray(st.history)) st.history = [];
@@ -30,7 +69,8 @@
       undoable: !!e.undoable,
       danger: !!e.danger,
       sensitive: !!e.sensitive,
-      changes: e.changes || []
+      changes: e.changes || [],
+      undo: e.undo || null        /* что именно вернуть при Undo; без него отмена только «на бумаге» */
     };
     st.history.unshift(entry);
     S.save();
@@ -61,6 +101,74 @@
 
   /* ================= Undo ================= */
 
+  /* Применение отмены к данным. Форматы payload (JSON-сериализуемые, живут в записи истории):
+       { type: 'restore', list: 'tasks', index: 2, item: {...} }     — вернуть удалённый объект на место
+       { type: 'remove',  list: 'tasks', id: 't101' }                — убрать созданный объект
+       { type: 'fields',  list: 'tasks', id: 't101', fields: {...} } — вернуть прежние значения полей
+       { type: 'value',   path: 'car.mileage', value: 152300 }        — вернуть значение вне списка
+       дополнительно: adjust: [{ path: 'finMonth.expense', delta: -850 }] — поправить числовые итоги.
+       Список может быть вложенным: list: 'car.fuel'.
+     Если payload нет (демо-записи из data.js), отмена помечает запись, но данные не меняются —
+     и прототип говорит об этом прямо, а не делает вид, что вернул состояние (ADR-010). */
+  /* Разрешение пути в состоянии: 'ops' или 'car.fuel' (списки), 'car.mileage' (скаляр). */
+  function resolvePath(root, pathStr) {
+    const parts = String(pathStr || '').split('.');
+    let o = root;
+    for (let i = 0; i < parts.length; i++) {
+      if (!o || typeof o !== 'object') return null;
+      o = o[parts[i]];
+    }
+    return o;
+  }
+  function resolveParent(root, pathStr) {
+    const parts = String(pathStr || '').split('.');
+    const key = parts.pop();
+    let o = root;
+    for (let i = 0; i < parts.length; i++) {
+      if (!o || typeof o !== 'object') return null;
+      o = o[parts[i]];
+    }
+    return (o && typeof o === 'object') ? { obj: o, key: key } : null;
+  }
+
+  function applyUndo(entry) {
+    const st = s();
+    const u = entry.undo;
+    if (!u || !u.type) return false;
+    if (u.type === 'value') {                     /* вернуть прежнее значение поля вне списка */
+      const t = resolveParent(st, u.path);
+      if (!t) return false;
+      t.obj[t.key] = u.value;
+      return applyAdjust(st, u.adjust);
+    }
+    const list = resolvePath(st, u.list);
+    if (u.type === 'restore') {
+      if (!Array.isArray(list) || !u.item) return false;
+      list.splice(Math.max(0, Math.min(u.index || 0, list.length)), 0, u.item);
+    } else if (u.type === 'remove') {
+      if (!Array.isArray(list)) return false;
+      let i = -1;
+      for (let k = 0; k < list.length; k++) if (list[k] && list[k].id === u.id) { i = k; break; }
+      if (i < 0) return false;
+      list.splice(i, 1);
+    } else if (u.type === 'fields') {
+      if (!Array.isArray(list)) return false;
+      const item = list.filter((x) => x && x.id === u.id)[0];
+      if (!item) return false;
+      Object.keys(u.fields || {}).forEach((k) => { item[k] = u.fields[k]; });
+    } else return false;
+    return applyAdjust(st, u.adjust);
+  }
+
+  function applyAdjust(st, adjust) {
+    (adjust || []).forEach((a) => {
+      const t = resolveParent(st, a.path);
+      if (t && typeof t.obj[t.key] === 'number') t.obj[t.key] = A.sumMoney(t.obj[t.key], a.delta);
+    });
+    return true;
+  }
+  A.applyUndo = applyUndo;
+
   A.undoAction = function (id) {
     const st = s();
     const list = st.history || [];
@@ -68,8 +176,10 @@
     if (!item) { A.toast('Запись не найдена (демо)'); return; }
     if (!item.undoable) { A.toast('Это действие необратимо — отмена не поддерживается'); return; }
     if (item.undone) { A.toast('Действие уже отменено'); return; }
+    const applied = applyUndo(item);
     item.undone = true;
     item.undoneAt = A.nowLabel();
+    item.undoApplied = applied;
     // Undo сам пишется в историю (MVP_SCOPE §5.9, критерий приёмки 2)
     A.logAction({
       action: 'history.undo', title: 'Отменено действие', object: item.title + (item.object ? ': ' + item.object : ''),
@@ -77,7 +187,9 @@
         field: c.field, from: c.to, to: c.from
       }))
     });
-    A.toast('Отменено: ' + item.title + ' (демо)');
+    A.toast(applied
+      ? 'Отменено: ' + item.title + ' — прежнее состояние возвращено'
+      : 'Отменено в истории: ' + item.title + ' (демо-запись: данные не менялись)');
     A.render();
   };
 
@@ -169,7 +281,7 @@
                 <b>${A.esc(h.title)}</b>
                 ${h.danger ? '<span class="pill danger">разрушающее</span>' : ''}
                 ${h.sensitive ? '<span class="pill warn">чувствительная настройка</span>' : ''}
-                ${h.undone ? '<span class="pill">отменено</span>' : ''}
+                ${h.undone ? `<span class="pill" title="${h.undoApplied === false ? 'Демо-запись: отменена отметка, данные не менялись' : 'Прежнее состояние данных возвращено'}">отменено${h.undoApplied === false ? ' (только запись)' : ''}</span>` : ''}
                 <span class="pill ${kind === 'delete' ? 'warn' : ''}">${A.esc(KIND_LABEL[kind] || kind)}</span>
               </div>
               <div class="hist-object">${A.esc(h.object || '—')}</div>
@@ -184,7 +296,7 @@
               ${h.undoable && !h.undone
                 ? `<button class="btn small" data-action="hist-undo" data-id="${A.esc(h.id)}" title="Вернуть прежнее состояние">Отменить</button>`
                 : (h.undone
-                  ? '<span class="pill">Undo выполнен</span>'
+                  ? `<span class="pill" title="${h.undoApplied === false ? 'Данные не менялись: демо-запись без payload отмены' : 'Данные возвращены в прежнее состояние'}">Undo выполнен${h.undoApplied === false ? ' · только запись' : ''}</span>`
                   : '<span class="pill" title="Необратимое действие — см. MVP_SCOPE §5.9">без Undo</span>')}
             </div>
           </div>`;
@@ -198,6 +310,9 @@
         <li>Undo поддерживается для создания/изменения/удаления пользовательских данных; необратимые операции
             (удаление аккаунта, восстановление из бэкапа) требуют подтверждения и не отменяются.</li>
         <li>Отмена сама пишется в историю — цепочка действий не теряет звеньев.</li>
+        <li>Undo возвращает данные: у записей разделов (задачи, заметки, финансы) хранится payload отмены —
+            что вернуть, куда и какие итоги поправить. Записи «отменено (только запись)» — это демо-набор
+            из <code>data.js</code>: у них нет данных для возврата, и прототип это показывает прямо.</li>
         <li>Пользовательская история и административный аудит разделены (ADR-012): аудит — в
             <a href="#/admin">Админке → Аудит</a>.</li>
         <li>Механизм защиты критического audit trail — открытый вопрос №14, в прототипе не реализован.</li>
@@ -245,7 +360,7 @@
           <div class="set-row"><div class="grow"><div class="t">Действие</div><div class="s"><code>${A.esc(h.action)}</code> · объект типа «${A.esc(h.objectType)}»</div></div>
             ${h.danger ? '<span class="pill danger">разрушающее, требовало подтверждения</span>' : ''}
             ${h.sensitive ? '<span class="pill warn">чувствительная настройка</span>' : ''}
-            ${h.undone ? '<span class="pill">отменено ' + A.esc(h.undoneAt || '') + '</span>' : ''}</div>
+            ${h.undone ? '<span class="pill">отменено ' + A.esc(h.undoneAt || '') + (h.undoApplied === false ? ' · только запись' : '') + '</span>' : ''}</div>
           ${rows}
           ${h.undoable && !h.undone ? `<div class="btn-row" style="margin-top:10px">
               <button class="btn" data-action="hist-undo" data-id="${A.esc(h.id)}">Отменить действие</button></div>` : ''}`
@@ -254,18 +369,15 @@
     'hist-export': () => {
       const st = s();
       const data = JSON.stringify({ exportedAt: new Date().toISOString(), demo: true, history: st.history || [] }, null, 2);
-      try {
-        const blob = new Blob([data], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = 'aven-history-demo.json';
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      /* Экспорт всех данных — операция с приватными данными, поэтому с подтверждением (MVP_SCOPE §7). */
+      A.confirmModal('Выгрузить историю действий в JSON? Файл содержит названия объектов и старое/новое значения полей — это приватные данные.', () => {
+        A.closeModal();
+        const ok = A.downloadFile('aven-history-demo.json', data, 'application/json;charset=utf-8');
+        if (!ok) return;
         A.toast('История выгружена в JSON (демо)');
-        A.logAction({ action: 'data.export', title: 'Экспорт данных', object: 'История действий · JSON', objectType: 'system', undoable: false, sensitive: true });
-      } catch (e) {
-        A.toast('Экспорт недоступен в этом окружении: ' + e.message);
-      }
+        A.logAction({ action: 'data.export', title: 'Экспорт данных', object: 'История действий · JSON',
+          objectType: 'system', undoable: false, sensitive: true, danger: false });
+      });
     }
   });
 })();

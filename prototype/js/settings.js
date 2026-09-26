@@ -305,10 +305,14 @@
       </div>`;
 
     if (cat === 'privacy') return `
-      <h2 class="set-h">Приватность</h2><p class="set-sub">Пользователь контролирует свои данные</p>
+      <h2 class="set-h">Приватность</h2>
+      <p class="set-sub">Пользователь контролирует свои данные: экспорт и удаление — в срезе 1.0, а не «когда-нибудь» (MVP_SCOPE §6.5, SECURITY §2)</p>
       <div class="card">
-        ${setRow('Экспорт данных', 'весь аккаунт — в перспективе', '<button class="btn" data-action="export-state">⬇ Экспорт прототипа</button>')}
-        ${setRow('Удаление данных', 'delete account — в перспективе', '<button class="btn danger" data-action="privacy-reset">Сбросить демо-данные</button>')}
+        ${setRow('Экспорт всех данных', 'JSON со всеми записями аккаунта; как операция с приватными данными требует подтверждения (§7)', '<button class="btn" data-action="priv-export-all">⬇ Выгрузить JSON</button>')}
+        ${setRow('Экспорт истории действий', 'JSON-выгрузка записей истории с изменениями', '<a class="btn small" href="#/history">История → Экспорт JSON</a>')}
+        ${setRow('Экспорт финансовых операций', 'CSV для таблиц (§5.6, приёмка 5)', '<a class="btn small" href="#/finance">Финансы → Экспорт CSV</a>')}
+        ${setRow('Удаление аккаунта и всех данных', 'необратимо: повторная аутентификация + ввод слова DELETE', '<button class="btn danger" data-action="priv-delete-account">Удалить аккаунт…</button>')}
+        ${setRow('Сброс демо-данных', 'вернуть исходный набор прототипа (это не удаление аккаунта)', '<button class="btn" data-action="privacy-reset">Сбросить демо-данные</button>')}
         ${setRow('Диагностические данные', 'управление телеметрией (вопрос №22)', sw('privacy.diag', false))}
         ${setRow('История действий', 'что сделано и что можно отменить (Undo)', '<a class="btn small" href="#/history">Открыть историю</a>')}
         ${setRow('Экспорт истории', 'JSON-выгрузка записей истории', '<a class="btn small" href="#/history">История → Экспорт JSON</a>')}
@@ -447,22 +451,76 @@
         S.reset(); A.applyEnv(); A.render(); A.toast('Демо-данные сброшены');
       });
     },
-    'export-state': () => {
-      try {
-        const blob = new Blob([JSON.stringify(S.s, null, 2)], { type: 'application/json' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'aven-prototype-state.json';
-        a.click();
-        A.demoToast('Экспорт состояния прототипа');
-      } catch (e) { A.toast('Экспорт недоступен в этом браузере'); }
+    /* Экспорт всех данных (§6.5). Раньше здесь было JSON.stringify(S.s) — сериализовалась функция,
+       а не состояние, то есть файл получался пустым; исправлено на S.s() + общая выгрузка A.downloadFile. */
+    'priv-export-all': () => {
+      const st = s();
+      A.confirmModal('Выгрузить все данные аккаунта в JSON? Файл содержит задачи, заметки, финансы и историю — это приватные данные, поэтому выгрузка подтверждается (MVP_SCOPE §7).', () => {
+        A.closeModal();
+        const payload = {
+          exportedAt: new Date().toISOString(), demo: true,
+          profile: st.profile, tasks: st.tasks, notes: st.notes, ops: st.ops, finMonth: st.finMonth,
+          car: st.car, purchases: st.purchases, history: st.history, settings: st.settings
+        };
+        if (!A.downloadFile('aven-data-demo.json', JSON.stringify(payload, null, 2), 'application/json;charset=utf-8')) return;
+        A.logAction({ action: 'data.export', title: 'Экспорт всех данных', object: 'Аккаунт · JSON',
+          objectType: 'system', undoable: false, sensitive: true });
+        A.toast('Все данные выгружены в JSON');
+      });
+    },
+    /* Удаление аккаунта и всех данных (§6.5, §7): необратимо, поэтому re-auth + слово DELETE */
+    'priv-delete-account': () => {
+      A.openModal({
+        title: 'Удалить аккаунт и все данные?',
+        body: `<div class="tts-priv warn">⚠️ Необратимо. Удаляются все записи пользователя и завершаются сессии;
+                 след остаётся только в административном аудите (ADR-012). Undo для удаления аккаунта не
+                 поддерживается (MVP_SCOPE §5.9).</div>
+               <div class="field"><label>Повторная аутентификация — текущий пароль</label>
+                 <input type="password" name="pass" placeholder="••••••••" autocomplete="current-password">
+                 <div class="s">Демо: пароль не проверяется по-настоящему, принимается «demo-pass-123».
+                 Механизм re-auth и окно доверия — открытый вопрос №21.</div></div>
+               <div class="field"><label>Введите DELETE, чтобы подтвердить</label><input type="text" name="word"></div>`,
+        submitText: 'Удалить аккаунт и данные',
+        onSubmit: (v) => {
+          if (String(v.word || '').trim().toUpperCase() !== 'DELETE') { A.toast('Подтверждение не совпало — ничего не удалено'); return; }
+          if (String(v.pass || '') !== 'demo-pass-123') { A.toast('Повторная аутентификация не пройдена — ничего не удалено'); return; }
+          const st = s();
+          const who = (st.auth && st.auth.email) || 'user@demo.aven';
+          st.tasks = []; st.notes = []; st.ops = []; st.history = []; st.sessions = []; st.purchases = [];
+          st.finMonth = { expense: 0, income: 0, balance: 0 };
+          if (st.car) { st.car.fuel = []; st.car.expenses = []; st.car.service = []; }
+          st.auth.logged = false; st.auth.name = ''; st.auth.email = ''; st.auth.twoFactor = false;
+          st.auth.deletedNote = 'Аккаунт и все данные удалены (демо-сценарий). Запись об удалении — в административном аудите (#/admin → Аудит), а не в пользовательской истории: аудит и история разделены (ADR-012).';
+          if (st.admin && Array.isArray(st.admin.audit)) {
+            st.admin.audit.unshift({ id: S.id('a'), when: A.nowLabel(), actor: who, action: 'account.delete',
+              object: 'аккаунт удалён по запросу пользователя', result: 'необратимо' });
+          }
+          S.save(); A.closeModal(); location.hash = '#/login'; A.applyEnv(); A.render();
+          A.toast('Аккаунт и данные удалены (демо). Запись — в аудите админки');
+        }
+      });
     },
     'demo-stub': () => A.toast('Демо: в прототипе действие не выполняется'),
     'sec-password': () => {
-      A.confirmModal('Сменить пароль? В реальной системе это опасное действие: оно требует текущего пароля и записывается в историю.', () => {
-        if (A.logAction) A.logAction({ action: 'auth.password.set', title: 'Пароль изменён (демо)', object: 'Настройки → Безопасность',
-          objectType: 'settings', undoable: false, danger: true, sensitive: true, changes: [] });
-        A.closeModal(); A.toast('Пароль изменён (демо) · запись в истории'); A.render();
+      A.openModal({
+        title: 'Сменить пароль',
+        body: `<div class="tts-priv">Опасное действие: требует повторной аутентификации и записывается в историю
+                 (MVP_SCOPE §7). Порог сложности пароля задаёт владелец (§5.1).</div>
+               <div class="field"><label>Текущий пароль</label><input type="password" name="cur" autocomplete="current-password">
+                 <div class="s">Демо: принимается «demo-pass-123».</div></div>
+               <div class="field"><label>Новый пароль (минимум 8 символов)</label><input type="password" name="next" autocomplete="new-password"></div>
+               <div class="field"><label>Повторите новый пароль</label><input type="password" name="next2" autocomplete="new-password"></div>`,
+        submitText: 'Сменить пароль',
+        onSubmit: (v) => {
+          if (String(v.cur || '') !== 'demo-pass-123') { A.toast('Повторная аутентификация не пройдена — пароль не изменён'); return; }
+          const a = String(v.next || ''), b = String(v.next2 || '');
+          if (a.length < 8) { A.toast('Новый пароль короче 8 символов — не изменён'); return; }
+          if (a !== b) { A.toast('Пароли не совпадают — не изменён'); return; }
+          A.logAction({ action: 'auth.password.set', title: 'Пароль изменён', object: 'Настройки → Безопасность',
+            objectType: 'settings', undoable: false, danger: true, sensitive: true,
+            changes: [{ field: 'Пароль', from: '••••••••', to: '•••••••• (обновлён)' }] });
+          A.closeModal(); A.toast('Пароль изменён (демо) · запись в истории'); A.render();
+        }
       });
     },
     'sec-session-end': (el) => {

@@ -229,9 +229,12 @@ async function load(hash) {
     const tfa = p.q('[data-action="auth-2fa-enable"]');
     ok('D8 переключатель 2FA отражает состояние', tfa && tfa.checked === p.st().auth.twoFactor);
     tfa.checked = false; p.change(tfa); await sleep(250);
-    ok('D9 отключение 2FA пишется в историю как чувствительная настройка',
-      p.st().auth.twoFactor === false && p.st().history[0].action === 'settings.update' && p.st().history[0].sensitive === true,
-      p.st().history[0] && p.st().history[0].action);
+    ok('D9 отключение 2FA — чувствительное действие: требует пароль и до него ничего не меняет',
+      p.st().auth.twoFactor === true && /повторная аутентификация/i.test(p.modalText()), p.modalText().slice(0, 60));
+    p.set(p.q('#modal-root input[name="pass"]'), 'demo-pass-123'); p.click(p.modalSubmit()); await sleep(260);
+    ok('D9b после подтверждения паролем 2FA отключена, запись чувствительная и опасная',
+      p.st().auth.twoFactor === false && p.st().history[0].action === 'settings.update' &&
+      p.st().history[0].sensitive === true && p.st().history[0].danger === true, p.st().history[0].action);
     ok('D10 политика 2FA по ролям честно помечена открытым вопросом', /открытый вопрос/i.test(p.q('#page').textContent));
 
     const sessionsBefore = p.st().sessions.length;
@@ -241,10 +244,10 @@ async function load(hash) {
       p.st().sessions.length === 1 && p.st().sessions[0].current === true, sessionsBefore + ' → ' + p.st().sessions.length);
 
     p.click(p.q('[data-action="sec-password"]')); await sleep(150);
-    ok('D12 смена пароля требует подтверждения', /Сменить пароль/.test(p.modalText()));
+    ok('D12 смена пароля требует повторной аутентификации', /Текущий пароль/.test(p.modalText()), p.modalText().slice(0, 60));
     p.click(p.modalSubmit()); await sleep(250);
-    ok('D13 смена пароля записана в историю (опасное, необратимое)',
-      p.st().history[0].action === 'auth.password.set' && p.st().history[0].undoable === false);
+    ok('D13 без пароля смена не проходит и в историю не пишется',
+      /аутентификация не пройдена/.test(p.toastText()) && p.st().history[0].action !== 'auth.password.set', p.toastText());
 
     // приватность ведёт в историю
     p.click(p.q('[data-action="set-cat"][data-id="privacy"]')); await sleep(200);
@@ -336,6 +339,298 @@ async function load(hash) {
       if (p.broken()) { ok('F настройки: раздел ' + c, false, 'ошибка отрисовки'); break; }
     }
     ok('F все разделы настроек рисуются без ошибок', !p.broken());
+    p.dom.window.close();
+  }
+
+
+  /* ============ G. Сквозная история и настоящий Undo в разделах (§5.3, §5.5, §5.6, §5.9, §6.2) ============ */
+  {
+    const p = await load('#/tasks');
+    const H = () => p.st().history;
+    const byId = (id) => H().filter((h) => h.id === id)[0];
+
+    p.click(p.q('[data-action="task-add"]')); await sleep(150);
+    p.set(p.q('#modal-root input[name="title"]'), 'Проверочная задача');
+    p.click(p.modalSubmit()); await sleep(250);
+    const createdId = p.st().tasks[0].id, e1 = H()[0];
+    ok('G1 создание задачи: запись с изменениями и payload отмены',
+      e1.action === 'task.create' && e1.undoable === true && e1.undo && e1.undo.type === 'remove' &&
+      (e1.changes || []).some((c) => c.to === 'Проверочная задача'), JSON.stringify(e1.changes));
+
+    await p.go('#/history');
+    p.click(p.q(`.hist-item[data-id="${e1.id}"] [data-action="hist-undo"]`)); await sleep(250);
+    ok('G2 Undo создания убирает задачу из данных, а не только помечает запись',
+      !p.st().tasks.some((t) => t.id === createdId) && byId(e1.id).undoApplied === true, p.st().tasks.length + ' задач');
+    ok('G3 тост честно сообщает о возврате состояния', /возвращено/.test(p.toastText()), p.toastText());
+
+    await p.go('#/tasks');
+    const box = p.q('.check-row[data-id="t1"] input[type="checkbox"]');
+    box.checked = true; p.change(box); await sleep(250);
+    const e2 = H()[0];
+    ok('G4 отметка «выполнено»: старое и новое значение статуса в истории',
+      p.st().tasks.filter((t) => t.id === 't1')[0].done === true && e2.action === 'task.update' &&
+      e2.changes[0].from === 'Открыта' && e2.changes[0].to === 'Выполнена', JSON.stringify(e2.changes));
+    p.w.Aven.undoAction(e2.id); await sleep(220);
+    ok('G5 Undo возвращает статус задачи', p.st().tasks.filter((t) => t.id === 't1')[0].done === false);
+
+    /* В браузере клик по <label> с чекбоксом даёт ДВА click-события (по метке и синтетическое по
+       чекбоксу) — до исправления делегирования действие выполнялось дважды и задача «отмечалась и
+       размечалась». Теперь чекбоксы обрабатываются событием change, которое приходит один раз. */
+    const histLen = H().length;
+    const label = p.q('.check-row[data-id="t1"]');
+    p.click(label); await sleep(250);
+    ok('G6 один клик по метке чекбокса = ровно одно действие (дубль click отсечён)',
+      H().length === histLen + 1 && p.st().tasks.filter((t) => t.id === 't1')[0].done === true,
+      '+' + (H().length - histLen) + ' записей, done=' + p.st().tasks.filter((t) => t.id === 't1')[0].done);
+
+    const idxBefore = p.st().tasks.findIndex((t) => t.id === 't2');
+    p.click(p.q('[data-action="task-del"][data-id="t2"]')); await sleep(150);
+    ok('G7 подтверждение удаления говорит про Undo', /Undo/i.test(p.modalText()), p.modalText().slice(0, 70));
+    p.click(p.modalSubmit()); await sleep(250);
+    const e3 = H()[0];
+    ok('G8 удаление записано как опасное и отменяемое',
+      !p.st().tasks.some((t) => t.id === 't2') && e3.action === 'task.delete' && e3.danger === true && e3.undoable === true);
+    p.w.Aven.undoAction(e3.id); await sleep(220);
+    ok('G9 Undo возвращает задачу на прежнее место',
+      p.st().tasks[idxBefore] && p.st().tasks[idxBefore].id === 't2', p.st().tasks[idxBefore] && p.st().tasks[idxBefore].id);
+    p.dom.window.close();
+  }
+
+  {
+    const p = await load('#/notes');
+    const H = () => p.st().history;
+    p.click(p.q('[data-action="note-add"]')); await sleep(150);
+    p.set(p.q('#modal-root input[name="title"]'), 'Заметка проверки');
+    p.set(p.q('#modal-root textarea[name="body"]'), 'Текст заметки');
+    p.click(p.modalSubmit()); await sleep(250);
+    const nId = p.st().notes[0].id;
+    ok('G10 создание заметки: запись в истории, помечена чувствительной',
+      H()[0].action === 'note.create' && H()[0].sensitive === true && H()[0].undo.type === 'remove');
+
+    p.click(p.q('[data-action="note-pin"]')); await sleep(250);
+    ok('G11 закрепление заметки пишется в историю',
+      H()[0].action === 'note.update' && p.st().notes.filter((n) => n.id === nId)[0].pinned === true);
+    p.w.Aven.undoAction(H()[0].id); await sleep(220);
+    ok('G12 Undo закрепления возвращает прежнее значение',
+      p.st().notes.filter((n) => n.id === nId)[0].pinned === false);
+
+    p.click(p.q('[data-action="note-edit"][data-id="' + nId + '"]')); await sleep(180);
+    p.set(p.q('#modal-root input[name="title"]'), 'Заметка проверки (изменено)');
+    p.click(p.modalSubmit()); await sleep(250);
+    const ch = H()[0].changes || [];
+    ok('G13 редактирование пишет только реально изменённые поля',
+      H()[0].action === 'note.update' && ch.length === 1 && ch[0].field === 'Заголовок' &&
+      /изменено/.test(ch[0].to), JSON.stringify(ch));
+    p.w.Aven.undoAction(H()[0].id); await sleep(220);
+    ok('G14 Undo редактирования возвращает прежний заголовок',
+      p.st().notes.filter((n) => n.id === nId)[0].title === 'Заметка проверки',
+      p.st().notes.filter((n) => n.id === nId)[0].title);
+
+    p.click(p.q('[data-action="note-del"][data-id="' + nId + '"]')); await sleep(150);
+    p.click(p.modalSubmit()); await sleep(250);
+    ok('G15 удаление заметки: опасное, отменяемое, запись есть',
+      !p.st().notes.some((n) => n.id === nId) && H()[0].action === 'note.delete' && H()[0].danger === true);
+    p.w.Aven.undoAction(H()[0].id); await sleep(220);
+    ok('G16 Undo возвращает удалённую заметку', p.st().notes.some((n) => n.id === nId));
+    p.dom.window.close();
+  }
+
+  {
+    const p = await load('#/finance');
+    const H = () => p.st().history;
+    const expBefore = p.w.Aven.minor(p.st().finMonth.expense);
+    const balBefore = p.w.Aven.minor(p.st().finMonth.balance);
+    for (const amt of ['0.1', '0.2']) {
+      p.click(p.q('[data-action="fin-add"]')); await sleep(150);
+      p.set(p.q('#modal-root input[name="amount"]'), amt);
+      p.click(p.modalSubmit()); await sleep(230);
+    }
+    ok('G17 итоги месяца считаются целыми копейками: +0.1 и +0.2 = ровно +30 мин. ед.',
+      p.w.Aven.minor(p.st().finMonth.expense) === expBefore + 30,
+      p.w.Aven.minor(p.st().finMonth.expense) - expBefore);
+    ok('G18 баланс пересчитан на те же 30 мин. ед.',
+      p.w.Aven.minor(p.st().finMonth.balance) === balBefore - 30,
+      p.w.Aven.minor(p.st().finMonth.balance) - balBefore);
+    ok('G19 0.1 + 0.2 = ровно 0.3 (float дал бы артефакт)',
+      p.w.Aven.sumMoney(0.1, 0.2) === 0.3 && String(0.1 + 0.2) !== '0.3', String(p.w.Aven.sumMoney(0.1, 0.2)));
+    ok('G20 на странице финансов виден расчёт точности денег', /в копейках/.test(p.q('#page').textContent));
+    ok('G21 у операций есть удаление и экспорт CSV', !!p.q('[data-action="fin-del"]') && !!p.q('[data-action="fin-export-csv"]'));
+
+    const opId = p.st().ops[0].id;
+    p.click(p.q('[data-action="fin-del"][data-id="' + opId + '"]')); await sleep(160);
+    ok('G22 подтверждение удаления операции говорит о пересчёте итогов',
+      /пересчитаются/.test(p.modalText()), p.modalText().slice(0, 70));
+    p.click(p.modalSubmit()); await sleep(260);
+    ok('G23 после удаления итоги пересчитаны (осталось +10 мин. ед.)',
+      p.w.Aven.minor(p.st().finMonth.expense) === expBefore + 10, p.w.Aven.minor(p.st().finMonth.expense) - expBefore);
+    const eDel = H()[0];
+    ok('G24 удаление операции — опасное и отменяемое, баланс в изменениях',
+      eDel.action === 'finance.expense.delete' && eDel.danger === true && eDel.undoable === true &&
+      (eDel.changes || []).some((c) => c.field === 'Баланс'), JSON.stringify(eDel.changes));
+    p.w.Aven.undoAction(eDel.id); await sleep(240);
+    ok('G25 Undo возвращает операцию и пересчитывает итоги обратно',
+      p.st().ops.some((o) => o.id === opId) && p.w.Aven.minor(p.st().finMonth.expense) === expBefore + 30 &&
+      p.w.Aven.minor(p.st().finMonth.balance) === balBefore - 30);
+
+    p.click(p.q('[data-action="fin-export-csv"]')); await sleep(160);
+    ok('G26 экспорт CSV подтверждается: файл содержит приватные данные (§7)',
+      /приватные данные/.test(p.modalText()), p.modalText().slice(0, 70));
+    const hLen = H().length;
+    p.click(p.modalSubmit()); await sleep(260);
+    const refused = /недоступна|не удалась/.test(p.toastText());
+    ok('G27 результат экспорта честный: либо честный отказ, либо запись об экспорте',
+      (refused && H().length === hLen) || (!refused && H().length > hLen && H()[0].action === 'data.export'),
+      p.toastText() + ' | +' + (H().length - hLen) + ' записей');
+    ok('G28 экспорт не сломал страницу', !p.broken());
+    p.dom.window.close();
+  }
+
+  {
+    const p = await load('#/auto');
+    const km0 = p.st().car.mileage;
+    p.click(p.q('[data-action="auto-mileage"]')); await sleep(160);
+    p.set(p.q('#modal-root input[name="km"]'), String(km0 + 500));
+    p.click(p.modalSubmit()); await sleep(260);
+    ok('G29 пробег обновлён и записан (payload «value»)',
+      p.st().car.mileage === km0 + 500 && p.st().history[0].action === 'car.mileage.update' &&
+      p.st().history[0].undo.type === 'value', JSON.stringify(p.st().history[0].undo));
+    p.w.Aven.undoAction(p.st().history[0].id); await sleep(240);
+    ok('G30 Undo возвращает прежнее значение пробега (поле вне списка)', p.st().car.mileage === km0, p.st().car.mileage);
+
+    await p.go('#/shopping');
+    p.click(p.q('[data-action="shop-add"]')); await sleep(160);
+    p.set(p.q('#modal-root input[name="name"]'), 'Тестовая покупка');
+    p.set(p.q('#modal-root input[name="price"]'), '1999.99');
+    p.click(p.modalSubmit()); await sleep(260);
+    ok('G31 покупка записана в историю, цена — целые копейки',
+      p.st().history[0].action === 'purchase.create' && p.st().purchases[0].price === 1999.99,
+      p.st().purchases[0] && p.st().purchases[0].price);
+
+    await p.go('#/automation');
+    const sw = p.q('[data-action="auto-toggle"]');
+    const wasOn = sw.checked; sw.checked = !wasOn; p.change(sw); await sleep(260);
+    ok('G32 переключение автоматизации пишет историю и отменяется',
+      p.st().history[0].action === 'automation.update' && p.st().history[0].undoable === true &&
+      p.st().automations.filter((a) => a.id === sw.dataset.id)[0].enabled === !wasOn);
+    p.w.Aven.undoAction(p.st().history[0].id); await sleep(240);
+    ok('G33 Undo возвращает состояние автоматизации',
+      p.st().automations.filter((a) => a.id === sw.dataset.id)[0].enabled === wasOn);
+    p.dom.window.close();
+  }
+
+
+  /* ============ H. Экспорт и удаление данных, повторная аутентификация (§5.1, §6.5, §7) ============ */
+  {
+    const p = await load('#/settings');
+    p.click(p.q('[data-action="set-cat"][data-id="privacy"]')); await sleep(200);
+    ok('H1 в приватности есть экспорт всех данных и удаление аккаунта (а не «в перспективе»)',
+      !!p.q('[data-action="priv-export-all"]') && !!p.q('[data-action="priv-delete-account"]') &&
+      !/в перспективе/.test(p.q('#page').textContent));
+
+    /* включаем выгрузку файлов в jsdom и перехватываем содержимое, чтобы проверить реальность экспорта */
+    let captured = null;
+    const OrigBlob = p.w.Blob;
+    p.w.Blob = function (parts, opts) { captured = String(parts && parts[0]); return new OrigBlob(parts, opts); };
+    p.w.URL.createObjectURL = () => 'blob:aven-demo';
+    p.w.URL.revokeObjectURL = () => {};
+    p.click(p.q('[data-action="priv-export-all"]')); await sleep(180);
+    ok('H2 экспорт всех данных подтверждается (операция с приватными данными, §7)',
+      /приватные данные/.test(p.modalText()), p.modalText().slice(0, 60));
+    p.click(p.modalSubmit()); await sleep(280);
+    let parsed = null;
+    try { parsed = JSON.parse(captured || 'null'); } catch (e) { parsed = null; }
+    ok('H3 в файл попадает состояние, а не функция (старая ошибка JSON.stringify(S.s))',
+      !!parsed && parsed !== undefined && Array.isArray(parsed.tasks) && Array.isArray(parsed.notes) &&
+      Array.isArray(parsed.ops) && Array.isArray(parsed.history) && parsed.demo === true,
+      captured === null ? 'ничего не выгружено' : String(captured).slice(0, 60));
+    ok('H4 экспорт записан в историю как чувствительное действие',
+      p.st().history[0].action === 'data.export' && p.st().history[0].sensitive === true);
+
+    /* удаление аккаунта */
+    const tasksBefore = p.st().tasks.length;
+    p.click(p.q('[data-action="priv-delete-account"]')); await sleep(180);
+    ok('H5 удаление аккаунта предупреждает о необратимости и требует слово + пароль',
+      /Необратимо/.test(p.modalText()) && /DELETE/.test(p.modalText()) && /Повторная аутентификация/.test(p.modalText()));
+    p.set(p.q('#modal-root input[name="word"]'), 'нет');
+    p.set(p.q('#modal-root input[name="pass"]'), 'demo-pass-123');
+    p.click(p.modalSubmit()); await sleep(220);
+    ok('H6 без слова DELETE ничего не удаляется', /не совпало/.test(p.toastText()) && p.st().tasks.length === tasksBefore, p.toastText());
+
+    p.click(p.q('[data-action="priv-delete-account"]')); await sleep(180);
+    p.set(p.q('#modal-root input[name="word"]'), 'DELETE');
+    p.set(p.q('#modal-root input[name="pass"]'), 'неверный');
+    p.click(p.modalSubmit()); await sleep(220);
+    ok('H7 повторная аутентификация обязательна: с неверным паролем данные целы',
+      /аутентификация не пройдена/.test(p.toastText()) && p.st().tasks.length === tasksBefore, p.toastText());
+
+    p.click(p.q('[data-action="priv-delete-account"]')); await sleep(180);
+    p.set(p.q('#modal-root input[name="word"]'), 'DELETE');
+    p.set(p.q('#modal-root input[name="pass"]'), 'demo-pass-123');
+    p.click(p.modalSubmit()); await sleep(320);
+    const st = p.st();
+    ok('H8 аккаунт удалён: данные очищены, вход сброшен',
+      st.tasks.length === 0 && st.notes.length === 0 && st.ops.length === 0 && st.history.length === 0 &&
+      st.sessions.length === 0 && st.auth.logged === false && p.w.location.hash === '#/login',
+      p.w.location.hash);
+    ok('H9 след остался в административном аудите, а не в пользовательской истории (ADR-012)',
+      st.admin.audit[0].action === 'account.delete' && st.history.length === 0, st.admin.audit[0].action);
+    ok('H10 экран входа честно сообщает об удалении и предлагает вернуть демо-данные',
+      /удалены/.test(p.q('#page').textContent) && !!p.q('[data-action="auth-restore-demo"]'));
+    p.click(p.q('[data-action="auth-restore-demo"]')); await sleep(320);
+    ok('H11 демо-данные возвращаются, пользователь снова на главной',
+      p.st().tasks.length > 0 && p.st().auth.logged === true && p.w.location.hash === '#/home',
+      p.st().tasks.length + ' задач, ' + p.w.location.hash);
+    p.dom.window.close();
+  }
+
+  {
+    const p = await load('#/settings');
+    p.click(p.q('[data-action="set-cat"][data-id="security"]')); await sleep(200);
+    ok('H12 2FA включена по умолчанию', p.st().auth.twoFactor === true);
+    let tfa = p.q('[data-action="auth-2fa-enable"]');
+    tfa.checked = false; p.change(tfa); await sleep(220);
+    ok('H13 отключение 2FA требует пароль (§5.1, приёмка 4)',
+      /повторная аутентификация/i.test(p.modalText()) && p.st().auth.twoFactor === true, p.modalText().slice(0, 60));
+    p.set(p.q('#modal-root input[name="pass"]'), 'неверный'); p.click(p.modalSubmit()); await sleep(250);
+    ok('H14 с неверным паролем 2FA остаётся включённой, переключатель вернулся к сохранённому значению',
+      p.st().auth.twoFactor === true && p.q('[data-action="auth-2fa-enable"]').checked === true,
+      String(p.q('[data-action="auth-2fa-enable"]').checked));
+    tfa = p.q('[data-action="auth-2fa-enable"]'); tfa.checked = false; p.change(tfa); await sleep(220);
+    p.set(p.q('#modal-root input[name="pass"]'), 'demo-pass-123'); p.click(p.modalSubmit()); await sleep(260);
+    ok('H15 с верным паролем 2FA отключается, запись помечена опасной и чувствительной',
+      p.st().auth.twoFactor === false && p.st().history[0].action === 'settings.update' &&
+      p.st().history[0].danger === true && p.st().history[0].sensitive === true, p.st().history[0].title);
+    tfa = p.q('[data-action="auth-2fa-enable"]'); tfa.checked = true; p.change(tfa); await sleep(250);
+    ok('H16 включение 2FA не требует пароля (не опасное действие)', p.st().auth.twoFactor === true);
+
+    p.click(p.q('[data-action="sec-password"]')); await sleep(200);
+    p.set(p.q('#modal-root input[name="cur"]'), 'неверный');
+    p.set(p.q('#modal-root input[name="next"]'), 'новый-пароль-1');
+    p.set(p.q('#modal-root input[name="next2"]'), 'новый-пароль-1');
+    p.click(p.modalSubmit()); await sleep(220);
+    ok('H17 смена пароля без повторной аутентификации отклоняется',
+      /аутентификация не пройдена/.test(p.toastText()) && p.st().history[0].action !== 'auth.password.set', p.toastText());
+    p.click(p.q('[data-action="sec-password"]')); await sleep(200);
+    p.set(p.q('#modal-root input[name="cur"]'), 'demo-pass-123');
+    p.set(p.q('#modal-root input[name="next"]'), 'семьзн1');
+    p.set(p.q('#modal-root input[name="next2"]'), 'семьзн1');
+    p.click(p.modalSubmit()); await sleep(220);
+    ok('H18 пароль короче 8 символов отклоняется (§5.1)',
+      /короче 8/.test(p.toastText()) && p.st().history[0].action !== 'auth.password.set', p.toastText());
+    p.click(p.q('[data-action="sec-password"]')); await sleep(200);
+    p.set(p.q('#modal-root input[name="cur"]'), 'demo-pass-123');
+    p.set(p.q('#modal-root input[name="next"]'), 'новый-пароль-1');
+    p.set(p.q('#modal-root input[name="next2"]'), 'другой-пароль-2');
+    p.click(p.modalSubmit()); await sleep(220);
+    ok('H19 несовпадающие пароли отклоняются', /не совпадают/.test(p.toastText()), p.toastText());
+    p.click(p.q('[data-action="sec-password"]')); await sleep(200);
+    p.set(p.q('#modal-root input[name="cur"]'), 'demo-pass-123');
+    p.set(p.q('#modal-root input[name="next"]'), 'новый-пароль-1');
+    p.set(p.q('#modal-root input[name="next2"]'), 'новый-пароль-1');
+    p.click(p.modalSubmit()); await sleep(260);
+    ok('H20 успешная смена пароля: необратимая запись в истории, значение пароля не раскрывается',
+      p.st().history[0].action === 'auth.password.set' && p.st().history[0].undoable === false &&
+      !/новый-пароль-1/.test(JSON.stringify(p.st().history[0])), JSON.stringify(p.st().history[0].changes));
     p.dom.window.close();
   }
 
