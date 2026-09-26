@@ -18,30 +18,74 @@
   ];
   const stageOf = (id) => (cats.filter((c) => c[0] === id)[0] || [])[3] || '';
 
-  /* статус self-hosted TTS-сервера (асинхронно, без перерисовки всей страницы).
-     Кнопка «Проверить» вызывает реальный health endpoint: при успехе — сервер/движки/число голосов/
-     latency, при неудаче — конкретная причина (HTTP-код, timeout, mixed content, сеть/CORS),
-     а не общее «не работает». */
+  /* Статус Natural Voice (асинхронно, без перерисовки всей страницы).
+     Автообновление при открытии раздела и «Проверить backend» — реальный health endpoint
+     (aven-tts-research: движки + устройство cuda/cpu + голоса + latency). Кнопка после
+     health делает ещё и настоящий короткий синтез vd17-design — audible-доказательство,
+     что backend живой (это секундная GPU-работа, поэтому только по кнопке).
+     При неудаче — конкретная причина (HTTP-код, timeout, mixed content, сеть/CORS,
+     «адрес не задан» для GitHub Pages), а не общее «не работает». */
   let lastServerKey = null;
   const serverKey = (st) => (st && st.checked ? st.ok + ':' + st.voices.map((v) => v.id).join(',') : 'unchecked');
+
+  function ttsStatusText(st) {
+    if (!st || !st.ok) return 'НЕ подключён — ' + ((st && st.error) || 'нет ответа');
+    const eng = (st.info && st.info.engines) || {};
+    const engines = Object.keys(eng).map((k) => k + (eng[k] && eng[k].device ? ' (' + eng[k].device + ')' : ''));
+    const hasVd17 = st.voices.some((v) => v.id === 'qwen3/vd17-design');
+    return 'подключён · ' + ((st.info && st.info.server) || 'сервер') +
+      (st.info && st.info.version ? ' ' + st.info.version : '') +
+      (engines.length ? ' · движки: ' + engines.join(', ') : ' · движков нет') +
+      ' · голосов: ' + st.voices.length +
+      (hasVd17 ? ' · vd17-design доступен' : ' · ВНИМАНИЕ: vd17-design на сервере нет') +
+      (st.latencyMs != null ? ' · ' + st.latencyMs + ' мс' : '');
+  }
+  function ttsStatusHint(st) {
+    if (st && st.ok) return '';
+    return 'Aven сейчас отвечает системным голосом (fallback — он остаётся всегда). Чтобы звучал ' +
+      'настоящий vd17-design, нужен работающий TTS-backend по HTTPS: research/tts/runtime/deploy-modal.sh ' +
+      '(Modal — бесплатно, без карты) или свой GPU-ПК — research/tts/runtime/README.md.';
+  }
+  function setTtsPill(text, ok) {
+    const el = document.getElementById('tts-server-status');
+    if (el) { el.textContent = text; el.className = 'pill ' + (ok ? 'ok' : ''); }
+  }
+  function setTtsHint(st) {
+    const el = document.getElementById('tts-server-hint');
+    if (el) el.textContent = ttsStatusHint(st);
+  }
   function refreshTtsServer(force) {
     if (!window.AvenTTS) return;
-    window.AvenTTS.checkServer(force).then((st) => {
-      const el = document.getElementById('tts-server-status');
-      if (el) {
-        if (st.ok) {
-          const eng = st.info && st.info.engines ? Object.keys(st.info.engines) : [];
-          el.textContent = 'подключён · ' + ((st.info && st.info.server) || 'сервер') +
-            (st.info && st.info.version ? ' ' + st.info.version : '') +
-            (eng.length ? ' · ' + eng.join(', ') : ' · движков нет') +
-            ' · голосов: ' + st.voices.length + (st.latencyMs != null ? ' · ' + st.latencyMs + ' мс' : '');
-        } else {
-          el.textContent = 'недоступен — ' + (st.error || 'нет ответа');
-        }
-        el.className = 'pill ' + (st.ok ? 'ok' : '');
-      }
+    window.AvenTTS.checkServer(force, () => setTtsPill('просыпается: ждём cold start сервера (до ~75 с)…', false)).then((st) => {
+      setTtsPill(ttsStatusText(st), st.ok);
+      setTtsHint(st);
       // перерисовать, если список серверных голосов изменился с момента отрисовки
       if (serverKey(st) !== lastServerKey && document.getElementById('tts-server-status')) A.render();
+    });
+  }
+  /* «Проверить backend»: health → если сервер жив и vd17-design есть — НАСТОЯЩИЙ короткий
+     синтез (звучит пробная фраза). Это проверка реального Qwen3 runtime, не только HTTP. */
+  function deepCheckTts() {
+    if (!window.AvenTTS) return;
+    const T = window.AvenTTS;
+    setTtsPill('проверяю настоящий backend…', false);
+    T.checkServer(true, () => setTtsPill('просыпается: ждём cold start сервера (до ~75 с)…', false)).then((st) => {
+      if (!st.ok) { setTtsPill(ttsStatusText(st), false); setTtsHint(st); return; }
+      if (!st.voices.some((v) => v.id === 'qwen3/vd17-design')) {
+        setTtsPill('сервер отвечает, но qwen3/vd17-design на нём нет — ' + ttsStatusText(st), false);
+        return;
+      }
+      setTtsPill('сервер ok · синтезирую пробную фразу голосом vd17-design…', false);
+      const t0 = performance.now();
+      const NV = (s().settings.voice.natural || {});
+      T.providers.natural.speak('Проверка Natural Voice.', {
+        voice: 'qwen3/vd17-design', rate: NV.rate || 1, volume: s().settings.voice.volume,
+        onStart: function () { setTtsPill('подключён · звучит пробная фраза vd17-design…', true); }
+      }).then(function () {
+        setTtsPill('подключён · настоящий синтез vd17-design проверен · ' + Math.round(performance.now() - t0) + ' мс', true);
+      }, function (e) {
+        setTtsPill('сервер отвечает, но синтез не прошёл — ' + (e && e.message ? e.message : e), false);
+      });
     });
   }
   document.addEventListener('input', (e) => {
@@ -164,12 +208,16 @@
           </select>`)}
         ${engine === 'system' ? setRow('Голос', sysVoices.length ? 'системные голоса: «на устройстве» — локально, «онлайн» — текст уходит поставщику' : 'системные голоса не найдены — демо',
           `<select data-action="set-voice" style="width:240px">${sysVoices.length ? sysVoices.map((v) => `<option value="${A.esc(v.id)}" ${v.id === V.voiceURI ? 'selected' : ''}>${A.esc(v.label)} · ${v.privacy === 'device' ? 'на устройстве' : 'онлайн'}</option>`).join('') : '<option>Системный (по умолчанию)</option>'}</select>`) : ''}
-        ${engine === 'natural' ? setRow('Натуральный голос', 'кандидаты исследования TTS · выбор — за владельцем после прослушивания',
+        ${engine === 'natural' ? setRow('Натуральный голос', 'выбранный кандидат — vd17-design (решение владельца); остальные — для сравнения/образцов',
           `<select data-action="set-natural-voice" style="width:240px">${natVoices.length ? natGroups(natVoices, natSel) : '<option value="">образцов пока нет</option>'}</select>`) : ''}
         ${engine === 'natural' && natMeta ? setRow('Лицензия голоса', A.esc(natMeta.license || ''), licPill(natMeta)) : ''}
-        ${engine === 'natural' ? setRow('Self-hosted TTS-сервер', 'research/tts/server.py · пусто — тот же адрес, что у страницы',
-          `<div style="display:flex;gap:6px;align-items:center"><input type="text" value="${A.esc(NV.serverUrl || '')}" placeholder="http://192.168.1.10:8080" style="width:190px" data-action="set-natural-server"><button class="btn small" data-action="tts-check-server">Проверить</button></div>`) : ''}
-        ${engine === 'natural' ? setRow('Статус сервера', '', '<span class="pill" id="tts-server-status">проверяю…</span>') : ''}
+        ${engine === 'natural' ? setRow('TTS-сервер Natural Voice', 'research/tts/server.py по HTTPS: Modal (deploy-modal.sh, бесплатно) или свой GPU-ПК · пусто — тот же адрес, что у страницы',
+          `<div style="display:flex;gap:6px;align-items:center"><input type="text" value="${A.esc(NV.serverUrl || '')}" placeholder="https://…modal.run" style="width:200px" data-action="set-natural-server"><button class="btn small" data-action="tts-check-server">Проверить backend</button></div>`) : ''}
+        ${engine === 'natural' ? setRow('Статус Natural Voice', 'health-проверка идёт автоматически; кнопка проверяет ещё и настоящий синтез',
+          '<span class="pill" id="tts-server-status">проверяю…</span>') : ''}
+        ${engine === 'natural' ? `<div class="s" id="tts-server-hint" style="color:var(--muted);font-size:.82rem;margin:-6px 0 8px"></div>` : ''}
+        ${engine === 'natural' ? setRow('Проверка произвольной фразой', 'текст, которого НЕТ среди готовых MP3 — прозвучит только настоящим синтезом на сервере',
+          `<div style="display:flex;gap:6px"><input type="text" id="tts-arb-in" value="Алексей, сегодня двадцать шестое сентября. Aven проверяет настоящий натуральный голос." style="width:300px"><button class="btn primary" data-action="tts-speak-arbitrary">▶ Произнести</button></div>`) : ''}
         ${engine === 'natural' ? setRow('Кэш озвучки', 'только память вкладки; фразы с цифрами и именами не кэшируются', sw('settings.voice.natural.cache', NV.cache !== false)) : ''}
         ${engine === 'natural' ? setRow('Таймаут Natural, сек', 'сервер не ответил за это время → честный переход на системный голос (здоровый GPU отвечает за доли секунды; для CPU-проверки своего сервера поднимите до ~120)',
           `<input type="number" min="2" max="600" step="1" value="${A.esc(NV.timeoutSec != null ? NV.timeoutSec : 10)}" style="width:80px" data-action="set-natural-timeout">`) : ''}
@@ -442,7 +490,16 @@
       el.value = s().settings.voice.natural.timeoutSec;
       S.save();
     },
-    'tts-check-server': () => { refreshTtsServer(true); },
+    'tts-check-server': () => { deepCheckTts(); },
+    'tts-speak-arbitrary': () => {
+      // приёмочная проверка Natural Voice: произвольный текст, для которого гарантированно
+      // нет готового MP3. Уходит настоящему TTS-серверу (если подключён) голосом vd17-design;
+      // если сервера нет — честный fallback/ошибка, никаких заглушек.
+      const inp = document.getElementById('tts-arb-in');
+      const text = inp && inp.value.trim();
+      if (!text || !window.AvenTTS) return;
+      window.AvenTTS.speak(text, { engine: 'natural' });
+    },
     'tts-stop': () => { if (window.AvenTTS) window.AvenTTS.stop(); },
     'tts-norm-preview': (el) => {
       const o = document.getElementById('tts-norm-out');

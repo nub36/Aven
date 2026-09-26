@@ -6,6 +6,144 @@
 
 ---
 
+## 2026-09-26 — XXIII. Natural Voice: запуск владельцем с Windows — deploy-modal.ps1, фикс путей .sh, same-origin на modal.run
+
+- **Дата:** 2026-09-26
+- **Задача:** у владельца Windows; PR #8 не мержить; дать пошаговую инструкцию первого
+  реального запуска vd17-design через Modal с Windows-компьютера. Проверить, выполним ли
+  существующий deploy из PowerShell; если нет — не заставлять ставить лишнюю среду, а дать
+  Windows-вариант. Ничего не разрабатывать и не исследовать сверх необходимого.
+
+### Проверки перед правками (факты)
+
+- `deploy-modal.sh` — bash-скрипт, из PowerShell не выполняется (WSL/Git Bash = лишняя среда).
+- **Найден баг в `deploy-modal.sh`:** `cd "$(dirname "$0")/../.."` попадает в `research/`, а не
+  в корень репозитория → `modal run research/tts/…` получил бы несуществующий путь. Устранено:
+  цель вычисляется от расположения скрипта (`APP=…/modal_app.py`, запуск из любой папки).
+  Проверено stub-прогоном: `modal run`/`modal deploy` получают корректный абсолютный путь.
+- `python -m modal` работает (проверено, client 1.5.5) → ps1 не зависит от PATH пользователя.
+- На GitHub Pages сейчас СТАРЫЙ интерфейс (PR #8 не смержен): подписи «Self-hosted TTS-сервер»,
+  «Проверить», «Последний запуск»; lastSource «self-hosted сервер» — индикатор настоящего
+  синтеза есть и в старом UI. Демо-ответ «Сегодня: стоматолог…» не совпадает ни с одним
+  опубликованным MP3 vd17 (в git только t01 из базового набора + x00–x20/n00–n07).
+- Приёмочная фраза «Алексей, сегодня двадцать шестое сентября…» среди фраз-образцов отсутствует
+  (проверено grep по phrases_vd17.json/phrases.json).
+
+### Что конкретно сделано
+
+- **`research/tts/runtime/deploy-modal.ps1`** — нативный PowerShell-эквивалент .sh (Windows
+  PowerShell 5.1-совместимый, UTF-8 с BOM — иначе кириллица ломается). Сам: находит Python
+  3.10+ (`python` или `py -3`, с защитой от Microsoft Store-заглушки; при отсутствии — русская
+  инструкция по установке с python.org и выход) → Modal CLI через `pip --user` (вызовы строго
+  `python -m modal`) → `modal setup` (подсказки про «Continue with GitHub», «карта не нужна;
+  если требуют — остановитесь») → `modal run …::download_weights` → `modal deploy` → финальная
+  памятка (какой URL копировать, как разбудить, как остановить). Аудит PowerShell-ловушек:
+  функция переименована в `RunPy` (имя `Py` рекурсивно перехватывало бы вызов `py`), `$0`/`$30`
+  в строках экранированы, `"$app::…"` собрано конкатенацией (не интерполяцией). pwsh в песочке
+  недоступен (CDN GitHub заблокирован) — скрипт проверен статически; логика идентична
+  протестированному .sh.
+- **`research/tts/runtime/deploy-modal.sh`** — фикс путей (см. выше).
+- **`prototype/js/tts/providers.js`** — no-base guard сужен до `*.github.io`: HTTPS-страница,
+  отданная самим TTS-сервером (`https://tts--…modal.run/`), с пустым полем сервера работает
+  через относительный `/api/tts/health` (same-origin, без CORS) — это чистая поверхность для
+  приёмочного теста «Проверка произвольной фразой».
+- **Документация:** runtime/README (Windows-вариант запуска + примечание same-origin),
+  TTS_RESEARCH §18.2a, CHANGELOG XVIII, эта запись.
+
+### Что проверено/протестировано
+
+- `prototype/tests/tts-proto-check.js` — **48/48** (новый S11: same-origin на …modal.run —
+  пустое поле → относительный health → «подключён»; S8 сохранён: github.io без адреса —
+  честное «статический хостинг», без запроса).
+- Регресс: `dryrun_server_qwen3.py` 19/19, `dryrun_modal_layout.py` 10/10,
+  `stage1-proto-check.js` 140/140, `normalize.test.js` 26/26.
+- `deploy-modal.sh` — полный stub-прогон (fake HOME + stub `modal`): команды получают
+  правильные абсолютные пути.
+
+### Известные проблемы / границы (честно)
+
+- deploy-modal.ps1 не выполнен на настоящей Windows (в песочнице нет pwsh — CDN заблокирован);
+  статическая проверка + логика, идентичная протестированному .sh. При ошибке владелец
+  присылает вывод — правим.
+- Живой синтез по-прежнему требует действия владельца (аккаунт Modal через GitHub, без карты).
+  Ничего не симулировалось.
+
+### Рекомендуется следующим
+
+1. Владелец выполняет инструкцию (ZIP ветки → PowerShell → `deploy-modal.ps1` → URL → Aven).
+2. Подтверждение живого vd17-design → после этого обсуждаем merge PR #8.
+
+---
+
+## 2026-09-26 — XXII. Natural Voice `vd17-design`: GPU-runtime Modal для GitHub Pages + UX настроек голоса
+
+- **Дата:** 2026-09-26
+- **Задача:** приоритет владельца один — Aven на сайте должен реально говорить голосом
+  `qwen3/vd17-design` **произвольным** текстом (не mock/не готовые MP3/не System TTS; они — только
+  fallback/demo). Новых исследований голосов, voice-lab, 3D/lip-sync — не делать. Минимальные
+  расходы, ничего платного без подтверждения, HTTPS для GitHub Pages, без временных LAN-IP как
+  штатного адреса, без секретов в репозитории/frontend. Код подготовить до получения GPU,
+  протестировать доступные части, commit+push+PR (merge не делать).
+
+### Что конкретно сделано
+
+- **Выбор провайдера (§18.1):** **Modal** — Starter $0/мес ($30 кредитов ежемесячно, без карты,
+  вход через GitHub), serverless L4 ≈ $0,80/ч только во время синтеза, простой $0, автоматический
+  постоянный HTTPS endpoint. Альтернативы отклонены: свой GPU-ПК+туннель (нужен домен, сложнее),
+  RunPod/HF Endpoints (платно сразу), ZeroGPU (квота ~3,5 мин/день + токен в frontend), Colab/Kaggle
+  (не постоянный адрес).
+- **`research/tts/runtime/modal_app.py`:** деплой `research/tts/server.py` **без изменений**
+  (`@modal.web_server` 0.0.0.0:8000, GPU L4/`AVEN_MODAL_GPU`, `scaledown_window=1200`,
+  `max_containers=1`, Volume для HF-весов, `download_weights()` на CPU). Раскладка образа
+  повторяет репозиторий (`/root/research/tts` + `/root/prototype`) — endpoint сам раздаёт прототип.
+- **`research/tts/runtime/deploy-modal.sh`:** одно действие владельца (CLI → `modal setup` через
+  GitHub → веса в Volume → `modal deploy` → печать URL и следующих шагов). PEP 668 учтён (venv).
+- **`prototype/js/tts/providers.js`:** двухстадийный health (3 с → 75 с с `onWaking`,
+  «просыпается…») для холодного старта serverless; новое состояние `no-base` — на HTTPS-странице
+  без адреса сервера сразу честная причина, без запроса.
+- **`prototype/js/data.js`/`state.js`:** `natural.voice` по умолчанию `qwen3/vd17-design` + миграция
+  пустого значения из старых localStorage.
+- **`prototype/js/settings.js`:** поле «TTS-сервер Natural Voice» (placeholder `https://…modal.run`,
+  убран `http://192.168.1.10:8080`); статус «подключён · … · qwen3 (cuda) · vd17-design доступен ·
+  N мс» / «НЕ подключён — причина» + подсказка; кнопка «Проверить backend» = health + настоящий
+  короткий синтез vd17-design; строка «Проверка произвольной фразой» (приёмочный тест).
+- **Документация:** `research/tts/runtime/README.md` (два пути: Б — Modal для GitHub Pages,
+  А — свой GPU-ПК; troubleshooting с cold start), `docs/TTS_RESEARCH.md` §18 (+шапка),
+  `docs/CHANGELOG.md` (XVII), `prototype/README.md`.
+
+### Что проверено/протестировано
+
+- `prototype/tests/tts-proto-check.js` — **47/47** (новые S0–S10: дефолт и миграция vd17, статус с
+  устройством движка, cold start (двухстадийный health + onWaking), no-base на «GitHub Pages»
+  (reconfigure на https), deep-check кнопкой (POST synthesize «Проверка Natural Voice.» + Audio),
+  произвольная фраза — приёмочный текст).
+- `research/tts/tests/dryrun_modal_layout.py` — **новый, 10/10**: раскладка Modal-образа,
+  server.py из неё поднимает qwen3/vd17-design (заглушка модели), health/synthesize/GET //CORS.
+- Регресс: `dryrun_server_qwen3.py` 19/19, `stage1-proto-check.js` 140/140, `normalize.test.js` 26/26.
+
+### Известные проблемы / границы (честно)
+
+- **Живой синтез на GPU не показан** — требует одного действия владельца (аккаунт Modal через
+  GitHub, без карты → `bash research/tts/runtime/deploy-modal.sh`). Агент не может создать аккаунт
+  за владельца; в песочнице нет GPU (2 vCPU/3,8 ГБ) и HuggingFace заблокирован. Ничего не
+  симулировалось.
+- Cold start Modal после ~20 мин простоя: первая фраза ждёт загрузки модели (десятки секунд,
+  фронтенд показывает «просыпается…»), следующие — секунды. `min_containers=1` (всегда тёплый) —
+  платно, сознательно не включено.
+- Endpoint публичный (без аутентификации): знающий URL может синтезировать в пределах кредитов
+  владельца — для личного демо приемлемо, URL не публиковать.
+- Т4 на Modal не подходит (Turing без bf16); default L4.
+
+### Рекомендуется следующим
+
+1. Владельцу: аккаунт Modal (GitHub, без карты) → `bash research/tts/runtime/deploy-modal.sh` →
+   URL в Настройки → Голос → «Проверить backend» → «Проверка произвольной фразой».
+2. После подтверждения живого синтеза: замер latency на L4 (наши цифры, а не опубликованные),
+   при желании — `AVEN_TTS_QWEN3_FA2=1`/flash-attn в образе Modal.
+3. Merge PR — решением владельца.
+
+---
+
 ## 2026-09-26 — XXI. Natural Voice Female Aven — runtime: аудит HTTP 404, Qwen3-движок сервера, честный frontend
 
 - **Дата:** 2026-09-26

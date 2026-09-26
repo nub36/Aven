@@ -1,4 +1,4 @@
-/* Aven prototype — абстракция TTS-провайдеров (docs/TTS_RESEARCH.md §7–10). Не production.
+/* Aven prototype — абстракция TTS-провайдеров (docs/TTS_RESEARCH.md §7–10, §17–18). Не production.
  *
  *   TTSProvider = {
  *     id, label,
@@ -12,7 +12,7 @@
  *
  *   SystemTTSProvider — браузерный speechSynthesis (ВСЕГДА остаётся как бесплатный fallback).
  *   NaturalTTSProviderExperimental — нейросетевые голоса из исследования:
- *       1) self-hosted сервер (research/tts/server.py):
+ *       1) self-hosted/облачный сервер (research/tts/server.py — GPU-ПК или Modal, §18):
  *          GET {base}/api/tts/health → проверка, POST {base}/api/tts/synthesize → WAV;
  *       2) если сервера нет — заранее сгенерированные образцы (только тестовые фразы T1–T10);
  *       3) иначе — честная ошибка → менеджер говорит системным голосом
@@ -22,6 +22,7 @@
  * Менеджер window.AvenTTS: normalize → provider → presence (preparing → speaking → idle),
  * stop() в любой момент, сессионный кэш аудио, замер задержки до начала звука,
  * таймаут запроса к серверу (natural.timeoutSec, по умолчанию 10 с) → fallback на системный.
+ * Выбранный голос Natural по умолчанию — qwen3/vd17-design (решение владельца, §11).
  */
 (function () {
   'use strict';
@@ -115,13 +116,19 @@
 
   /* ---------------- Natural (эксперимент) ---------------- */
   var SAMPLES_BASE = 'assets/voice-samples/';
-  var HEALTH_TIMEOUT_MS = 3000;   // проверка сервера — быстрая
+  var HEALTH_TIMEOUT_MS = 3000;        // быстрая проверка живого сервера
+  var HEALTH_WAKE_TIMEOUT_MS = 75000;  // cold start serverless GPU (Modal): модель грузится десятки секунд
   var audioEl = null;
   var serverState = { checked: 0, ok: false, voices: [], base: null, error: '', kind: '', latencyMs: null, info: null };
 
   function samples() { return window.AvenVoiceSamples || { phrases: {}, voices: {} }; }
   function serverBase() { return (cfg().natural.serverUrl || '').replace(/\/+$/, ''); }
   function canon(t) { return String(t || '').toLowerCase().replace(/ё/g, 'е').replace(/[^а-яa-z0-9]+/g, ' ').trim(); }
+  function wakeTimeoutMs() {
+    // тестовый хук (jsdom-тесты ускоряют вторую стадию); в продукте — всегда 75 с
+    var v = (typeof window !== 'undefined' && Number(window.__AVEN_TTS_TEST_WAKE_MS)) || 0;
+    return v > 0 ? v : HEALTH_WAKE_TIMEOUT_MS;
+  }
 
   /* Таймаут ответа сервера на синтез (§13): по умолчанию 10 с — здоровый GPU-сервер отвечает
    * за доли секунды (TTS_RESEARCH §12.2: RTF 0,29–0,46), зависший не должен вешать Aven.
@@ -137,15 +144,30 @@
   }
 
   /**
-   * Проверка сервера (§14). Результат — serverState:
+   * Проверка сервера (§14, §18). Результат — serverState:
    *   ok: true + voices[], latencyMs, info.engine/server/version
-   *   ok: false + kind: 'mixed-content' | 'http' (+httpStatus) | 'timeout' | 'network' | 'no-base'
+   *   ok: false + kind: 'no-base' | 'mixed-content' | 'http' (+httpStatus) | 'timeout' | 'network' | 'no-base'
    * Честный текст причины — в .error (никакого общего «не работает»).
+   *
+   * Две стадии (§18): сначала быстрый probe (3 с). Если он упёрся в timeout —
+   * это может быть честный cold start serverless-бэкенда (Modal: контейнер с GPU
+   * загружает модель десятки секунд, запрос висит, а не падает). Тогда одна
+   * терпеливая повторная попытка (75 с); onWaking сообщают UI, что идёт просыпание.
    */
-  function checkServer(force) {
+  function checkServer(force, onWaking) {
     var base = serverBase();
     if (location.protocol === 'file:' && !base) {
       return Promise.resolve(failState(base, 'страница открыта как файл — сервера нет', 'no-base'));
+    }
+    // §18: «пусто — тот же адрес, что у страницы». На HTTP это LAN/localhost-режим, а на HTTPS:
+    // если страницу отдаёт сам TTS-сервер (например, прототип с https://tts--…modal.run/) —
+    // health идёт относительным путём и всё работает; если же это GitHub Pages — статический
+    // хостинг, синтезировать речь он не может, и пустое поле означает отсутствие сервера —
+    // говорим это сразу и честно, не делая вид, что «проверяем» то, чего нет.
+    if (location.protocol === 'https:' && !base && /github\.io$/i.test(location.hostname)) {
+      return Promise.resolve(failState(base,
+        'адрес TTS-сервера не задан. GitHub Pages — статический хостинг и синтезировать речь не может: ' +
+        'нужен HTTPS-endpoint Aven TTS (research/tts/runtime/README.md — GPU-ПК или Modal)', 'no-base'));
     }
     if (!force && serverState.base === base && Date.now() - serverState.checked < 30000) return Promise.resolve(serverState);
     // §16: HTTPS-страница (GitHub Pages) не может обратиться к HTTP-серверу — браузер заблокирует.
@@ -156,13 +178,22 @@
         'Local Development Mode: откройте прототип по HTTP с адреса сервера (http://<IP>:8080/) ' +
         'или поднимите TTS endpoint по HTTPS', 'mixed-content'));
     }
+    return probeHealth(base, HEALTH_TIMEOUT_MS).then(function (st) {
+      if (st.ok || st.kind !== 'timeout') return st;
+      onWaking && onWaking();
+      return probeHealth(base, wakeTimeoutMs());
+    });
+  }
+
+  /** Один GET {base}/api/tts/health с таймаутом timeoutMs (см. checkServer). */
+  function probeHealth(base, timeoutMs) {
     var ctl = new AbortController();
     var timedOut = false;
-    var to = setTimeout(function () { timedOut = true; ctl.abort(); }, HEALTH_TIMEOUT_MS);
+    var to = setTimeout(function () { timedOut = true; ctl.abort(); }, timeoutMs);
     var t0 = performance.now();
-    var done = function (st) { clearTimeout(to); return st; };
     function classify(e) {
-      if (timedOut) return failState(base, 'нет ответа за ' + (HEALTH_TIMEOUT_MS / 1000) + ' с (timeout) — сервер молчит', 'timeout');
+      if (timedOut) return failState(base, 'нет ответа за ' + Math.round(timeoutMs / 1000) + ' с (timeout) — сервер молчит' +
+        (timeoutMs > HEALTH_TIMEOUT_MS ? ' (включая ожидание cold start)' : ''), 'timeout');
       if (e && e.kind === 'http') {
         var h = e.httpStatus;
         var hint = h === 404 ? ' — endpoint не найден: по этому адресу работает НЕ Aven TTS server ' +
@@ -194,7 +225,7 @@
     return fetch(base + '/api/tts/health', { signal: ctl.signal, cache: 'no-store' })
       .then(function (r) { if (!r.ok) { var e = new Error('HTTP ' + r.status); e.kind = 'http'; e.httpStatus = r.status; throw e; } return r.json(); })
       .then(proceed, classify)
-      .then(done, function (e) { clearTimeout(to); return classify(e); });
+      .then(function (st) { clearTimeout(to); return st; }, function (e) { clearTimeout(to); return classify(e); });
   }
 
   function playUrl(url, o) {

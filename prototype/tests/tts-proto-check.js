@@ -1,5 +1,8 @@
 /* Проверка голосового пути прототипа Aven: Natural TTS end-to-end (контракт, воспроизведение,
-   состояния, честный fallback) — сценарии A–J из постановки «Natural Voice Female Aven» (§22).
+   состояния, честный fallback) — сценарии A–J из постановки «Natural Voice Female Aven» (§22),
+   плюс §18: vd17-design по умолчанию + миграция, cold start (двухстадийный health),
+   «адрес не задан» на GitHub Pages, кнопка «Проверить backend» (health + настоящий синтез),
+   произвольная фраза (приёмочный критерий Natural Voice).
 
    Это разработческий инструмент, НЕ часть приложения и не зависимость продукта:
    jsdom ставится во временный каталог (см. ниже), в репозитории package.json/node_modules нет.
@@ -12,8 +15,8 @@
    (POST /api/tts/synthesize, GET /api/tts/health) → blob → воспроизведение → presence
    («Готовлю речь…/Говорю · Natural/Говорю · системный голос/Готова») → stop/прерывание →
    честные тосты fallback. Сеть/Audio/speechSynthesis — стабы, потому что jsdom их не имеет.
-   Что ЗДЕСЬ НЕ проверяется (честно): сам синтез Qwen3 — он возможен только на GPU-машине
-   владельца (research/tts/runtime/); серверный контракт без модели — research/tts/tests/
+   Что ЗДЕСЬ НЕ проверяется (честно): сам синтез Qwen3 — он возможен только на GPU-бэкенде
+   (research/tts/runtime/ — GPU-ПК или Modal); серверный контракт без модели — research/tts/tests/
    dryrun_server_qwen3.py. Mixed-content guard (https-страница → http-сервер) здесь не
    воспроизводится: страница теста открыта по http — покрыто код-ревью провайдера. */
 let JSDOM;
@@ -65,7 +68,10 @@ const WAV64 = wavBytes().toString('base64');
 async function load(hash, mode, opts) {
   opts = opts || {};
   const dom = await JSDOM.fromURL(BASE + 'index.html' + (hash || ''), {
-    runScripts: 'dangerously', resources: 'usable', pretendToBeVisual: true
+    runScripts: 'dangerously', resources: 'usable', pretendToBeVisual: true,
+    beforeParse(window) { // предзаполненный localStorage (миграции/старые сохранённые состояния)
+      if (opts.seed) { try { window.localStorage.setItem('aven-proto-v1', JSON.stringify(opts.seed)); } catch (e) { /* noop */ } }
+    }
   });
   await sleep(700);
   const w = dom.window, d = w.document;
@@ -164,28 +170,51 @@ async function load(hash, mode, opts) {
 (async () => {
   await new Promise((r) => server.listen(PORT, '127.0.0.1', r));
 
-  /* ============ S. Настройки → Голос: честный статус сервера (§14) ============ */
+  /* ============ S. Настройки → Голос: честный статус сервера и vd17-design по умолчанию (§14, §18) ============ */
   {
+    // S0: свежее состояние — голос Natural по умолчанию qwen3/vd17-design (решение владельца)
+    const p0 = await load('#/settings', 'ok');
+    ok('S0 голос Natural по умолчанию — qwen3/vd17-design', p0.st().settings.voice.natural.voice === 'qwen3/vd17-design',
+      p0.st().settings.voice.natural.voice);
+    p0.st().settings.voice.engine = 'natural'; // раздел Natural рендерится при движке natural
+    p0.w.AvenState.save();
+    p0.click(p0.q('[data-action="set-cat"][data-id="voice"]'));
+    await sleep(150);
+    const sel0 = p0.q('[data-action="set-natural-voice"]');
+    ok('S0a в списке кандидатов выбран именно vd17-design', sel0 && sel0.value === 'qwen3/vd17-design', sel0 && sel0.value);
+    p0.dom.window.close();
+
+    // S0b: миграция старого localStorage с пустым natural.voice → vd17-design
+    const p0b = await load('#/settings', 'ok');
+    p0b.st().settings.voice.natural.voice = '';
+    p0b.w.AvenState.save();
+    p0b.dom.window.close();
+    const p0c = await load('#/settings', 'ok');
+    ok('S0b миграция: пустой natural.voice → qwen3/vd17-design', p0c.st().settings.voice.natural.voice === 'qwen3/vd17-design',
+      p0c.st().settings.voice.natural.voice);
+    p0c.dom.window.close();
+
     const p = await load('#/settings', 'ok');
     p.setNatural();
     p.click(p.q('[data-action="set-cat"][data-id="voice"]'));
     await sleep(250);
     await p.waitFor(() => { const el = p.q('#tts-server-status'); return el && el.textContent.indexOf('подключён') >= 0; }, 8000, 'server status ok');
-    ok('S1 health: статус «подключён» с сервером/движком/голосами', (() => {
+    ok('S1 health: статус «подключён» с сервером/движком (c устройство)/голосами/vd17', (() => {
       const t = p.q('#tts-server-status').textContent;
-      return t.indexOf('подключён') >= 0 && t.indexOf('aven-tts-research 0.3.0') >= 0 && t.indexOf('qwen3') >= 0 && t.indexOf('голосов: 1') >= 0;
+      return t.indexOf('подключён') >= 0 && t.indexOf('aven-tts-research 0.3.0') >= 0 && t.indexOf('qwen3 (cuda)') >= 0 && t.indexOf('голосов: 1') >= 0 && t.indexOf('vd17-design доступен') >= 0;
     })(), p.q('#tts-server-status').textContent);
     ok('S2 latency показан (… мс)', (p.q('#tts-server-status').textContent.match(/·\s*\d+\s*мс/) || null) !== null);
     ok('S3 поле таймаута Natural существует со значением по умолчанию 10', (() => {
       const el = p.q('[data-action="set-natural-timeout"]');
       return el && el.value === '10';
     })(), p.q('[data-action="set-natural-timeout"]') ? 'есть' : 'нет поля');
+    ok('S3a подсказки «нет hint при подключённом сервере»', (p.q('#tts-server-hint') || { textContent: '' }).textContent === '');
     p.dom.window.close();
 
     const p2 = await load('#/settings', '404');
     p2.setNatural();
     p2.click(p2.q('[data-action="set-cat"][data-id="voice"]'));
-    await p2.waitFor(() => { const el = p2.q('#tts-server-status'); return el && el.textContent.indexOf('недоступен') >= 0; }, 8000, 'server status 404');
+    await p2.waitFor(() => { const el = p2.q('#tts-server-status'); return el && el.textContent.indexOf('НЕ подключён') >= 0; }, 8000, 'server status 404');
     ok('S4 HTTP 404: честная причина с подсказкой про endpoint', (() => {
       const t = p2.q('#tts-server-status').textContent;
       return t.indexOf('HTTP 404') >= 0 && t.indexOf('НЕ Aven TTS server') >= 0;
@@ -195,21 +224,118 @@ async function load(hash, mode, opts) {
     const p3 = await load('#/settings', 'network');
     p3.setNatural();
     p3.click(p3.q('[data-action="set-cat"][data-id="voice"]'));
-    await p3.waitFor(() => { const el = p3.q('#tts-server-status'); return el && el.textContent.indexOf('недоступен') >= 0; }, 8000, 'server status network');
+    await p3.waitFor(() => { const el = p3.q('#tts-server-status'); return el && el.textContent.indexOf('НЕ подключён') >= 0; }, 8000, 'server status network');
     ok('S5 сеть/CORS: причина перечислена честно', p3.q('#tts-server-status').textContent.indexOf('сеть/CORS') >= 0, p3.q('#tts-server-status').textContent);
+    ok('S5a подсказка при отключённом backend честно объясняет, что делать', (p3.q('#tts-server-hint') || { textContent: '' }).textContent.indexOf('deploy-modal.sh') >= 0, p3.q('#tts-server-hint') && p3.q('#tts-server-hint').textContent.slice(0, 80));
     p3.dom.window.close();
 
-    const p4 = await load('#/settings', 'synth-hang'); // health провисит до abort (3 с)
+    // S6: сервер молчит совсем — быстрый probe (3 с) + терпеливый повтор (тест ускоряет до 1,5 с)
+    const p4 = await load('#/settings', 'synth-hang');
     p4.setNatural();
+    p4.w.__AVEN_TTS_TEST_WAKE_MS = 1500; // хук теста: вторая стадия проверки короче
+    let healthCalls = 0;
     p4.w.fetch = (url, fo) => new Promise((resolve, reject) => { // health «молчит», пока таймаут не прервёт
+      healthCalls++;
       const sig = fo && fo.signal;
       if (sig) sig.addEventListener('abort', () => { const er = new Error('aborted'); er.name = 'AbortError'; reject(er); });
       else setTimeout(() => { const er = new Error('mock dead'); reject(er); }, 20000);
     });
     p4.click(p4.q('[data-action="set-cat"][data-id="voice"]'));
-    await p4.waitFor(() => { const el = p4.q('#tts-server-status'); return el && el.textContent.indexOf('timeout') >= 0; }, 9000, 'server status timeout');
-    ok('S6 health timeout: показан честный «нет ответа за 3 с (timeout)»', p4.q('#tts-server-status').textContent.indexOf('timeout') >= 0, p4.q('#tts-server-status').textContent);
+    await p4.waitFor(() => { const el = p4.q('#tts-server-status'); return el && el.textContent.indexOf('timeout') >= 0; }, 12000, 'server status timeout');
+    ok('S6 health timeout: честный «timeout» после двух стадий (3 с + повтор)', p4.q('#tts-server-status').textContent.indexOf('timeout') >= 0 && healthCalls === 2,
+      p4.q('#tts-server-status').textContent + ' | calls=' + healthCalls);
     p4.dom.window.close();
+
+    // S7: cold start serverless (Modal) — первый health висит (контейнер грузится), второй успешен
+    const p7 = await load('#/settings', 'ok');
+    p7.setNatural();
+    p7.w.__AVEN_TTS_TEST_WAKE_MS = 60000;
+    let wakeSeen = false;
+    const okHealth = () => Promise.resolve({
+      ok: true, status: 200,
+      json: async () => ({
+        ok: true, status: 'ok', server: 'aven-tts-modal', version: '0.3.0',
+        engines: { qwen3: { voices: ['qwen3/vd17-design'], device: 'cuda' } },
+        voices: [{ id: 'qwen3/vd17-design', label: 'Qwen3 · vd17-design', engine: 'qwen3', license: 'Apache-2.0', commercial: 'yes' }]
+      }),
+      text: async () => '', blob: async () => new p7.w.Blob([])
+    });
+    let calls7 = 0;
+    p7.w.fetch = (url, fo) => {
+      if (url.indexOf('/api/tts/health') < 0) return Promise.resolve({ ok: false, status: 404, json: async () => ({}), text: async () => 'nf', blob: async () => new p7.w.Blob([]) });
+      calls7++;
+      if (calls7 === 1) return new Promise((resolve, reject) => { // cold start: висим до abort
+        const sig = fo && fo.signal;
+        sig.addEventListener('abort', () => { const er = new Error('aborted'); er.name = 'AbortError'; reject(er); });
+      });
+      return okHealth();
+    };
+    const st7 = await p7.w.AvenTTS.checkServer(true, () => { wakeSeen = true; });
+    ok('S7 cold start: onWaking вызван, терпеливый повтор успешен', wakeSeen === true && st7.ok === true && st7.voices.length === 1 && calls7 === 2,
+      'wake=' + wakeSeen + ' ok=' + st7.ok + ' calls=' + calls7);
+    p7.dom.window.close();
+
+    // S8: GitHub Pages (https) без адреса сервера — сразу честное «не подключён», без запроса
+    const p8 = await load('#/settings', 'ok');
+    p8.setNatural();
+    p8.st().settings.voice.natural.serverUrl = '';
+    p8.w.AvenState.save();
+    let fetches8 = 0;
+    const realFetch8 = p8.w.fetch;
+    p8.w.fetch = (u, fo) => { fetches8++; return realFetch8(u, fo); };
+    p8.dom.reconfigure({ url: 'https://nub36.github.io/Aven/#/settings' }); // страница «как на GitHub Pages»
+    await sleep(200); // jsdom reconfigure: даём событийному циклу settle до клика
+    p8.click(p8.q('[data-action="set-cat"][data-id="voice"]'));
+    await p8.waitFor(() => { const el = p8.q('#tts-server-status'); return el && el.textContent.indexOf('НЕ подключён') >= 0; }, 6000, 'no-base status');
+    ok('S8 https без адреса: «статический хостинг… не может» и запроса не было',
+      p8.q('#tts-server-status').textContent.indexOf('статический хостинг') >= 0 && fetches8 === 0,
+      p8.q('#tts-server-status').textContent + ' | fetches=' + fetches8);
+    p8.dom.window.close();
+
+    // S11: страницу отдаёт сам TTS-сервер по HTTPS (например https://tts--…modal.run/):
+    // пустое поле сервера = «тот же адрес» → health по относительному пути (same-origin, без CORS)
+    const p11 = await load('#/settings', 'ok');
+    p11.setNatural();
+    p11.st().settings.voice.natural.serverUrl = '';
+    p11.w.AvenState.save();
+    let seenUrl11 = '';
+    const realFetch11 = p11.w.fetch;
+    p11.w.fetch = (u, fo) => { if (String(u).indexOf('/api/tts/health') >= 0) seenUrl11 = String(u); return realFetch11(u, fo); };
+    p11.dom.reconfigure({ url: 'https://tts--aven-tts-demo.modal.run/#/settings' });
+    await sleep(200); // jsdom reconfigure: даём событийному циклу settle до клика
+    p11.click(p11.q('[data-action="set-cat"][data-id="voice"]'));
+    await p11.waitFor(() => { const el = p11.q('#tts-server-status'); return el && el.textContent.indexOf('подключён') >= 0; }, 6000, 'same-origin status');
+    ok('S11 same-origin (…modal.run): пустое поле → относительный /api/tts/health, «подключён»',
+      seenUrl11 === '/api/tts/health' && p11.q('#tts-server-status').textContent.indexOf('подключён') >= 0,
+      'seenUrl=' + seenUrl11);
+    p11.dom.window.close();
+
+    // S9: кнопка «Проверить backend» — health + НАСТОЯЩИЙ синтез пробной фразы vd17-design
+    const p9 = await load('#/settings', 'ok');
+    p9.setNatural();
+    p9.click(p9.q('[data-action="set-cat"][data-id="voice"]'));
+    await p9.waitFor(() => { const el = p9.q('#tts-server-status'); return el && el.textContent.indexOf('подключён') >= 0; }, 8000, 'S9 health');
+    p9.click(p9.q('[data-action="tts-check-server"]'));
+    await p9.waitFor(() => { const el = p9.q('#tts-server-status'); return el && el.textContent.indexOf('настоящий синтез vd17-design проверен') >= 0; }, 8000, 'S9 deep check');
+    ok('S9 deep check: пробная фраза ушла в POST synthesize голосом vd17-design',
+      p9.w.__synthLog.length === 1 && p9.w.__synthLog[0].voice === 'qwen3/vd17-design' && p9.w.__synthLog[0].text === 'Проверка Natural Voice.',
+      JSON.stringify(p9.w.__synthLog[0]));
+    ok('S9a звук реально проигран (Audio создан)', p9.w.__audios.length >= 1);
+    p9.dom.window.close();
+
+    // S10: произвольная фраза (критерий приёмки) — текста нет среди готовых MP3
+    const p10 = await load('#/settings', 'ok');
+    p10.setNatural();
+    p10.click(p10.q('[data-action="set-cat"][data-id="voice"]'));
+    await p10.waitFor(() => { const el = p10.q('#tts-server-status'); return el && el.textContent.indexOf('подключён') >= 0; }, 8000, 'S10 health');
+    const phrase10 = 'Алексей, сегодня двадцать шестое сентября. Aven проверяет настоящий натуральный голос.';
+    p10.q('#tts-arb-in').value = phrase10;
+    p10.click(p10.q('[data-action="tts-speak-arbitrary"]'));
+    await p10.waitFor(() => p10.w.__synthLog.length === 1, 6000, 'S10 synthesize');
+    ok('S10 произвольная фраза ушла настоящему серверу голосом vd17-design (нормализованная)',
+      p10.w.__synthLog[0].voice === 'qwen3/vd17-design' && p10.w.__synthLog[0].text === p10.norm(phrase10),
+      JSON.stringify(p10.w.__synthLog[0]));
+    p10.dom.window.close();
   }
 
   /* ============ A. Главная: «Что у меня сегодня?» → Natural end-to-end (§2, §23) ============ */

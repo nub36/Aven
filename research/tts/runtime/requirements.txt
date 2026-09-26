@@ -13,3 +13,5 @@ silero-stress>=0.2   # только если включаете движок Sil
 # torch — НЕ дублируем здесь: ставится отдельной командой (CPU/GPU-сборки различаются,
 # см. README §«Быстрый старт», шаг 2). Проверено с torch 2.x (GitHub Actions, CPU).
 # flash-attn — опционально (ускорение на GPU): pip install flash-attn + AVEN_TTS_QWEN3_FA2=1
+# modal — только для пути Б (облако, deploy-modal.sh ставит CLI сам; для GPU-ПК не нужен):
+#   pip install modal && modal setup && modal deploy research/tts/runtime/modal_app.py
