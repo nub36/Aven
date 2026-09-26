@@ -1,0 +1,96 @@
+# Aven — сравнение VPS-кандидатов TTS + честная проба «1 CPU» (этап 5, docs/TTS_RESEARCH.md §19).
+#
+# Запуск ТОЛЬКО вручную (Actions → VPS TTS Compare → Run workflow) или через repository_dispatch
+# (тот же смысл): при обычном push НЕ запускается.
+#
+# Что делает:
+#   1) собирает RHVoice (GPL/LGPL, голоса elena GPL-3.0 + dasha-rus CC BY-SA 4.0) из исходников;
+#   2) скачивает Silero v5_cis_base (MIT) с models.silero.ai;
+#   3) запускает research/tts/vps_compare.py ЦЕЛИКОМ под taskset -c 0 (одно ядро!):
+#      генерирует недостающие фразы для prototype/voice-compare.html и меряет
+#      load/RSS/latency каждым движком на ОДНОМ ядре — это цифры для VPS 1 CPU, не экстраполяция;
+#   4) ничего не коммитит: MP3 + vps_probe.json уходят в артефакт vps-tts-compare,
+#      агент забирает артефакт и кладёт файлы в репозиторий осознанно.
+#
+# Платные сервисы и ключи не используются. GPU не нужен.
+
+name: VPS TTS Compare
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [vps-tts-compare]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vps-tts-compare-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+  RHVOICE_COMMIT: '7725bb9cb15e09492c5d448d9b20c57ddf706644'  # пиннинг для воспроизводимости
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Зависимости (scons, libao, ffmpeg)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq scons pkg-config libao-dev ffmpeg >/dev/null
+          ffmpeg -version | head -1
+
+      - name: Сборка RHVoice (elena + dasha-rus)
+        run: |
+          set -e
+          git init -q /tmp/RHVoice
+          cd /tmp/RHVoice
+          git remote add origin https://github.com/RHVoice/RHVoice.git
+          git fetch --depth 1 origin "$RHVOICE_COMMIT"
+          git checkout -q FETCH_HEAD
+          git submodule update --init --depth 1 data/voices/elena data/voices/dasha-rus
+          scons -j"$(nproc)" >/tmp/rhvoice-build.log 2>&1 || { tail -40 /tmp/rhvoice-build.log; exit 1; }
+          sudo scons install >/dev/null 2>&1 || { tail -20 /tmp/rhvoice-build.log; exit 1; }
+          which RHVoice-test
+          echo "Слушаю." | RHVoice-test -p elena -o /tmp/check.wav && ls -la /tmp/check.wav
+
+      - name: Python-зависимости (torch CPU, silero-stress)
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install numpy silero-stress
+
+      - name: Генерация + проба 1 CPU (taskset -c 0)
+        run: |
+          mkdir -p research/tts/out/logs
+          # ВСЁ (генерация и замеры) на одном ядре — честные цифры для VPS 1 CPU
+          taskset -c 0 python research/tts/vps_compare.py 2>&1 | tee research/tts/out/logs/vps_compare.log
+          echo "--- vps_probe.json ---"
+          cat research/tts/out/vps-probe/vps_probe.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vps-tts-compare
+          path: research/tts/out/vps-compare/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vps-tts-probe
+          path: |
+            research/tts/out/vps-probe/
+            research/tts/out/logs/
+          if-no-files-found: warn

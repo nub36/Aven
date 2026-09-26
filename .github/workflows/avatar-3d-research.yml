@@ -1,0 +1,113 @@
+# Aven — 3D-исследование: попытка автоматического бюста Female Aven по утверждённому reference
+# (docs/AVATAR_3D_RESEARCH.md). ЭКСПЕРИМЕНТ, не production и не финальная Female Aven.
+#
+# Запуск ТОЛЬКО вручную (Actions → Avatar 3D Research → Run workflow) или repository_dispatch;
+# при обычном push НЕ запускается.
+#
+# Что делает:
+#   1) TripoSR (MIT, VAST-AI-Research) — single-image-to-3D на CPU-раннере:
+#      вход — prototype/assets/character/master/female-aven-reference.jpg (утверждённое лицо)
+#      и web/female-aven-transparent.png; фон убирает rembg;
+#   2) --bake-texture: UV (xatlas) + текстура 2048 из изображения;
+#   3) --render: 30 видов вокруг головы (рендер самой модели, без GL) + mp4 —
+#      по ним владелец честно оценивает сходство лица;
+#   4) research/3d/postprocess_bust.py: децимация до ~120k треугольников, GLB для Three.js;
+#   5) ничего не коммитит: GLB + рендеры + stats уходят в артефакты, агент забирает их
+#      и осознанно кладёт в репозиторий (viewer честно помечает модель как экспериментальную).
+#
+# Ограничения (честно): TripoSR по одному фото НЕ даёт rig/blendshapes/отдельных глаз и век;
+# гарантию сходства лица не даёт никто — решение принимает владелец по рендерам.
+
+name: Avatar 3D Research
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [avatar-3d]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: avatar-3d-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+  TRIPOSR_COMMIT: '107cefdc244c39106fa830359024f6a2f1c78871'  # пиннинг для воспроизводимости
+
+jobs:
+  bust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Python-зависимости (torch CPU + TripoSR)
+        run: |
+          set -e
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install "omegaconf==2.3.0" "Pillow" "einops==0.7.0" "transformers==4.35.0" \
+                      "trimesh==4.0.5" rembg "huggingface-hub" "imageio[ffmpeg]" "xatlas==0.0.9" \
+                      fast-simplification numpy
+          # torchmcubes (marching cubes как расширение torch) — компилируется, пиннинг коммита
+          pip install "git+https://github.com/tatsy/torchmcubes.git@879926d0ef58e6ce0ac2630fdecb5e53af7ed3ff"
+
+      - name: Клон TripoSR (пиннинг)
+        run: |
+          git init -q /tmp/TripoSR
+          cd /tmp/TripoSR
+          git remote add origin https://github.com/VAST-AI-Research/TripoSR.git
+          git fetch --depth 1 origin "$TRIPOSR_COMMIT"
+          git checkout -q FETCH_HEAD
+          ls
+
+      - name: TripoSR — бюст по reference (CPU, текстура + 30 рендеров)
+        run: |
+          set -e
+          mkdir -p out/logs out/tripo
+          # 0 = master reference (утверждённое лицо), 1 = transparent PNG (запасной вход)
+          taskset -c 0-3 python /tmp/TripoSR/run.py \
+            prototype/assets/character/master/female-aven-reference.jpg \
+            prototype/assets/character/web/female-aven-transparent.png \
+            --device cpu --output-dir out/tripo \
+            --model-save-format obj --bake-texture --texture-resolution 2048 \
+            --mc-resolution 256 --render 2>&1 | tee out/logs/triposr.log
+          find out/tripo -maxdepth 2 -type f -printf "%p %s bytes\n" | sort
+
+      - name: Постобработка → GLB (децимация, realtime-friendly)
+        run: |
+          set -e
+          python research/3d/postprocess_bust.py out/tripo/0 master  out/glb/aven-bust-experimental-master.glb
+          python research/3d/postprocess_bust.py out/tripo/1 transparent out/glb/aven-bust-experimental-transparent.glb
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: avatar-3d-glb
+          path: out/glb/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: avatar-3d-renders
+          path: |
+            out/tripo/*/input.png
+            out/tripo/*/render_*.png
+            out/tripo/*/render.mp4
+            out/tripo/*/mesh.obj
+            out/tripo/*/texture.png
+          if-no-files-found: warn
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: avatar-3d-logs
+          path: out/logs/
+          if-no-files-found: warn
