@@ -113,6 +113,18 @@ async function load(hash, mode, opts) {
     fopts = fopts || {};
     if (mode === 'network') return Promise.reject(new TypeError('Failed to fetch'));
     if (mode === '404') return Promise.resolve({ ok: false, status: 404, json: async () => ({}), text: async () => 'nf', blob: async () => new w.Blob([]) });
+    if (mode === 'minimal' && url.indexOf('/api/tts/health') >= 0) {
+      // VPS-режим server.py 0.4.0 (AVEN_TTS_HEALTH=minimal): без engines/voices/uptime, но с default_voice
+      return Promise.resolve(jsonRes(200, {
+        ok: true, status: 'ok', server: 'aven-tts-research', version: '0.4.0',
+        max_chars: 600, default_voice: 'silero_cis_mit/ru_aigul'
+      }));
+    }
+    if (mode === 'minimal' && url.indexOf('/api/tts/voices') >= 0) {
+      return Promise.resolve(jsonRes(200, { voices: [
+        { id: 'silero_cis_mit/ru_aigul', label: 'Aigul · Silero CIS', engine: 'silero_cis_mit', engineTitle: 'Silero CIS (MIT)', license: 'MIT', commercial: 'yes' }
+      ] }));
+    }
     if (url.indexOf('/api/tts/health') >= 0) {
       return Promise.resolve(jsonRes(200, {
         ok: true, status: 'ok', server: 'aven-tts-research', version: '0.3.0',
@@ -344,6 +356,51 @@ async function load(hash, mode, opts) {
     ok('J1 предыдущая речь остановлена новой', first.paused === true);
     ok('J2 новая речь играет (текст второй фразы ушёл на сервер)', p.w.__synthLog[1].text === 'Слушаю.' && last._playing === true);
     ok('J3 прерывание — НЕ ошибка: тоста fallback не появилось', p.toastText().indexOf('Natural Voice недоступен') < 0, p.toastText());
+    p.dom.window.close();
+  }
+
+  /* ============ M. VPS-режим: minimal health + default_voice (этап 6, §19) ============ */
+  {
+    const p = await load('#/settings', 'minimal');
+    p.setNatural();
+    delete p.st().settings.voice.natural.voice; // голос не сохранён — должен взяться default_voice сервера
+    p.w.AvenState.save();
+    p.click(p.q('[data-action="set-cat"][data-id="voice"]'));
+    await p.waitFor(() => { const el = p.q('#tts-server-status'); return el && el.textContent.indexOf('подключён') >= 0; }, 8000, 'minimal health ok');
+    ok('M1 minimal health: «подключён», версия 0.4.0, голосов: 1, БЕЗ «движков нет»', (() => {
+      const t = p.q('#tts-server-status').textContent;
+      return t.indexOf('подключён') >= 0 && t.indexOf('0.4.0') >= 0 && t.indexOf('голосов: 1') >= 0 && t.indexOf('движков нет') < 0;
+    })(), p.q('#tts-server-status').textContent);
+    await p.waitFor(() => { const el = p.q('[data-action="set-natural-voice"]'); return el && el.options.length === 1 && el.options[0].value === 'silero_cis_mit/ru_aigul'; }, 6000, 'voice select from default_voice');
+    ok('M2 голос предвыбран из default_voice сервера: silero_cis_mit/ru_aigul («Aigul · Silero CIS»)', (() => {
+      const el = p.q('[data-action="set-natural-voice"]');
+      return el && el.options[0].selected && el.options[0].textContent.indexOf('Aigul') >= 0;
+    })(), p.q('[data-action="set-natural-voice"]') && p.q('[data-action="set-natural-voice"]').options[0].textContent);
+    ok('M3 в Natural-списке НЕТ готовых MP3-образцов (manifest на странице загружен, но голос только серверный)',
+      p.w.AvenTTS.providers.natural.voices().length === 1 && p.w.AvenTTS.providers.natural.voices()[0].id === 'silero_cis_mit/ru_aigul',
+      JSON.stringify(p.w.AvenTTS.providers.natural.voices().map((v) => v.id)));
+
+    p.w.AvenTTS.speak('Готово.');
+    await p.waitFor(() => p.w.__synthLog.length === 1, 6000, 'synth M4');
+    ok('M4 речь без сохранённого голоса ушла на сервер голосом default_voice (ru_aigul)',
+      p.w.__synthLog[0].voice === 'silero_cis_mit/ru_aigul', p.w.__synthLog[0].voice);
+    await p.waitFor(() => p.presence() === 'idle', 4000, 'idle M');
+    p.dom.window.close();
+  }
+
+  /* ============ K. Тестовая фраза владельца из Настроек (этап 6) ============ */
+  {
+    const p = await load('#/settings', 'minimal');
+    p.setNatural();
+    p.click(p.q('[data-action="set-cat"][data-id="voice"]'));
+    await p.waitFor(() => { const el = p.q('#tts-server-status'); return el && el.textContent.indexOf('подключён') >= 0; }, 8000, 'K health');
+    p.click(p.q('[data-action="voice-test"]'));
+    await p.waitFor(() => p.w.__synthLog.length === 1, 6000, 'synth K1');
+    const want = p.norm('Авен проверяет натуральный голос. Сейчас 18 часов 43 минуты, пробег автомобиля 104520 километров.');
+    ok('K1 «Прослушать» (Natural): фраза владельца ушла на сервер нормализованной — имя, время, километры словами',
+      p.w.__synthLog[0].text === want && p.w.__synthLog[0].text.indexOf('восемнадцать часов сорок три минуты') >= 0 && p.w.__synthLog[0].text.indexOf('сто четыре тысячи пятьсот двадцать километров') >= 0,
+      p.w.__synthLog[0].text);
+    await p.waitFor(() => p.presence() === 'idle', 5000, 'idle K');
     p.dom.window.close();
   }
 

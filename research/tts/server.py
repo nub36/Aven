@@ -485,12 +485,15 @@ class Handler(SimpleHTTPRequestHandler):
 
 def warmup():
     """Один короткий синтез на движок после загрузки — у первого реального запроса
-    не будет холодного старта (docs/TTS_RESEARCH.md §12.4). Текст в лог не пишется."""
+    не будет холодного старта (docs/TTS_RESEARCH.md §12.4). Текст в лог не пишется.
+    Если задан AVEN_TTS_DEFAULT_VOICE и голос есть у движка — прогревается именно он
+    (на VPS это silero_cis_mit/ru_aigul)."""
+    preferred = DEFAULT_VOICE or ""
     for name, eng in ENGINES.items():
         vs = eng.voices()
         if not vs:
             continue
-        vid = vs[0]["id"]
+        vid = preferred if preferred in {v["id"] for v in vs} else vs[0]["id"]
         _, _, voice = vid.partition("/")
         t = time.perf_counter()
         try:
