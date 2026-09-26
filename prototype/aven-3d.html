@@ -107,7 +107,12 @@
     </div>
   </div>
 
-  <!-- Three.js (MIT, vendored: three@0.180.0 + GLTFLoader + OrbitControls) -->
+  <!-- Three.js (MIT, vendored: three@0.180.0 + GLTFLoader + OrbitControls + BufferGeometryUtils).
+       ВАЖНО: с r150+ минифицированная сборка three.js разбита на ДВА файла —
+       three.module.min.js (реэкспорт) реально импортирует './three.core.min.js' (основной код)
+       ОТНОСИТЕЛЬНЫМ путём, мимо importmap. Оба файла обязаны лежать рядом в assets/vendor/three/ —
+       отсутствие three.core.min.js ломает саму загрузку 'three' и весь граф модулей ниже
+       (это и было настоящей причиной «GLB недоступен» на GitHub Pages, см. docs/WORK_LOG.md). -->
   <script type="importmap">
     { "imports": {
         "three": "./assets/vendor/three/three.module.min.js",
@@ -116,12 +121,20 @@
         "three/utils/BufferGeometryUtils.js": "./assets/vendor/three/utils/BufferGeometryUtils.js"
     } }
   </script>
-  <!-- Честная диагностика: если сам ES-модуль (или один из его импортов) не загрузился,
-       страница обязана сказать реальную причину, а не молчать. -->
+  <!-- Честная диагностика: базовый каркас window.__aven3d ставится ДО модуля, чтобы
+       при полном провале ES-module graph (см. ниже) снаружи (DevTools/тесты) было видно
+       moduleLoaded=false, а не undefined. Сам модуль (js/aven3d.js) переключает поля
+       по мере реального прохождения этапов (rendererCreated, glbLoaded, meshCount…). -->
   <script>
+    window.__aven3d = { moduleLoaded: false, rendererCreated: false, glbLoaded: false, meshCount: 0 };
+    // Если сам ES-модуль (или ОДИН ИЗ ЕГО ТРАНЗИТИВНЫХ ИМПОРТОВ, напр. вендоренный
+    // three.core.min.js/BufferGeometryUtils.js) не загрузился — браузер по спецификации
+    // кидает 'error' на элементе <script type=module>, а не молча падает. Страница обязана
+    // честно показать причину, а не оставить пустой canvas.
     window.addEventListener('error', function (e) {
       var t = e.target;
       if (t && t.tagName === 'SCRIPT') {
+        window.__aven3d.moduleLoaded = window.__aven3d.moduleLoaded || false;
         var fb = document.getElementById('fallback');
         if (fb) {
           fb.hidden = false;
