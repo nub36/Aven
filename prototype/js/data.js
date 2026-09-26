@@ -28,7 +28,7 @@ window.AvenDemo = (function () {
           pitch: 1,
           volume: 1,
           engine: 'system', // 'system' | 'natural' (эксперимент, docs/TTS_RESEARCH.md)
-          natural: { voice: '', serverUrl: '', rate: 1, cache: true, timeoutSec: 10 },
+          natural: { voice: 'qwen3/vd17-design', serverUrl: '', rate: 1, cache: true, timeoutSec: 10 }, // vd17-design — выбранный владельцем кандидат (§11)
           stt: { enabled: true, lang: 'ru-RU', interim: true, autoSend: false }
         },
         character: {

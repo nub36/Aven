@@ -82,16 +82,21 @@ prototype/tests/
 
 ## Natural Voice `vd17-design` — реальный запуск (experimental, 2026-09-26)
 
-Natural TTS в прототипе идёт по contract: `GET {сервер}/api/tts/health` (кнопка «Проверить» в
-Настройках → Голос — с честной причиной при недоступности: HTTP-код, timeout, mixed content, сеть/CORS)
+Natural TTS в прототипе идёт по contract: `GET {сервер}/api/tts/health` (статус в Настройках → Голос —
+с честной причиной при недоступности: HTTP-код, timeout, mixed content, сеть/CORS, «адрес не задан»)
 и `POST {сервер}/api/tts/synthesize {text, voice, rate}` → `audio/wav`. Сервер — `research/tts/server.py`
-(v0.3.0): теперь с движком **Qwen3-TTS VoiceDesign** (голос `qwen3/vd17-design`, промпт тот же, что
-у образцов исследования). Требуется **GPU ≥ 8 ГБ VRAM** и скачивание ≈4,5 ГБ весов на машину владельца
-(в git не попадают). Пошаговый запуск: **[research/tts/runtime/README.md](../research/tts/runtime/README.md)**.
+(v0.3.0): движок **Qwen3-TTS VoiceDesign** (голос `qwen3/vd17-design` — теперь выбор по умолчанию,
+промпт тот же, что у образцов исследования). Кнопка **«Проверить backend»** проверяет health **и**
+делает настоящий короткий синтез; строка **«Проверка произвольной фразой»** — приёмочный тест
+(любой текст, для которого нет готовых MP3).
+
+Запуск backend — два пути (**[research/tts/runtime/README.md](../research/tts/runtime/README.md)**):
+**Б (рекомендуемый для GitHub Pages):** `bash research/tts/runtime/deploy-modal.sh` — serverless GPU
+Modal, постоянный HTTPS-endpoint, $0/мес (Starter: $30 кредитов ежемесячно, без карты), оплата только
+во время синтеза; **А:** свой GPU-ПК (≥ 8 ГБ VRAM) — прототип открывается по HTTP с адреса сервера.
 
 Важно про адреса: GitHub Pages — статический хостинг, он не запускает модель; `192.168.x.x` — только
-LAN-тест, а HTTPS-страница не может обращаться к HTTP-серверу (mixed content). Рабочие пути:
-открыть прототип по HTTP с адреса самого сервера (`http://<IP>:8080/`) или поднять HTTPS endpoint.
+LAN-тест (не штатный адрес Aven), а HTTPS-страница не может обращаться к HTTP-серверу (mixed content).
 При недоступном сервере прототип честно говорит системным голосом («Natural Voice недоступен —
 используется системный голос») и показывает «Говорю · системный голос» вместо «Говорю · Natural».
 

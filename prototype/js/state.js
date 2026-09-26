@@ -16,6 +16,13 @@ window.AvenState = (function () {
     if (raw) state = deepMerge(state, JSON.parse(raw));
   } catch (e) { /* демо: игнорируем */ }
 
+  /* Миграции сохранённых состояний к новым дефолтам (явно: deepMerge не отличает
+     «пустая строка в сохранённом» от «не задано»). */
+  try {
+    const nv = state.settings && state.settings.voice && state.settings.voice.natural;
+    if (nv && !nv.voice) nv.voice = 'qwen3/vd17-design'; // выбранный владельцем кандидат (TTS_RESEARCH §11)
+  } catch (e) { /* демо: игнорируем */ }
+
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* демо */ }
   }
