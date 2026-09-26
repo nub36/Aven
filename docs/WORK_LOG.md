@@ -6,6 +6,75 @@
 
 ---
 
+## 2026-09-26 — XXIV. Починка 3D viewer: GLB реально загружается в `aven-3d.html`
+
+- **Дата:** 2026-09-26
+- **Задача (владелец):** страница https://nub36.github.io/Aven/aven-3d.html показывала
+  «GLB недоступен — 3D-модель не загружена» и PNG-fallback вместо 3D. Найти объективную
+  причину и добиться реальной загрузки mesh. Ничего не менять в Silero/VPS/nginx/TTS,
+  Modal не использовать, новую 3D-модель не создавать, Female Aven не менять,
+  merge самостоятельно не делать.
+
+### Объективная причина (две независимые ошибки)
+
+1. **Сломанный граф ES-модулей.** Вендоренный `assets/vendor/three/loaders/GLTFLoader.js`
+   (three r180, файл идентичен официальному) в строке 68 импортирует
+   `../utils/BufferGeometryUtils.js`. Этот файл в PR #9 **не был закоммичен**:
+   `https://nub36.github.io/Aven/assets/vendor/three/utils/BufferGeometryUtils.js` → **404**.
+   Импорт падает → модуль `js/aven3d.js` не исполняется вообще → сцена Three.js не
+   создаётся, GLB даже не запрашивается. Сам GLB при этом был опубликован корректно.
+2. **CSS перебивал `[hidden]`.** Правило `.v3d-stage .fallback { display: grid; }`
+   сильнее браузерного `[hidden] { display: none }`, поэтому PNG-fallback был виден
+   **всегда** — в том числе поверх успешно загруженной 3D-сцены.
+
+### Что сделано
+
+- Добавлен недостающий вендоренный модуль `prototype/assets/vendor/three/utils/BufferGeometryUtils.js`
+  (three r180, MIT, побайтово из npm-пакета `three@0.180.0`), плюс запись в importmap.
+- CSS: `.v3d-stage .fallback[hidden] { display: none; }` — fallback реально скрывается.
+- `js/aven3d.js`: прогресс загрузки, явное скрытие fallback при успехе, честный текст
+  ошибки (абсолютный URL + сообщение загрузчика), диагностическое состояние
+  `window.__aven3d` (`loading|loaded|error`, meshes/triangles) для проверок.
+- HTML: обработчик ошибок загрузки `<script>` — если модуль не загрузился, страница
+  честно называет причину, а не молчит.
+
+### Файлы
+
+- `prototype/assets/vendor/three/utils/BufferGeometryUtils.js` (новый)
+- `prototype/aven-3d.html`, `prototype/js/aven3d.js`
+- `docs/AVATAR_3D_RESEARCH.md`, `docs/WORK_LOG.md`
+
+### Что проверено
+
+- GLB валиден: заголовок `glTF` v2, размеры совпадают с длиной файла;
+  master — 4 991 172 байт, transparent — 5 235 748 байт.
+- Реальный парсинг через **three r180 + GLTFLoader в Node**: master → 1 mesh,
+  119 999 треугольников, bbox 0.94×1.60×1.64; transparent → 1 mesh, 119 999 треугольников.
+- Локальный HTTP-сервер из `prototype/`: 200 и ненулевой размер для html, aven3d.js,
+  three.module.min.js, GLTFLoader.js, OrbitControls.js, **BufferGeometryUtils.js**,
+  обоих GLB, mp4, PNG-fallback, reference.
+- Публично: `assets/3d/aven-bust-experimental-master.glb` отдаётся Pages (получен
+  реальный бинарник, заголовок glTF), а `assets/vendor/three/utils/BufferGeometryUtils.js`
+  до этой правки давал 404 — это и есть доказанная причина.
+- Кадрирование: модель нормируется к высоте 1.6, камера (0, 0.95, 3.1), fov 35 →
+  вертикальный охват ≈1.95 > 1.6, модель в кадре; OrbitControls — вращение мышью/тачем.
+
+### Граница проверки (честно)
+
+- **Headless Chromium/WebGL недоступен** в этом окружении: загрузка Chrome for Testing
+  заблокирована сетью (ECONNRESET к googlechromelabs.github.io). Поэтому визуальный
+  рендер в браузере НЕ проверялся автоматически; проверены HTTP-доступность всех assets,
+  полный граф ES-модулей, реальный парсинг GLB кодом three r180 и геометрия кадра.
+  Финальная визуальная проверка — за владельцем после деплоя Pages из main.
+
+### Что рекомендуется делать следующим
+
+1. Merge PR (владельцем) → Pages пересоберётся → открыть `aven-3d.html`.
+2. Владелец визуально решает: похожа ли модель на утверждённую Female Aven.
+   Rig/Blender/lip-sync — только после этого решения.
+
+---
+
 ## 2026-09-26 — XXIII. Этап 6: Silero ru_aigul — рабочий Natural Voice через VPS владельца
 
 - **Дата:** 2026-09-26
