@@ -45,40 +45,53 @@ def process(src_dir: Path, label: str, dst_glb: Path, stats: dict) -> None:
         raise FileNotFoundError(obj)
 
     mesh = trimesh.load(str(obj), force="mesh", process=True)
-    if not isinstance(mesh.visual, trimesh.visual.TextureVisuals):
-        # без текстуры GLB получится с vertex colors — честно фиксируем в stats
-        stats["texture"] = "vertex colors (текстура не найдена)"
-    else:
-        img = getattr(mesh.visual.material, "image", None) or mesh.visual.image
-        stats["texture"] = f"{img.size} px" if img is not None else "texture (image not loaded)"
+    # Текстуру берём ЯВНО из texture.png рядом с OBJ: xatlas.export() (TripoSR) пишет OBJ
+    # с UV, но БЕЗ map_Kd в MTL → trimesh получает placeholder 2×2 px (проверено прогоном
+    # 36229047288: stats "texture (2,2) px", реальная текстура 2048 лежала рядом).
+    tex_path = src_dir / "texture.png"
+    tex_image = None
+    if tex_path.exists():
+        from PIL import Image
+        tex_image = Image.open(tex_path).convert("RGB")
+    elif isinstance(mesh.visual, trimesh.visual.TextureVisuals):
+        cand = getattr(mesh.visual.material, "image", None) or mesh.visual.image
+        if cand is not None and min(cand.size) >= 8:  # 2×2 — placeholder, не текстура
+            tex_image = cand
+    stats["texture"] = f"{tex_image.size} px" if tex_image is not None else "vertex colors (текстура не найдена)"
+
+    # UV есть, если trimesh загрузил texcoords (xatlas их пишет даже без MTL)
+    had_uv = isinstance(mesh.visual, trimesh.visual.TextureVisuals) and mesh.visual.uv is not None
 
     stats["src_faces"] = int(len(mesh.faces))
     stats["src_vertices"] = int(len(mesh.vertices))
 
     # децимация. fast-simplification теряет UV/текстуру → сохраняем и переопроектируем
-    had_texture = isinstance(mesh.visual, trimesh.visual.TextureVisuals)
-    if had_texture:
-        orig_uv = np.asarray(mesh.visual.uv, dtype=np.float64) if mesh.visual.uv is not None else None
+    if had_uv and tex_image is not None:
+        orig_uv = np.asarray(mesh.visual.uv, dtype=np.float64)
         orig_v = np.asarray(mesh.vertices, dtype=np.float64)
-        tex_image = getattr(mesh.visual.material, "image", None) or mesh.visual.image
-    else:
-        orig_uv = None
+
+    def attach_texture(target, target_uv: np.ndarray) -> None:
+        mat = trimesh.visual.texture.SimpleMaterial(image=tex_image)
+        target.visual = trimesh.visual.TextureVisuals(uv=target_uv, material=mat, image=tex_image)
 
     if len(mesh.faces) > TARGET_FACES:
         mesh = mesh.simplify_quadric_decimation(face_count=TARGET_FACES)
-        if had_texture and orig_uv is not None and tex_image is not None:
+        if had_uv and tex_image is not None:
             # UV по ближайшей исходной вершине (cKDTree): децимированные вершины лежат
             # на исходной поверхности, поэтому соответствие достаточно точное для
             # запечённой текстуры; на границах UV-островов возможно лёгкое смешение.
             from scipy.spatial import cKDTree
             _, idx = cKDTree(orig_v).query(np.asarray(mesh.vertices, dtype=np.float64), k=1)
-            mat = trimesh.visual.texture.SimpleMaterial(image=tex_image)
-            mesh.visual = trimesh.visual.TextureVisuals(uv=orig_uv[idx], material=mat, image=tex_image)
+            attach_texture(mesh, orig_uv[idx])
             stats["uv"] = "reprojected (nearest vertex after decimation)"
         else:
-            stats["uv"] = "lost (decimation без текстуры)"
+            stats["uv"] = "none"
     else:
-        stats["uv"] = "native" if had_texture else "none"
+        if had_uv and tex_image is not None:
+            attach_texture(mesh, np.asarray(mesh.visual.uv, dtype=np.float64))  # real texture вместо placeholder
+            stats["uv"] = "native (texture attached from texture.png)"
+        else:
+            stats["uv"] = "native" if had_uv else "none"
     stats["faces"] = int(len(mesh.faces))
     stats["vertices"] = int(len(mesh.vertices))
 
