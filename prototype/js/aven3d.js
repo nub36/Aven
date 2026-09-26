@@ -38,7 +38,11 @@ const STATES = {
                sway: 0.4, swaySpeed: 1.0, breath: 0.9, tilt: 0,    nod: 0, oneShot: 'shake-subtle' }
 };
 
-const MODEL_URL = 'assets/3d/aven-bust-experimental.glb';
+const MODEL_URL = 'assets/3d/aven-bust-experimental-master.glb';
+const MODELS = [
+  { id: 'master',      label: 'реконструкция по master reference', url: 'assets/3d/aven-bust-experimental-master.glb' },
+  { id: 'transparent', label: 'реконструкция по transparent PNG',  url: 'assets/3d/aven-bust-experimental-transparent.glb' }
+];
 const AUDIO_SAMPLES = [
   { id: 't01', label: 'vd17: приветствие (T1)', url: 'assets/voice-samples/qwen3/vd17-design/t01.mp3' },
   { id: 'x16', label: 'vd17: длинный ответ (X16)', url: 'assets/voice-samples/qwen3/vd17-design/x16.mp3' }
@@ -77,7 +81,11 @@ let model = null, modelRoot = null;
 let morphs = {};   // name → { mesh, index }
 const caps = { blink: false, jaw: false, smile: false, brows: false };
 
-new GLTFLoader().load(MODEL_URL, (gltf) => {
+function loadModel(url) {
+  if (modelRoot) { scene.remove(modelRoot); modelRoot = null; }
+  morphs = {}; caps.blink = caps.jaw = caps.smile = caps.brows = false;
+  document.getElementById('fallback').hidden = true;
+  new GLTFLoader().load(url, (gltf) => {
   modelRoot = gltf.scene;
   const box = new THREE.Box3().setFromObject(modelRoot);
   const size = box.getSize(new THREE.Vector3());
@@ -116,8 +124,19 @@ new GLTFLoader().load(MODEL_URL, (gltf) => {
   console.warn('[aven3d] GLB не загрузился:', err);
   document.getElementById('fallback').hidden = false;
   document.getElementById('fbReason').textContent =
-    'Файл ' + MODEL_URL + ' не найден или браузер не поддержал WebGL/GLB.';
+    'Файл ' + url + ' не найден или браузер не поддержал WebGL/GLB.';
 });
+}
+
+/* переключатель входов реконструкции (master / transparent) */
+const modelSel = document.getElementById('modelSel');
+if (modelSel) {
+  MODELS.forEach((m) => {
+    const o = document.createElement('option'); o.value = m.url; o.textContent = m.label; modelSel.appendChild(o);
+  });
+  modelSel.addEventListener('change', () => loadModel(modelSel.value));
+}
+loadModel(MODEL_URL);
 
 function renderCaps() {
   const el = document.getElementById('caps');

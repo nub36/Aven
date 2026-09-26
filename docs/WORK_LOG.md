@@ -36,11 +36,15 @@
   текущей модели честно показано «модель без лицевого rig»), «уровень 0» lip-sync (амплитуда
   Web Audio → речь), reference рядом для оценки сходства, PNG-fallback при отсутствии GLB.
   Главная страница и PNG НЕ изменены; модель помечена ЭКСПЕРИМЕНТ.
-- **Отладка CI (3 попытки):** 1) torchmcubes требует `--no-build-isolation` + build-депы;
+- **Отладка CI (6 прогонов):** 1) torchmcubes требует `--no-build-isolation` + build-депы;
   2) rembg 2.0.85 выносит onnxruntime в extra → `rembg[cpu]`; trimesh 4.0.5 несовместим с
   numpy 2.x (`.ptp()`) → `trimesh>=4.4`; 3) `tsr/bake_texture.py` безусловно импортирует
-  moderngl → добавлены moderngl==5.10.0 + libgl1/libegl1/libgl1-mesa-dri (headless EGL);
-  RHVoice после `scons install` требует `sudo ldconfig`; в step с tee добавлен pipefail.
+  moderngl (moderngl==5.10.0 + GL-библиотеки); 4) glcontext на Linux безусловно выбирает
+  x11 → headless-CI нужен `xvfb-run` (XOpenDisplay без дисплея); 5) RHVoice после
+  `scons install` требует `sudo ldconfig`; 6) `xatlas.export()` пишет OBJ без `map_Kd` →
+  trimesh брал placeholder 2×2 вместо texture.png (прогон 36229047288) — `postprocess_bust.py`
+  теперь привязывает `texture.png` явно (проверено на локальном репро). Итоговый прогон
+  **36231486547 — SUCCESS** (GLB master 4.99 МБ, 119 999 faces, текстура 2048×2048 встроена).
 
 ### Что сделано — VPS TTS
 
@@ -66,10 +70,13 @@
 - py_compile обоих скриптов; локальный тест postprocess_bust.py на синтетическом меше (2
   варианта, включая децимацию 327k→120k с сохранением текстуры в GLB — reload подтверждает
   PBRMaterial + baseColorTexture); bash -n deploy-vps.sh; YAML обоих workflows.
-- Прогоны CI: VPS TTS Compare — **success** (MP3 + probe сгенерированы); Avatar 3D Research —
-  после трёх итераций фиксов (итог — см. фактические файлы в prototype/assets/3d и
-  review/3d-aven-bust); tts-proto-check регресс не гонялся на этой ветке (frontend этапа 5 не
-  меняет код Главной; новые страницы не подключены к index.html).
+- Прогоны CI (финал): VPS TTS Compare — **success** (50 MP3 финалистов + vps_probe.json,
+  бот-коммит 83924a7); Avatar 3D Research — **success** с 6-й итерации (run 36231486547,
+  бот-коммит a06c4e7: GLB master/transparent + stats + turntable + 6 рендеров + input/texture);
+  tts-proto-check — 37/37 PASS (код Главной не менялся); jsdom-смоук voice-compare.html — все
+  48 аудио-ячеек существуют (vd17-эталон ×8 + 5 кандидатов ×8), страница/лицензии/таблица
+  исключённых на месте; jsdom-смоук aven-3d.html — 16/16 (разметка, все статические ресурсы
+  включая оба GLB, PNG-fallback, reference, маркировка эксперимента).
 
 ### Известные проблемы / что дальше
 
