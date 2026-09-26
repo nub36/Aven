@@ -20,6 +20,11 @@ on:
   workflow_dispatch:
   repository_dispatch:
     types: [vps-tts-compare]
+  # Ручной запуск до попадания workflow на main (там workflow_dispatch недоступен для ветки):
+  # триггер срабатывает ТОЛЬКО при изменении marker-файла в ЭТОЙ ветке.
+  push:
+    branches: [arena/01a0dc3a-aven-3d-vps-tts]
+    paths: ['.github/triggers/vps-tts-compare.txt']
 
 permissions:
   contents: read
