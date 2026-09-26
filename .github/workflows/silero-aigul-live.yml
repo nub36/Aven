@@ -107,11 +107,15 @@ jobs:
       - name: MP3 + JSON → review/silero-aigul-live
         run: |
           set -e
+          # download-artifact@v4 с одиночным name распаковывает прямо в path; на случай
+          # смены поведения допускаем и подкаталог artifacts/silero-live/
+          if [ -d artifacts/silero-live ]; then SRC=artifacts/silero-live; else SRC=artifacts; fi
+          echo "SRC=$SRC"; find artifacts -maxdepth 3 -type f | sort | head -40
           DST=review/silero-aigul-live
           rm -rf "$DST"
           mkdir -p "$DST/mp3"
-          find artifacts/silero-live/mp3 -name '*.mp3' -exec cp -f {} "$DST/mp3/" \;
-          find artifacts/silero-live -maxdepth 1 -name 'silero_live.json' -exec cp -f {} "$DST/" \;
+          find "$SRC/mp3" -name '*.mp3' -exec cp -f {} "$DST/mp3/" \;
+          find "$SRC" -maxdepth 1 -name 'silero_live.json' -exec cp -f {} "$DST/" \;
           test -f "$DST/silero_live.json" || { echo "нет silero_live.json"; exit 1; }
           test "$(find "$DST/mp3" -name '*.mp3' | wc -l)" -gt 0 || { echo "нет MP3"; exit 1; }
           find "$DST" -type f | sort
