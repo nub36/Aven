@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aven — 3D Female Aven · экспериментальный viewer (PoC)</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body { padding: 20px; max-width: 1180px; margin: 0 auto; }
+    .v3d-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .v3d-head h1 { margin: 0; font-size: 1.4rem; }
+    .muted { color: var(--muted); font-size: .84rem; }
+    .v3d-warn { margin: 10px 0 14px; }
+    .v3d-layout { display: grid; grid-template-columns: minmax(320px, 1.2fr) minmax(280px, 1fr); gap: 14px; }
+    @media (max-width: 900px) { .v3d-layout { grid-template-columns: 1fr; } }
+    .v3d-stage { position: relative; border-radius: 14px; overflow: hidden; min-height: 460px;
+                 background: radial-gradient(120% 90% at 50% 15%, #2b3350 0%, #171c2e 55%, #10131f 100%); }
+    .v3d-stage canvas { display: block; width: 100%; height: 100%; }
+    .v3d-stage .fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: 18px; text-align: center; }
+    .v3d-stage .fallback img { max-height: 78%; max-width: 90%; }
+    .v3d-statebar { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+    .v3d-statebar button { min-width: 86px; }
+    .v3d-statebar button.active { outline: 2px solid var(--accent); }
+    .v3d-desc { min-height: 2.6em; }
+    .pill.ok { background: rgba(40,170,90,.15); color: var(--ok); }
+    .pill.no { background: rgba(220,60,60,.13); color: var(--danger); }
+    .v3d-caps { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+    .v3d-caps .pill { font-size: .78rem; }
+    .v3d-vid video { width: 100%; border-radius: 10px; margin-top: 8px; }
+    .ref img { width: 100%; border-radius: 10px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .hint { padding: 10px 12px; border-radius: 10px; }
+  </style>
+</head>
+<body>
+  <div class="v3d-head">
+    <div>
+      <h1>3D Female Aven · экспериментальный viewer</h1>
+      <div class="muted">Отдельный PoC: GLB → WebGL/Three.js → состояния Aven. Главная страница и PNG-персонаж НЕ изменены.
+        Исследование: docs/AVATAR_3D_RESEARCH.md.</div>
+    </div>
+    <div class="row">
+      <a class="btn" href="voice-compare.html">Сравнение голосов →</a>
+      <a class="btn" href="index.html#/settings">← Прототип</a>
+    </div>
+  </div>
+
+  <div class="card v3d-warn tts-priv warn">
+    <b>Это технический PoC, НЕ финальная Female Aven.</b> Модель — автоматическая экспериментальная
+    реконструкция (TripoSR) по утверждённому reference-фото; у неё нет rig/blendshapes, отдельных глаз,
+    век и челюсти. Сходство лица оценивает владелец: рядом reference и видео-облёт. Если лицо
+    отличается — модель НЕ будет названа Female Aven (см. docs/AVATAR_3D_RESEARCH.md).
+  </div>
+
+  <div class="v3d-layout">
+    <div class="card">
+      <div class="v3d-stage" id="stage">
+        <div class="fallback" id="fallback" hidden>
+          <div>
+            <div class="t" style="font-weight:600;margin-bottom:6px">GLB недоступен — 3D-модель не загружена</div>
+            <div class="muted" id="fbReason">Файл prototype/assets/3d/ не найден или не поддерживается браузером.</div>
+            <img src="assets/character/web/female-aven-transparent.png" alt="Female Aven (PNG fallback)"
+                 style="margin-top:10px" id="fbImg">
+            <div class="muted" style="margin-top:8px">PNG-fallback — тот же образ, что на Главной (ничего не подменяется).</div>
+          </div>
+        </div>
+      </div>
+      <div class="v3d-statebar" id="statebar"></div>
+      <div class="v3d-desc muted" id="stateDesc"></div>
+      <div class="row" style="margin:8px 0">
+        <button class="btn small" id="demoBtn">▶ Авто-демо состояний</button>
+        <label class="muted">озвучка speaking: <select id="audioSel" class="btn small" style="padding:4px 8px"></select></label>
+        <button class="btn small" id="audioBtn">🔊 Проиграть</button>
+        <button class="btn small" id="audioStop">■</button>
+      </div>
+      <div class="v3d-caps" id="caps"></div>
+      <div class="muted" id="modelStats"></div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="t" style="font-weight:600;margin-bottom:6px">Утверждённый reference (для оценки сходства)</div>
+        <div class="ref"><img src="assets/character/master/female-aven-reference.jpg" alt="Female Aven reference"></div>
+        <div class="muted" style="margin-top:6px">Лицо/причёска/композиция утверждены владельцем
+          (review/3d-character-concepts). 3D-реконструкция не должна «придумывать другую девушку».</div>
+      </div>
+      <div class="card v3d-vid" style="margin-top:12px">
+        <div class="t" style="font-weight:600">Видео-облёт реконструкции (30 видов)</div>
+        <video id="turntable" controls muted loop playsinline>
+          <source src="assets/3d/aven-bust-turntable.mp4" type="video/mp4">
+          <span class="muted">Видео недоступно (файл не закоммичен).</span>
+        </video>
+        <div class="muted" style="margin-top:6px">Рендер самой модели TripoSR — так владелец видит форму
+          со всех сторон, а не только фронт.</div>
+      </div>
+      <div class="card hint" style="margin-top:12px">
+        <div class="t" style="font-weight:600;margin-bottom:4px">Путь до полного lip-sync (не в этом PoC)</div>
+        <div class="muted">Ответ Aven → TTS → audio → анализ (амплитуда Web Audio — уровень 0; висимы Rhubarb-WASM/MFA —
+          следующий уровень, docs/TTS_RESEARCH.md §14, §19) → visemes → 3D. Здесь реализован уровень 0: амплитуда
+          звука уже управляет речью (пока через движение всей головы — челюсти в модели нет).</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three.js (MIT, vendored: three@0.180.0 + GLTFLoader + OrbitControls) -->
+  <script type="importmap">
+    { "imports": {
+        "three": "./assets/vendor/three/three.module.min.js",
+        "three/loaders/GLTFLoader.js": "./assets/vendor/three/loaders/GLTFLoader.js",
+        "three/controls/OrbitControls.js": "./assets/vendor/three/controls/OrbitControls.js"
+    } }
+  </script>
+  <script type="module" src="js/aven3d.js"></script>
+</body>
+</html>

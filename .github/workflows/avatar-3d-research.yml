@@ -52,6 +52,12 @@ jobs:
         with:
           python-version: '3.11'
 
+      # moderngl (bake-texture) создаёт headless GL-контекст через EGL → нужна mesa/llvmpipe
+      - name: Системные библиотеки GL (headless bake-texture)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgl1 libegl1 libgl1-mesa-dri >/dev/null
+
       - name: Python-зависимости (torch CPU + TripoSR)
         run: |
           set -e

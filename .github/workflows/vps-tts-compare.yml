@@ -71,6 +71,9 @@ jobs:
             data/languages/Russian data/voices/elena data/voices/dasha-rus
           scons -j"$(nproc)" >/tmp/rhvoice-build.log 2>&1 || { tail -40 /tmp/rhvoice-build.log; exit 1; }
           sudo scons install >/dev/null 2>&1 || { tail -20 /tmp/rhvoice-build.log; exit 1; }
+          # scons install кладёт libRHVoice_core.so в /usr/local/lib — без ldconfig бинарник
+          # её не находит (exit 127, проверено прогоном)
+          sudo ldconfig
           which RHVoice-test
           echo "Слушаю." | RHVoice-test -p elena -o /tmp/check.wav && ls -la /tmp/check.wav
 
