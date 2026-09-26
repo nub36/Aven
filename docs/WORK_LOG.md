@@ -6,6 +6,109 @@
 
 ---
 
+## 2026-09-26 — XXVIII. Female Aven V2: contact sheet, face comparison, страница проверки identity
+
+- **Дата:** 2026-09-26 (продолжение этапа V2, PR #14 открыт).
+- **Задача (владелец):** дать возможность сравнить утверждённый reference с уже созданными доп.
+  views. **НЕ генерировать новые изображения, не править существующие, не делать новый 3D, не
+  запускать MetaHuman/MPFB/TripoSR, не выбирать pipeline за владельца.** Использовать только уже
+  существующие изображения. Сделать contact sheet (reference в центре + 5 видов вокруг с
+  подписями статуса) и face comparison (одинаково масштабированные crop лиц). Обновить
+  `aven-3d-v2.html` как страницу проверки identity. Исправить формулировки о «сохранённой
+  identity» на честный статус Under Review. Обновить PR #14, merge не делать.
+- **Что сделано:**
+  - **Новые изображения НЕ генерировались.** Использованы только существующие файлы из ветки:
+    `front-reference.jpg` (= утверждённый master) и 5 AI-кандидатов (`candidate-*.jpg`).
+  - **contact-sheet.jpg** (1508×1310): 3×3 — центр = reference в красной рамке с подписью
+    «★ УТВЕРЖДЁННЫЙ REFERENCE ★»; вокруг Left 3/4, Back/Hair, Right 3/4, Left Profile, Right
+    Profile с подписью «AI · НЕ УТВЕРЖДЁН»; нижний ряд — title/status/legend.
+  - **face-comparison.jpg** (2278×714): одинаково масштабированные crop лиц в порядке turnaround
+    (Left Profile → Left 3/4 → FRONT[утверждён] → Right 3/4 → Right Profile) для сравнения
+    формы головы/лба/бровей/глаз/расстояния между ними/носа/переносицы/губ/подбородка/jawline/
+    ушей/линии волос. **Только crop/resize — без beautify/morph/правок черт.**
+  - Оба листа собраны воспроизводимым скриптом **`research/3d/build_v2_review_sheets.sh`**
+    (ImageMagick), положены в `review/3d-v2-reference-views/` и
+    `prototype/assets/character/v2-reference-views/`.
+  - **`prototype/aven-3d-v2.html`** переписана в страницу **проверки identity**: заголовок
+    «Female Aven — проверка дополнительных ракурсов», предупреждение (утверждён только front),
+    (1) reference, (2) contact sheet, (3) face comparison, (4) каждый вид отдельно с бейджем
+    «AI — НЕ УТВЕРЖДЁН», блок «Решение владельца» (A/B/C — только подсказка, не сохраняется).
+  - **Формулировки исправлены** в `AVATAR_3D_V2_PLAN.md`, `DECISIONS.md` (ADR-016),
+    `CHARACTER.md`, `CHANGELOG.md`, `WORK_LOG.md`, `review/.../README.md`: вместо «один и тот же
+    человек / identity сохранена / консистентный turnaround» — статус **AI-generated candidate
+    reference views — Under Review** (сходство identity не подтверждено). ADR-016 оставлен
+    **Proposed** (не фиксирует pipeline как Accepted); новый ADR не создавался.
+- **Изменённые/добавленные файлы:** `research/3d/build_v2_review_sheets.sh` (новый),
+  `review/3d-v2-reference-views/{contact-sheet,face-comparison}.jpg` (новые),
+  `prototype/assets/character/v2-reference-views/{contact-sheet,face-comparison}.jpg` (новые),
+  `prototype/aven-3d-v2.html` (переписан), `docs/AVATAR_3D_V2_PLAN.md`, `docs/DECISIONS.md`,
+  `docs/CHARACTER.md`, `docs/CHANGELOG.md`, `docs/WORK_LOG.md`,
+  `review/3d-v2-reference-views/README.md`.
+- **Проверено:** локальный http-сервер из `prototype/` — `aven-3d-v2.html`, `css/style.css`,
+  contact-sheet, face-comparison, все 6 исходных изображений → 200. Оба сравнительных листа
+  визуально просмотрены агентом: reference в центре с рамкой, 5 видов помечены «НЕ УТВЕРЖДЁН»,
+  лица крупные и одинаково масштабированы.
+- **Не тронуто:** master, transparent PNG, Главная, TripoSR POC (`aven-3d.html`), Silero Aigul,
+  VPS/nginx/HTTPS/TTS/voice settings. Новый ADR не создан.
+- **Рекомендуется далее (за владельцем):** визуальное решение по доп. ракурсам (A/B/C). Merge не
+  делать до решения.
+
+---
+
+## 2026-09-26 — XXVII. Female Aven 3D V2: исследование pipeline, reference turnaround, план (вариант B)
+
+- **Дата:** 2026-09-26 (новая сессия, main = 0c3f51a, PR #13 смёржен).
+- **Задача (владелец):** спроектировать и, если реально возможно бесплатными автоматическими
+  инструментами, получить качественную realtime 3D Female Aven V2 (бюст, rig, ARKit/visemes,
+  отдельные глаза/веки/jaw, hair cards, PBR, 30–100k tris, 2K). Главный приоритет — **сохранить
+  утверждённую внешность**, а не факт очередного GLB. Запрещено: выдавать TripoSR за V2, снова
+  запускать тот же TripoSR, придумывать новое лицо, менять reference/Hair/Color/Makeup, покупать
+  модели/сервисы, ripped/неизвестная лицензия, менять TTS/VPS/nginx/HTTPS, Modal, менять Главную,
+  заменять PNG Female Aven без утверждения. Возможны два честных результата: A (реально лучший
+  кандидат) или B (инструменты не дают качества/identity → дать production-план, не плодить плохие GLB).
+- **Результат = вариант B** (честно). В инфраструктуре сессии (2 CPU, ~3.8 GB RAM, **без GPU**;
+  нет Blender/Unreal; бесплатные Actions тоже без GPU) бесплатные автоматические инструменты
+  не дают надёжной качественной identity-preserving риггованной модели. Новая плохая модель НЕ
+  создавалась.
+- **Что сделано:**
+  - **Исследование реальных pipeline** (веб-поиск, проверка лицензий) — 4 сильных кандидата:
+    A. TRELLIS 2 / Hunyuan3D 2.1 (лучше TripoSR как статичный бюст, но GPU 16–29 GB и **нет
+    rig/глаз/blendshapes**); B. FLAME/MICA/DECA/EMOCA (правильная топология с jaw/eyes/веки, но
+    **non-commercial лицензия** → нельзя для коммерческого Aven, + GPU); **C. Epic Mesh to
+    MetaHuman** ★ (полный ARKit-52 риг, отдельные глаза/зубы/веки/jaw, шея, грумы, экспорт web-GLB;
+    бесплатно для не-Unreal при выручке <$1M, без AI-train; нужны UE5+GPU+ручная работа); Reallusion
+    CC/Headshot и KeenTools FaceBuilder (платно); Avaturn (free non-comm); **D. MPFB 2/MakeHuman
+    (CC0) + художник** — чистый бесплатный запасной. Всё зафиксировано с лицензиями/железом/
+    качеством/identity в новом **docs/AVATAR_3D_V2_PLAN.md**.
+  - **Stage 2 (доп. reference-виды):** из утверждённого фронтального master получены доп. виды
+    (left/right 3/4, left/right profile, back/hair) image-edit-моделью с жёсткой инструкцией
+    «тот же человек, только поворот камеры». Статус — **AI-generated candidate reference views —
+    Under Review**. Визуально близко к reference (субъективное впечатление, НЕ доказательство);
+    **сходство identity НЕ подтверждено**, виды не canonical до одобрения владельцем (canonical —
+    фронтальный master).
+  - **Страница оценки** `prototype/aven-3d-v2.html` — turnaround (front + 5 видов, авто-облёт,
+    миниатюры) + сводка pipeline/требований/лицензий; честный баннер «3D-модели V2 ещё нет».
+  - **Production-план** (маршруты MetaHuman ★ / MPFB CC0; граница авто-Blender vs ручная работа
+    художника; что нужно от владельца) — раздел 7 плана.
+- **Изменённые/добавленные файлы:** `docs/AVATAR_3D_V2_PLAN.md` (новый), `prototype/aven-3d-v2.html`
+  (новый), `prototype/assets/character/v2-reference-views/*.jpg` (6 файлов), `review/3d-v2-reference-views/`
+  (README + 5 кандидатных видов), `docs/DECISIONS.md` (ADR-016 Proposed), `docs/CHARACTER.md`
+  (раздел 6.4), `docs/AVATAR_3D_RESEARCH.md` (пометка V1 = TECHNICAL POC + ссылка на V2-план),
+  `README.md` (ссылка на V2-план), `docs/CHANGELOG.md`, `docs/WORK_LOG.md`.
+- **Проверено:** локальный http-сервер из `prototype/` — `aven-3d-v2.html`, `css/style.css` и все
+  изображения отдаются 200; базовая валидность HTML; пути ассетов существуют. Кандидатные виды —
+  Under Review; сходство identity НЕ утверждается, решение за владельцем.
+- **Известные проблемы/границы:** GPU/Blender/Unreal в песочнице недоступны → MetaHuman/TRELLIS/
+  Hunyuan/FLAME не запускались (только исследование+лицензии). Turnaround — AI-экстраполяция:
+  мелкие расхождения на скрытых деталях (ухо/затылок/корни волос) возможны; **финальная оценка
+  сходства — за владельцем**. Pages деплоит только с `main` → публичный
+  `https://nub36.github.io/Aven/aven-3d-v2.html` заработает после merge PR.
+- **Рекомендуется далее (за владельцем, НЕ автоматически):** (1) оценить turnaround на странице/в
+  `review/`, принять/уточнить; (2) выбрать маршрут A (MetaHuman) или B (MPFB CC0); (3) выделить ПК
+  с GPU / 3D-художника. Только после этого — production по разделу 7 плана.
+
+---
+
 ## 2026-09-26 — XXVI. 3D viewer: ориентация, камера-пресеты, studio-свет (оценочный viewer)
 
 - **Дата:** 2026-09-26 (новая сессия, main = c5d9d8a, PR #12 смёржен).

@@ -1,5 +1,10 @@
 # AVATAR_3D_RESEARCH — 3D Female Aven: исследование и честный статус (этап 5)
 
+> **ОБНОВЛЕНИЕ 2026-09-26:** описанный здесь TripoSR-результат зафиксирован как **TECHNICAL 3D
+> POC** (не Female Aven и не основа V2). Его viewer не улучшается, rig/blendshapes ему не
+> делаются, на Главную он не ставится. Новое направление и production-план качественной
+> Female Aven V2 — в **[AVATAR_3D_V2_PLAN.md](AVATAR_3D_V2_PLAN.md)** (ADR-016).
+
 > Дата: 2026-09-26. Задача владельца: **бюст Female Aven** (голова + полная шея + плечи/верх груди,
 > БЕЗ полного тела) по утверждённому reference
 > (`prototype/assets/character/master/female-aven-reference.jpg`), GLB/GLTF realtime-friendly
