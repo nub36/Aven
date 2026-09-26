@@ -1,0 +1,52 @@
+[silero] скачиваю модель https://models.silero.ai/models/tts/ru/v5_cis_base.pt …
+[silero] модель загружена за 0.27 с; RSS после загрузки 586.1 МБ
+[silero] ru_aigul c01: synth=0.658s audio=0.963s
+[silero] ru_aigul c02: synth=0.076s audio=0.975s
+[silero] ru_aigul c03: synth=0.847s audio=13.012s
+[silero] ru_aigul t02: synth=0.386s audio=6.088s
+[silero] ru_aigul t05: synth=0.167s audio=2.538s
+[silero] ru_aigul t07: synth=0.348s audio=5.612s
+[silero] ru_aigul t08: synth=0.275s audio=4.263s
+[silero] ru_aigul t09: synth=0.193s audio=2.987s
+[silero] ru_aigul t10: synth=0.313s audio=5.0s
+[silero] ru_vika c01: synth=0.074s audio=0.963s
+[silero] ru_vika c02: synth=0.074s audio=0.963s
+[silero] ru_vika c03: synth=0.754s audio=11.75s
+[silero] ru_vika t02: synth=0.36s audio=5.725s
+[silero] ru_vika t05: synth=0.166s audio=2.487s
+[silero] ru_vika t07: synth=0.314s audio=4.963s
+[silero] ru_vika t08: synth=0.248s audio=3.913s
+[silero] ru_vika t09: synth=0.188s audio=2.95s
+[silero] ru_vika t10: synth=0.292s audio=4.65s
+[silero] ru_zara c01: synth=0.071s audio=0.925s
+[silero] ru_zara c02: synth=0.071s audio=0.925s
+[silero] ru_zara c03: synth=0.776s audio=11.713s
+[silero] ru_zara t02: synth=0.359s audio=5.612s
+[silero] ru_zara t05: synth=0.161s audio=2.425s
+[silero] ru_zara t07: synth=0.309s audio=4.95s
+[silero] ru_zara t08: synth=0.251s audio=3.938s
+[silero] ru_zara t09: synth=0.188s audio=2.875s
+[silero] ru_zara t10: synth=0.289s audio=4.575s
+[rhvoice] elena c01: wall=0.115s audio=0.685s
+[rhvoice] elena c02: wall=0.115s audio=0.595s
+[rhvoice] elena c03: wall=0.416s audio=10.155s
+[rhvoice] elena t02: wall=0.265s audio=4.775s
+[rhvoice] elena t05: wall=0.164s audio=2.06s
+[rhvoice] elena t07: wall=0.215s audio=4.005s
+[rhvoice] elena t08: wall=0.215s audio=3.405s
+[rhvoice] elena t09: wall=0.165s audio=2.4s
+[rhvoice] elena t10: wall=0.215s audio=3.51s
+[rhvoice] elena t03: wall=0.215s audio=3.41s
+[rhvoice] dasha-rus c01: wall=0.165s audio=0.825s
+[rhvoice] dasha-rus c02: wall=0.165s audio=0.74s
+[rhvoice] dasha-rus c03: wall=0.416s audio=11.075s
+[rhvoice] dasha-rus t02: wall=0.265s audio=5.065s
+[rhvoice] dasha-rus t05: wall=0.165s audio=2.215s
+[rhvoice] dasha-rus t07: wall=0.266s audio=4.46s
+[rhvoice] dasha-rus t08: wall=0.215s audio=3.87s
+[rhvoice] dasha-rus t09: wall=0.215s audio=2.615s
+[rhvoice] dasha-rus t10: wall=0.214s audio=3.98s
+[rhvoice] dasha-rus t03: wall=0.215s audio=3.75s
+
+[vps-compare] MP3: /home/runner/work/Aven/Aven/research/tts/out/vps-compare
+[vps-probe] /home/runner/work/Aven/Aven/research/tts/out/vps-probe/vps_probe.json

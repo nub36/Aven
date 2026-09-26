@@ -6,7 +6,90 @@
 
 ---
 
-## 2026-09-26 — XXI. Natural Voice Female Aven — runtime: аудит HTTP 404, Qwen3-движок сервера, честный frontend
+## 2026-09-26 — XXII. Этап 5: 3D Female Aven (эксперимент) + бесплатный лёгкий VPS TTS + viewer/compare/runtime
+
+- **Дата:** 2026-09-26
+- **Задача (владелец, два потока):** (1) 3D-бюст Female Aven по утверждённому reference — GLB
+  realtime-friendly, состояния Aven, НЕ менять лицо, НЕ заменять PNG на Главной, identity важнее
+  факта 3D; (2) бесплатный лёгкий русский женский TTS под VPS владельца (Ubuntu 24.04, 1 CPU,
+  2 ГБ, без GPU) из уже исследованных кандидатов, финальный выбор за владельцем на слух;
+  опционально CPU runtime. Modal отменён владельцем; PR #8 заморожен; работа в новой ветке
+  `arena/01a0dc3a-aven-3d-vps-tts` от main (решение владельца), отдельный PR.
+
+### Что сделано — 3D (результат = эксперимент, не финальная Female Aven)
+
+- **Исследование и выбор инструмента:** TripoSR (MIT, offline CPU) — единственный бесплатный
+  вариант без GPU; альтернативы (InstantMesh/CRM — GPU; Hunyuan/Tripo API/Rodin/Meshy — платные
+  облака; DECA/EMOCA — только лицо) зафиксированы в новом **docs/AVATAR_3D_RESEARCH.md**.
+- **Workflow `.github/workflows/avatar-3d-research.yml`** (ручной, marker-триггер): TripoSR
+  (пиннинг 107cefd) по master reference + transparent PNG, `--bake-texture --texture-resolution
+  2048 --mc-resolution 256 --render`; артефакты glb/renders/logs; publish-джоб ботом кладёт
+  GLB + stats + turntable.mp4 в `prototype/assets/3d/`, 6 рендеров + input + texture в
+  `review/3d-aven-bust/` (mesh.obj НЕ коммитится).
+- **`research/3d/postprocess_bust.py`:** OBJ+texture → децимация до ~120k треугольников →
+  центрирование → GLB. Найдено и исправлено локально: fast-simplification теряет UV → UV
+  переопроектируются на исходные вершины через cKDTree (проверено синтетическим мешем:
+  327k→120k faces, текстура в GLB сохранена).
+- **Viewer PoC `prototype/aven-3d.html` + `prototype/js/aven3d.js`** (three.js 0.180 vendored,
+  MIT, `prototype/assets/vendor/three/`): состояния idle/listening/thinking/speaking/success/
+  important/waiting/error (дыхание, микродвижения, кивки), авто-детекция blendshapes (для
+  текущей модели честно показано «модель без лицевого rig»), «уровень 0» lip-sync (амплитуда
+  Web Audio → речь), reference рядом для оценки сходства, PNG-fallback при отсутствии GLB.
+  Главная страница и PNG НЕ изменены; модель помечена ЭКСПЕРИМЕНТ.
+- **Отладка CI (6 прогонов):** 1) torchmcubes требует `--no-build-isolation` + build-депы;
+  2) rembg 2.0.85 выносит onnxruntime в extra → `rembg[cpu]`; trimesh 4.0.5 несовместим с
+  numpy 2.x (`.ptp()`) → `trimesh>=4.4`; 3) `tsr/bake_texture.py` безусловно импортирует
+  moderngl (moderngl==5.10.0 + GL-библиотеки); 4) glcontext на Linux безусловно выбирает
+  x11 → headless-CI нужен `xvfb-run` (XOpenDisplay без дисплея); 5) RHVoice после
+  `scons install` требует `sudo ldconfig`; 6) `xatlas.export()` пишет OBJ без `map_Kd` →
+  trimesh брал placeholder 2×2 вместо texture.png (прогон 36229047288) — `postprocess_bust.py`
+  теперь привязывает `texture.png` явно (проверено на локальном репро). Итоговый прогон
+  **36231486547 — SUCCESS** (GLB master 4.99 МБ, 119 999 faces, текстура 2048×2048 встроена).
+
+### Что сделано — VPS TTS
+
+- **Финалисты (техотбор; выбор — владелец):** Silero v5 CIS MIT (ru_aigul 203 Гц, ru_vika 197,
+  ru_zara 211) и RHVoice (elena GPL-3.0; dasha-rus CC BY-SA 4.0). Исключены по лицензии/ресурсам:
+  Piper (лицензия данных Unknown), silero_v5_ru (NC), Vosk, Supertonic (RAM 15.6 ГБ),
+  Chatterbox (RTF ~4.5), eSpeak (WER 94%), Qwen3 (GPU — эталон vd17).
+- **`research/tts/vps_compare.py` + workflow `VPS TTS Compare`:** генерация недостающих фраз
+  (c01 «Слушаю.», c02 «Готово.», c03 длинный = x16, t02/t05/t07–t10) и ЧЕСТНАЯ проба на одном
+  закреплённом ядре (`taskset -c 0`): load, RSS, латентность короткой/длинной фразы →
+  `research/tts/results/vps_probe.json`; MP3 финалистов публикуются ботом в
+  `prototype/assets/voice-samples/vps/`.
+- **Страница `prototype/voice-compare.html`:** vd17-эталон против 5 финалистов по одинаковым
+  типам фраз; карточки с лицензиями и цифрами 1 CPU; таблица исключённых движков с причинами.
+  Голос НЕ выбран и не объявляется выбранным.
+- **Runtime `research/tts/runtime/vps/`:** `deploy-vps.sh` (silero|rhvoice одной командой:
+  зависимости, движок, systemd `aven-tts` 127.0.0.1:8080 + MemoryMax=1500M, self-check) и
+  пошаговый `README-vps.md` (SSH → деплой → Caddy HTTPS → подключение в прототипе; системный
+  speechSynthesis fallback остаётся; откат). На реальный VPS ничего не ставилось (доступа нет).
+
+### Проверено
+
+- py_compile обоих скриптов; локальный тест postprocess_bust.py на синтетическом меше (2
+  варианта, включая децимацию 327k→120k с сохранением текстуры в GLB — reload подтверждает
+  PBRMaterial + baseColorTexture); bash -n deploy-vps.sh; YAML обоих workflows.
+- Прогоны CI (финал): VPS TTS Compare — **success** (50 MP3 финалистов + vps_probe.json,
+  бот-коммит 83924a7); Avatar 3D Research — **success** с 6-й итерации (run 36231486547,
+  бот-коммит a06c4e7: GLB master/transparent + stats + turntable + 6 рендеров + input/texture);
+  tts-proto-check — 37/37 PASS (код Главной не менялся); jsdom-смоук voice-compare.html — все
+  48 аудио-ячеек существуют (vd17-эталон ×8 + 5 кандидатов ×8), страница/лицензии/таблица
+  исключённых на месте; jsdom-смоук aven-3d.html — 16/16 (разметка, все статические ресурсы
+  включая оба GLB, PNG-fallback, reference, маркировка эксперимента).
+
+### Известные проблемы / что дальше
+
+- Сходство лица оценивает ТОЛЬКО владелец (у агента нет vision): решение A/B —
+  docs/AVATAR_3D_RESEARCH.md §5, обзор в review/3d-aven-bust.
+- Артефакты Actions (Azure blob) недоступны из песочницы агента → publish-джобы ботом (паттерн
+  tts-research.yml); полные 30 рендеров/mesh.obj/WAV — только в артефактах (retention 14 дней).
+- Липсинк: timings у TTS нет (не блокер) — уровень 0 реализован, уровни 1–2 (G2P ru,
+  Rhubarb-WASM/MFA) зафиксированы в TTS_RESEARCH.md §14/§18.
+- Параллельные edit одного файла = потерянные правки (случайно перезаписали moderngl/pipefail);
+  правки одного файла — только последовательно.
+
+
 
 - **Дата:** 2026-09-26
 - **Задача:** по приоритету владельца (только Natural Voice Runtime; события/accessibility/authorization/

@@ -1,0 +1,190 @@
+# Aven — 3D-исследование: попытка автоматического бюста Female Aven по утверждённому reference
+# (docs/AVATAR_3D_RESEARCH.md). ЭКСПЕРИМЕНТ, не production и не финальная Female Aven.
+#
+# Запуск ТОЛЬКО вручную (Actions → Avatar 3D Research → Run workflow) или repository_dispatch;
+# при обычном push НЕ запускается.
+#
+# Что делает:
+#   1) TripoSR (MIT, VAST-AI-Research) — single-image-to-3D на CPU-раннере:
+#      вход — prototype/assets/character/master/female-aven-reference.jpg (утверждённое лицо)
+#      и web/female-aven-transparent.png; фон убирает rembg;
+#   2) --bake-texture: UV (xatlas) + текстура 2048 из изображения;
+#   3) --render: 30 видов вокруг головы (рендер самой модели, без GL) + mp4 —
+#      по ним владелец честно оценивает сходство лица;
+#   4) research/3d/postprocess_bust.py: децимация до ~120k треугольников, GLB для Three.js;
+#   5) публикует компактный набор в ВЕТКУ ботом github-actions (как tts-research.yml):
+#      GLB + stats + turntable.mp4 → prototype/assets/3d/, выбранные рендеры + input/texture
+#      → review/3d-aven-bust/. mesh.obj (десятки МБ) НЕ коммитится — только в артефакте.
+#      Причина: артефакты Actions лежат в Azure blob, недоступном из песочницы агента;
+#      публикация в ветку — способ доставить GLB до GitHub Pages viewer'а.
+#
+# Ограничения (честно): TripoSR по одному фото НЕ даёт rig/blendshapes/отдельных глаз и век;
+# гарантию сходства лица не даёт никто — решение принимает владелец по рендерам.
+
+name: Avatar 3D Research
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [avatar-3d]
+  # Ручной запуск до попадания workflow на main (там workflow_dispatch недоступен для ветки):
+  # триггер срабатывает ТОЛЬКО при изменении marker-файла в ЭТОЙ ветке.
+  push:
+    branches: [arena/01a0dc3a-aven-3d-vps-tts]
+    paths: ['.github/triggers/avatar-3d.txt']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: avatar-3d-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+  TRIPOSR_COMMIT: '107cefdc244c39106fa830359024f6a2f1c78871'  # пиннинг для воспроизводимости
+
+jobs:
+  bust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      # bake-texture использует moderngl (GL 3.3). glcontext на Linux безусловно выбирает
+      # x11-бэкенд → в headless CI нужен виртуальный дисплей (Xvfb) + mesa (llvmpipe).
+      - name: Системные библиотеки GL (headless bake-texture)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1 libegl1 libgl1-mesa-dri libglx-mesa0 >/dev/null
+
+      - name: Python-зависимости (torch CPU + TripoSR)
+        run: |
+          set -e
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          # trimesh>=4.4 обязателен: 4.0.5 падает на numpy 2.x (удалён ndarray.ptp);
+          # rembg[cpu] без extra не тянет onnxruntime → import rembg падает (проверено);
+          # moderngl обязателен для --bake-texture (tsr/bake_texture.py импортирует его безусловно)
+          pip install "omegaconf==2.3.0" "Pillow" "einops==0.7.0" "transformers==4.35.0" \
+                      "trimesh>=4.4,<5" "rembg[cpu]" "huggingface-hub" "imageio[ffmpeg]" "xatlas==0.0.9" \
+                      "moderngl==5.10.0" fast-simplification scipy numpy
+          # torchmcubes (marching cubes как расширение torch) — компилируется против УЖЕ установленного
+          # torch: сборка строго без build-isolation, build-депы ставим заранее (иначе RuntimeError
+          # "must be built against an installed PyTorch")
+          pip install scikit-build-core pybind11 ninja cmake
+          pip install --no-build-isolation "git+https://github.com/tatsy/torchmcubes.git@879926d0ef58e6ce0ac2630fdecb5e53af7ed3ff"
+
+      - name: Клон TripoSR (пиннинг)
+        run: |
+          git init -q /tmp/TripoSR
+          cd /tmp/TripoSR
+          git remote add origin https://github.com/VAST-AI-Research/TripoSR.git
+          git fetch --depth 1 origin "$TRIPOSR_COMMIT"
+          git checkout -q FETCH_HEAD
+          ls
+
+      - name: TripoSR — бюст по reference (CPU, текстура + 30 рендеров)
+        run: |
+          set -e -o pipefail
+          mkdir -p out/logs out/tripo
+          # 0 = master reference (утверждённое лицо), 1 = transparent PNG (запасной вход)
+          # xvfb-run: virtual X display для moderngl (bake-texture); -a — авто-выбор DISPLAY
+          xvfb-run -a taskset -c 0-3 python /tmp/TripoSR/run.py \
+            prototype/assets/character/master/female-aven-reference.jpg \
+            prototype/assets/character/web/female-aven-transparent.png \
+            --device cpu --output-dir out/tripo \
+            --model-save-format obj --bake-texture --texture-resolution 2048 \
+            --mc-resolution 256 --render 2>&1 | tee out/logs/triposr.log
+          find out/tripo -maxdepth 2 -type f -printf "%p %s bytes\n" | sort
+
+      - name: Постобработка → GLB (децимация, realtime-friendly)
+        run: |
+          set -e
+          python research/3d/postprocess_bust.py out/tripo/0 master  out/glb/aven-bust-experimental-master.glb
+          python research/3d/postprocess_bust.py out/tripo/1 transparent out/glb/aven-bust-experimental-transparent.glb
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: avatar-3d-glb
+          path: out/glb/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: avatar-3d-renders
+          path: |
+            out/tripo/*/input.png
+            out/tripo/*/render_*.png
+            out/tripo/*/render.mp4
+            out/tripo/*/mesh.obj
+            out/tripo/*/texture.png
+          if-no-files-found: warn
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: avatar-3d-logs
+          path: out/logs/
+          if-no-files-found: warn
+
+  # Публикация компактного набора в ветку ботом (паттерн tts-research.yml):
+  # GLB для viewer'а + turntable + 6 обзорных рендеров; полный набор (30 рендеров,
+  # mesh.obj, texture) — только в артефакте avatar-3d-renders (retention 14 дней).
+  publish:
+    needs: bust
+    if: needs.bust.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: avatar-3d-*
+          path: artifacts
+
+      - name: GLB/turntable → prototype/assets/3d; обзор → review/3d-aven-bust
+        run: |
+          set -e
+          mkdir -p prototype/assets/3d review/3d-aven-bust
+          GLB=artifacts/avatar-3d-glb
+          R=artifacts/avatar-3d-renders
+          ls "$GLB" || true; ls "$R" || true
+          # GLB + stats (master — основной вход viewer'а, transparent — сравнение входов)
+          find "$GLB" -name 'aven-bust-experimental-*.glb'        -exec cp -f {} prototype/assets/3d/ \;
+          find "$GLB" -name 'aven-bust-experimental-*.stats.json' -exec cp -f {} prototype/assets/3d/ \;
+          # turntable-видео для страницы viewer'а (мастер-реконструкция)
+          find "$R" -path '*/0/render.mp4' -exec cp -f {} prototype/assets/3d/aven-bust-turntable.mp4 \;
+          # обзор для владельца: вход после rembg, текстура, 6 из 30 рендеров
+          find "$R" -path '*/0/input.png'   -exec cp -f {} review/3d-aven-bust/tripo-input-master.png \;
+          find "$R" -path '*/0/texture.png' -exec cp -f {} review/3d-aven-bust/tripo-texture-master.png \; || true
+          for i in 000 005 010 015 020 025; do
+            find "$R" -path "*/0/render_$i.png" -exec cp -f {} "review/3d-aven-bust/render-$i.png" \; || true
+          done
+          echo "— что публикуется:"
+          find prototype/assets/3d review/3d-aven-bust -type f | sort
+          test -f prototype/assets/3d/aven-bust-experimental-master.glb || { echo "master GLB не найден"; exit 1; }
+          du -sh prototype/assets/3d review/3d-aven-bust
+
+      - name: Commit results to branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add prototype/assets/3d review/3d-aven-bust
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git commit -m "research(3d): экспериментальный бюст TripoSR — GLB + turntable + обзор (run ${{ github.run_id }})"
+          for i in 1 2 3 4 5; do
+            git pull --rebase -X theirs origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            sleep 10
+          done
+          exit 1

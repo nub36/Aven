@@ -1,0 +1,140 @@
+{
+ "_comment": "Честная проба 1-CPU: весь скрипт выполнялся под taskset -c 0 (одно ядро), torch.set_num_threads(1). Окружение — GitHub Actions runner (см. env).",
+ "env": {
+  "cpu": "1 ядро (taskset -c 0)",
+  "runner_cores": 4,
+  "machine": "x86_64",
+  "python": "3.11.16"
+ },
+ "silero_cis_mit": {
+  "model": "v5_cis_base (MIT)",
+  "model_mb": 91.7,
+  "load_s_1cpu": 0.27,
+  "rss_after_load_mb": 586.1,
+  "threads": 1,
+  "voices": {
+   "ru_aigul": {
+    "c01": {
+     "synth_s_1cpu": 0.658,
+     "audio_s": 0.963,
+     "rtf_1cpu": 0.683
+    },
+    "c02": {
+     "synth_s_1cpu": 0.076,
+     "audio_s": 0.975,
+     "rtf_1cpu": 0.078
+    },
+    "c03": {
+     "synth_s_1cpu": 0.847,
+     "audio_s": 13.012,
+     "rtf_1cpu": 0.065
+    },
+    "t03": {
+     "synth_s_1cpu": 0.289,
+     "audio_s": 4.375,
+     "rtf_1cpu": 0.066
+    },
+    "rss_peak_mb": 714.9
+   },
+   "ru_vika": {
+    "c01": {
+     "synth_s_1cpu": 0.074,
+     "audio_s": 0.963,
+     "rtf_1cpu": 0.077
+    },
+    "c02": {
+     "synth_s_1cpu": 0.074,
+     "audio_s": 0.963,
+     "rtf_1cpu": 0.077
+    },
+    "c03": {
+     "synth_s_1cpu": 0.754,
+     "audio_s": 11.75,
+     "rtf_1cpu": 0.064
+    },
+    "t03": {
+     "synth_s_1cpu": 0.268,
+     "audio_s": 4.2,
+     "rtf_1cpu": 0.064
+    },
+    "rss_peak_mb": 715.7
+   },
+   "ru_zara": {
+    "c01": {
+     "synth_s_1cpu": 0.071,
+     "audio_s": 0.925,
+     "rtf_1cpu": 0.077
+    },
+    "c02": {
+     "synth_s_1cpu": 0.071,
+     "audio_s": 0.925,
+     "rtf_1cpu": 0.077
+    },
+    "c03": {
+     "synth_s_1cpu": 0.776,
+     "audio_s": 11.713,
+     "rtf_1cpu": 0.066
+    },
+    "t03": {
+     "synth_s_1cpu": 0.258,
+     "audio_s": 4.025,
+     "rtf_1cpu": 0.064
+    },
+    "rss_peak_mb": 720.2
+   }
+  }
+ },
+ "rhvoice": {
+  "bin": "RHVoice-test",
+  "per_request_process": true,
+  "voices": {
+   "elena": {
+    "c01": {
+     "wall_s_1cpu": 0.115,
+     "audio_s": 0.685,
+     "rtf_1cpu": 0.168
+    },
+    "c02": {
+     "wall_s_1cpu": 0.115,
+     "audio_s": 0.595,
+     "rtf_1cpu": 0.193
+    },
+    "c03": {
+     "wall_s_1cpu": 0.416,
+     "audio_s": 10.155,
+     "rtf_1cpu": 0.041
+    },
+    "t03": {
+     "wall_s_1cpu": 0.215,
+     "audio_s": 3.41,
+     "rtf_1cpu": 0.063
+    },
+    "rss_mb": 25.9
+   },
+   "dasha-rus": {
+    "c01": {
+     "wall_s_1cpu": 0.165,
+     "audio_s": 0.825,
+     "rtf_1cpu": 0.2
+    },
+    "c02": {
+     "wall_s_1cpu": 0.165,
+     "audio_s": 0.74,
+     "rtf_1cpu": 0.223
+    },
+    "c03": {
+     "wall_s_1cpu": 0.416,
+     "audio_s": 11.075,
+     "rtf_1cpu": 0.038
+    },
+    "t03": {
+     "wall_s_1cpu": 0.215,
+     "audio_s": 3.75,
+     "rtf_1cpu": 0.057
+    },
+    "rss_mb": 26.0
+   }
+  }
+ },
+ "errors": []
+}

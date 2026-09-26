@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aven — выбор голоса для VPS (этап 5)</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body { padding: 20px; max-width: 1180px; margin: 0 auto; }
+    .vc-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .vc-head h1 { margin: 0; font-size: 1.4rem; }
+    .muted { color: var(--muted); font-size: .84rem; }
+    table.mx { width: 100%; border-collapse: collapse; font-size: .86rem; }
+    table.mx th, table.mx td { padding: 7px 8px; border-bottom: 1px solid rgba(128,140,170,.18); vertical-align: middle; }
+    table.mx th { text-align: left; font-size: .8rem; white-space: nowrap; }
+    table.mx td.a { min-width: 190px; }
+    table.mx audio { width: 200px; height: 32px; max-width: 100%; }
+    .vc-role { font-size: .72rem; padding: 1px 7px; border-radius: 8px; white-space: nowrap; }
+    .vc-role.ref { background: rgba(90,140,255,.16); color: var(--accent); }
+    .vc-role.fin { background: rgba(40,170,90,.15); color: var(--ok); }
+    .pill.lic-yes { background: rgba(40,170,90,.15); color: var(--ok); }
+    .pill.lic-unclear { background: rgba(230,160,0,.15); color: var(--warn); }
+    .pill.lic-no { background: rgba(220,60,60,.13); color: var(--danger); }
+    .meta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; margin-top: 10px; }
+    .meta-grid .card { padding: 13px 14px; border-radius: 13px; }
+    .meta-grid h3 { margin: 0 0 6px; font-size: .98rem; }
+    .kv { display: grid; grid-template-columns: 128px 1fr; gap: 3px 10px; font-size: .82rem; }
+    .kv dt { color: var(--muted); }
+    .kv dd { margin: 0; }
+    .hint { padding: 10px 12px; border-radius: 10px; margin: 12px 0; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  </style>
+</head>
+<body>
+  <div class="vc-head">
+    <div>
+      <h1>Выбор голоса для VPS · этап 5</h1>
+      <div class="muted">Бесплатные лёгкие русские женские движки для сервера владельца
+        (Ubuntu 24.04, 1 CPU, 2 ГБ RAM, без GPU). vd17-design — только звуковой эталон
+        (не кандидат: нужен GPU). Полное исследование — docs/TTS_RESEARCH.md §19,
+        промеры 1 CPU — research/tts/results.</div>
+    </div>
+    <div class="row">
+      <a class="btn" href="aven-3d.html">3D-эксперимент →</a>
+      <a class="btn" href="voice-lab.html">Voice Lab (все голоса) →</a>
+      <a class="btn" href="index.html#/settings">← Прототип</a>
+    </div>
+  </div>
+
+  <div class="card hint warn">
+    <b>Голос ещё НЕ выбран.</b> Финальный выбор делает владелец на слух. Здесь: эталон vd17
+    и технические финалисты, отобранные по лицензии/коммерции/легковесности (критерии и
+    исключённые движки — ниже). Тексты фраз у эталона (x-набор) и кандидатов (t/c-набор)
+    местами различаются — сравнивайте тембр и естественность, не дословность.
+  </div>
+
+  <div class="card">
+    <h2 style="margin:4px 0 10px;font-size:1.1rem">Матрица прослушивания — одинаковые типы фраз</h2>
+    <div style="overflow-x:auto">
+      <table class="mx" id="mx"></table>
+    </div>
+    <div class="muted" style="margin-top:8px">Все 48 ячеек заполнены: этап 1–4 (t01–t10 в базовых каталогах) +
+      этап 5 (vps/: c01–c03 и недостающие t-фразы, прогон на 1 CPU). Полный набор метрик —
+      research/tts/results/vps_probe.json.</div>
+  </div>
+
+  <h2 style="margin:22px 0 4px;font-size:1.1rem">Кандидаты: движок, лицензия, честные цифры 1 CPU</h2>
+  <div class="muted">Замеры «1 CPU» получены в CI на одном закреплённом ядре (taskset -c 0): генерация и
+    замеры целиком под ограничением. Это цифры для VPS 1 CPU, а не экстраполяция с 4 vCPU.</div>
+  <div class="meta-grid" id="meta"></div>
+
+  <h2 style="margin:22px 0 4px;font-size:1.1rem">Почему НЕ финалисты (исключено на этапе отбора)</h2>
+  <div class="card" style="margin-top:8px">
+    <table class="mx" id="rej"></table>
+  </div>
+
+  <div class="card hint">
+    <b>Как слушать.</b> Идите по столбцам: одна и та же фраза у эталона и всех кандидатов подряд.
+    Обратите внимание на: произношение «Авен», числа/деньги/километры, естественность длинной
+    фразы, утомительность тембра при повторных прослушиваниях. Оценку даёт только владелец;
+    агент голос не выбирает.
+  </div>
+
+  <script>
+    /* Эталон + финалисты этапа 5. Путь к MP3: assets/voice-samples/<key>/<phrase>.mp3
+       key существующих сэмплов — как в manifest.js; новые файлы этапа 5 кладутся в
+       assets/voice-samples/vps/<id>/<phrase>.mp3 (свой набор, манифест voice-lab не трогаем). */
+    var REF = { key: 'qwen3/vd17-design', name: 'vd17-design', tag: 'эталон' };
+    var CANDS = [
+      { id: 'silero-aigul',  key: 'vps/silero-ru_aigul',  base: 'silero_cis_mit/ru_aigul', name: 'Silero ru_aigul',  engine: 'Silero v5 CIS base + silero-stress' },
+      { id: 'silero-vika',   key: 'vps/silero-ru_vika',   base: 'silero_cis_mit/ru_vika',  name: 'Silero ru_vika',   engine: 'Silero v5 CIS base + silero-stress' },
+      { id: 'silero-zara',   key: 'vps/silero-ru_zara',   base: 'silero_cis_mit/ru_zara',  name: 'Silero ru_zara',   engine: 'Silero v5 CIS base + silero-stress' },
+      { id: 'rhvoice-elena', key: 'vps/rhvoice-elena',    base: 'rhvoice/elena',           name: 'RHVoice elena',    engine: 'RHVoice (HTS, сборка из исходников)' },
+      { id: 'rhvoice-dasha', key: 'vps/rhvoice-dasha-rus',base: 'rhvoice/dasha-rus',       name: 'RHVoice dasha-rus',engine: 'RHVoice (HTS, сборка из исходников)' }
+    ];
+    /* Строки матрицы: ref — фраза эталона (x-набор), new — фраза финалистов этапа 5 (c/t-набор). */
+    var ROWS = [
+      { title: 'Приветствие',   ref: 'x00', nw: 't01', txt: '«Здравствуйте. Я Авен, ваш персональный помощник…»' },
+      { title: 'Слушаю.',       ref: 'x03', nw: 'c01', txt: '«Слушаю.»' },
+      { title: 'Готово.',       ref: 'x02', nw: 'c02', txt: '«Готово.»' },
+      { title: 'Напоминание',   ref: 'x04', nw: 't02', txt: '«Сегодня у вас стоматолог в десять часов…»' },
+      { title: 'Время',         ref: 'x06', nw: 't06', txt: '«…в девять часов тридцать минут.»' },
+      { title: 'Деньги',        ref: 'x07', nw: 't03', txt: '«…три тысячи четыреста двадцать рублей.»' },
+      { title: 'Автомобиль',    ref: 'x10', nw: 't04', txt: '«…сто четыре тысячи пятьсот двадцать километров.»' },
+      { title: 'Длинный ответ', ref: 'x16', nw: 'c03', txt: 'развёрнутый ответ Авен (~40 слов)' }
+    ];
+    /* Существующие (этап 1–4) фразы у кандидатов: t01,t03,t04,t06 у silero; t01–t10 у rhvoice. */
+    var HAVE = { 'silero-aigul': ['t01','t03','t04','t06'], 'silero-vika': ['t01','t03','t04','t06'],
+                 'silero-zara': ['t01','t03','t04','t06'], 'rhvoice-elena': ['t01','t02','t03','t04','t05','t06','t07','t08','t09','t10'],
+                 'rhvoice-dasha': ['t01','t02','t03','t04','t05','t06','t07','t08','t09','t10'] };
+    /* Фразы этапа 5 из прогона VPS TTS Compare (taskset -c 0) — опубликованы ботом
+       в assets/voice-samples/vps/ (50 MP3: 5 кандидатов × c01,c02,c03,t02,t03,t05,t07–t10). */
+    var VPS = { 'silero-aigul':  ['c01','c02','c03','t02','t03','t05','t07','t08','t09','t10'],
+                'silero-vika':   ['c01','c02','c03','t02','t03','t05','t07','t08','t09','t10'],
+                'silero-zara':   ['c01','c02','c03','t02','t03','t05','t07','t08','t09','t10'],
+                'rhvoice-elena': ['c01','c02','c03'],
+                'rhvoice-dasha': ['c01','c02','c03'] };
+
+    function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]; }); }
+    function player(key, ph) {
+      return '<audio controls preload="none" src="assets/voice-samples/' + esc(key) + '/' + ph + '.mp3"></audio>';
+    }
+    function cell(cid, ph) {
+      var c = CANDS.filter(function (x) { return x.id === cid; })[0];
+      if (VPS[cid].indexOf(ph) >= 0) return player(c.key, ph);
+      if (HAVE[cid].indexOf(ph) >= 0) return player(c.base, ph);
+      return '<span class="muted">—</span>';
+    }
+
+    /* --- матрица --- */
+    (function () {
+      var h = '<tr><th>Фраза</th><th>' + esc(REF.name) + ' <span class="vc-role ref">' + REF.tag + '</span></th>';
+      CANDS.forEach(function (c) { h += '<th>' + esc(c.name) + '</th>'; });
+      h += '</tr>';
+      ROWS.forEach(function (r) {
+        h += '<tr><td><b>' + esc(r.title) + '</b><div class="muted">' + esc(r.txt) + '</div></td>' +
+             '<td class="a">' + player(REF.key, r.ref) + '</td>';
+        CANDS.forEach(function (c) { h += '<td class="a">' + cell(c.id, r.nw) + '</td>'; });
+        h += '</tr>';
+      });
+      document.getElementById('mx').innerHTML = h;
+    })();
+
+    /* --- карточки кандидатов: цифры — из research/tts/results/vps_probe.json (прогон этапа 5,
+           всё под taskset -c 0, одно ядро; «короткая» = «Слушаю.», «длинная» = ~12 с аудио) --- */
+    var META = {
+      'silero-aigul':  { lic: 'MIT (код + веса CIS)', comm: 'yes', ram: '≈0.6 ГБ после загрузки (пик 0.72 ГБ, torch)', s: '≈0.08 с (первый вызов 0.66 с — прогрев)', l: '≈0.85 с на 13 с аудио (RTF 0.065)', net: 'нет (после установки)', fit: 'да' },
+      'silero-vika':   { lic: 'MIT (код + веса CIS)', comm: 'yes', ram: '≈0.6 ГБ после загрузки (пик 0.72 ГБ, torch)', s: '≈0.07 с', l: '≈0.75 с на 12 с аудио (RTF 0.064)', net: 'нет (после установки)', fit: 'да' },
+      'silero-zara':   { lic: 'MIT (код + веса CIS)', comm: 'yes', ram: '≈0.6 ГБ после загрузки (пик 0.72 ГБ, torch)', s: '≈0.07 с', l: '≈0.78 с на 12 с аудио (RTF 0.066)', net: 'нет (после установки)', fit: 'да' },
+      'rhvoice-elena': { lic: 'GPL-3.0 (голос elena)', comm: 'yes', ram: '≈26 МБ (процесс на запрос)', s: '≈0.12 с', l: '≈0.42 с на 10 с аудио (RTF 0.041)', net: 'нет (офлайн)', fit: 'да' },
+      'rhvoice-dasha': { lic: 'CC BY-SA 4.0 (голос dasha-rus)', comm: 'yes (атрибуция)', ram: '≈26 МБ (процесс на запрос)', s: '≈0.17 с', l: '≈0.42 с на 11 с аудио (RTF 0.038)', net: 'нет (офлайн)', fit: 'да' }
+    };
+    var REJ = [
+      ['Supertonic 3 (F3)', 'OpenRAIL-M, коммерческое да', 'RTF ~0.42 и RAM ~15.6 ГБ — не для 1 CPU / 2 ГБ VPS'],
+      ['Piper ru irina-medium', 'лицензия голоса Unknown', 'недопустимо для коммерческого использования без выяснения'],
+      ['Silero v5_ru (baya/kseniya/xenia)', 'CC BY-NC-SA', 'некоммерческая лицензия весов'],
+      ['Vosk TTS', 'лицензия неясна', 'не проходит фильтр лицензии'],
+      ['Chatterbox Multilingual', 'MIT', 'RTF ~4.5 на 4 vCPU — слишком медленный для 1 CPU'],
+      ['eSpeak NG (ru)', 'GPL-3.0', 'WER ~94% — технический бейзлайн, а не кандидат'],
+      ['Qwen3-TTS (vd17)', 'Apache-2.0', 'эталон качества; для диалога нужен GPU — не для VPS']
+    ];
+    (function () {
+      var h = '';
+      CANDS.forEach(function (c) {
+        var m = META[c.id];
+        var licCls = m.comm === 'yes' ? 'lic-yes' : (m.comm === 'unclear' ? 'lic-unclear' : 'lic-no');
+        h += '<div class="card"><h3>' + esc(c.name) + ' <span class="vc-role fin">финалист</span></h3>' +
+             '<dl class="kv">' +
+             '<dt>Движок</dt><dd>' + esc(c.engine) + '</dd>' +
+             '<dt>Лицензия</dt><dd>' + esc(m.lic) + '</dd>' +
+             '<dt>Коммерческое</dt><dd><span class="pill ' + licCls + '">' + esc(m.comm) + '</span></dd>' +
+             '<dt>RAM (RSS)</dt><dd data-probe="ram-' + c.id + '">' + esc(m.ram) + '</dd>' +
+             '<dt>1 CPU: короткая</dt><dd data-probe="s-' + c.id + '">' + esc(m.s) + '</dd>' +
+             '<dt>1 CPU: длинная</dt><dd data-probe="l-' + c.id + '">' + esc(m.l) + '</dd>' +
+             '<dt>Интернет</dt><dd>' + esc(m.net) + '</dd>' +
+             '<dt>Годен для VPS 1 CPU / 2 ГБ</dt><dd data-probe="fit-' + c.id + '">' + esc(m.fit) + '</dd>' +
+             '</dl></div>';
+      });
+      document.getElementById('meta').innerHTML = h;
+      var r = '<tr><th>Движок</th><th>Лицензия</th><th>Почему исключён</th></tr>';
+      REJ.forEach(function (x) { r += '<tr><td>' + esc(x[0]) + '</td><td>' + esc(x[1]) + '</td><td>' + esc(x[2]) + '</td></tr>'; });
+      document.getElementById('rej').innerHTML = r;
+    })();
+
+    /* стоп всех, кроме играющего */
+    document.addEventListener('play', function (e) {
+      document.querySelectorAll('audio').forEach(function (a) { if (a !== e.target) a.pause(); });
+    }, true);
+  </script>
+</body>
+</html>
