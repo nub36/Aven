@@ -1,0 +1,12 @@
+{
+ "label": "master",
+ "source_dir": "out/tripo/0",
+ "texture": "(2, 2) px",
+ "src_faces": 131456,
+ "src_vertices": 102531,
+ "uv": "reprojected (nearest vertex after decimation)",
+ "faces": 119999,
+ "vertices": 62905,
+ "glb_mb": 2.7,
+ "postprocess_s": 6.1
+}

@@ -1,0 +1,12 @@
+{
+ "label": "transparent",
+ "source_dir": "out/tripo/1",
+ "texture": "(2, 2) px",
+ "src_faces": 148532,
+ "src_vertices": 116807,
+ "uv": "reprojected (nearest vertex after decimation)",
+ "faces": 120000,
+ "vertices": 67122,
+ "glb_mb": 2.78,
+ "postprocess_s": 6.2
+}
