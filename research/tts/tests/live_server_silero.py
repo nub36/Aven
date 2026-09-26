@@ -65,15 +65,16 @@ class Server:
         self.port = free_port()
         env = dict(__import__("os").environ)
         env.update({
-            "SILERO_MODEL": model,
+            "SILERO_MODEL": str(Path(model).resolve()),  # абсолютный путь — не зависит от cwd
             "SILERO_SPEAKERS": "ru_aigul",
             "AVEN_TTS_HEALTH": "minimal",
             "AVEN_TTS_DEFAULT_VOICE": "silero_cis_mit/ru_aigul",
         })
         env.update(env_extra)
+        self.log = open(f"/tmp/aven-live-server-{self.port}.log", "w+")
         self.proc = subprocess.Popen(
             [PY, str(SERVER), "--host", "127.0.0.1", "--port", str(self.port), "--warmup"],
-            env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=str(RESEARCH.parent))
+            env=env, stdout=self.log, stderr=subprocess.STDOUT, cwd=str(RESEARCH.parent))
         self.base = f"http://127.0.0.1:{self.port}"
         t0 = time.time()
         while time.time() - t0 < 300:
@@ -84,7 +85,12 @@ class Server:
                 if self.proc.poll() is not None:
                     break
                 time.sleep(1)
-        raise RuntimeError("сервер с Silero не поднялся за 300 с")
+        raise RuntimeError("сервер с Silero не поднялся за 300 с; лог:\n" + self.logtext())
+
+    def logtext(self) -> str:
+        self.log.flush()
+        self.log.seek(0)
+        return self.log.read()
 
     def stop(self):
         self.proc.terminate()
@@ -92,6 +98,10 @@ class Server:
             self.proc.wait(timeout=10)
         except subprocess.TimeoutExpired:
             self.proc.kill()
+        # лог сервера — в общий вывод теста: причина «engine unavailable» не должна быть скрыта
+        txt = self.logtext()
+        print("--- server log ---\n" + txt + "--- /server log ---", flush=True)
+        self.log.close()
 
 
 def http(base, path, method="GET", obj=None):

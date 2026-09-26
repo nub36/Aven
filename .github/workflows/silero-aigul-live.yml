@@ -72,6 +72,7 @@ jobs:
 
       - name: LIVE-тест (taskset -c 0 — одно ядро, как на VPS)
         run: |
+          set -eo pipefail   # иначе `| tee` проглотит падение python (проверено прогоном 36238856773)
           mkdir -p research/tts/out/logs
           taskset -c 0 python research/tts/tests/live_server_silero.py \
             --model research/tts/models/silero/v5_cis_base.pt \
