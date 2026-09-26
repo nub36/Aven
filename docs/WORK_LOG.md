@@ -6,6 +6,72 @@
 
 ---
 
+## 2026-09-26 — XXIII. Этап 6: Silero ru_aigul — рабочий Natural Voice через VPS владельца
+
+- **Дата:** 2026-09-26
+- **Задача (владелец):** довести выбранный Silero CIS / ru_aigul до реально работающего
+  Natural Voice Female Aven через VPS владельца (Ubuntu 24.04, 1 CPU, 2 ГБ, без GPU).
+  Схема: Aven Web (Pages) → HTTPS → VPS TTS API → Silero → браузер. Запрещено: Modal,
+  GPU cloud, платные API, продолжение исследования голосов. Использовать существующие
+  runtime/ и TTSProvider. Веса модели в git не добавлять; секретов в frontend нет;
+  домен владельца не придумывать; на реальный VPS ничего не ставить; merge самостоятельно
+  не делать. Ветка `arena/01a0dc3a-aven-silero-aigul` от main (a752d2f, после PR #9).
+
+### Что сделано
+
+- **server.py 0.4.0 (production-like):** `AVEN_TTS_HEALTH=minimal` (health без
+  engines/voices/uptime), `AVEN_TTS_DEFAULT_VOICE` (health.default_voice), rate limit по
+  IP на synthesize `AVEN_TTS_RATE_N/_WINDOW_S` (12/60 c → 429 + Retry-After, до чтения
+  тела), `AVEN_TTS_BUSY_TIMEOUT_S` (503 при занятом движке), 413 (тело >20 КБ, текст
+  >600 симв.), 400 (пустой текст/неизвестный голос), 405 + Allow (PUT/DELETE/PATCH,
+  POST не на synthesize), `sanitize_text` (управляющие символы), warmup предпочитает
+  DEFAULT_VOICE, `_json` с extra_headers. Подписи голосов Silero — «Aigul · Silero CIS».
+- **Frontend (providers.js/settings.js):** Natural-провайдер — ТОЛЬКО голоса self-hosted
+  сервера; готовые MP3-образцы убраны из основного сценария (файл ≠ Natural Voice),
+  voice-lab не тронут (свой код/данные). checkServer понимает minimal health (голоса —
+  с /api/tts/voices) и сохраняет default_voice; speak() предвыбирает его. Настройки:
+  Движок «Natural Voice (Silero · свой сервер)», Голос «Aigul · Silero CIS», статус-пилл
+  «сервер недоступен — ответы озвучатся системным голосом», «Прослушать» для Natural —
+  фраза владельца «Авен проверяет натуральный голос. Сейчас 18 часов 43 минуты, пробег
+  автомобиля 104520 километров.». System TTS/fallback/normalize не тронуты.
+- **VPS runtime:** deploy-vps.sh — env 0.4.0, SILERO_SPEAKERS=ru_aigul, self-check с
+  синтезом фразы владельца, обновление/откат кода через AVEN_REF=<ветка|SHA>;
+  README-vps.md переработан: метрики 1-CPU, таблица защиты, пошаговая инструкция для
+  Windows из 9 шагов (панель VPS → IP/логин → DNS A-запись tts.<домен> → SSH → команды →
+  curl health → подключение в Aven → фраза → 4 проверки, что говорит Silero, не System).
+- **CI live-тест:** `research/tts/tests/live_server_silero.py` — настоящий server.py +
+  настоящий Silero под taskset -c 0: health minimal (точный набор ключей), батарея фраз
+  (произвольный текст, «Авен», числа, время, даты, рубли, км, литры, короткие/длинные,
+  фраза успеха), RIFF/WAV + synth_s/RTF, WAV→MP3, 413/400, rate-limit 429 на отдельном
+  инстансе. Workflow `.github/workflows/silero-aigul-live.yml` + marker-триггер;
+  publish ботом → review/silero-aigul-live/ (MP3 + silero_live.json).
+
+### Файлы
+
+server.py, tests/dryrun_server_silero.py (новый), tests/live_server_silero.py (новый),
+prototype/js/tts/providers.js, prototype/js/settings.js, prototype/tests/tts-proto-check.js,
+runtime/vps/{deploy-vps.sh,README-vps.md}, .github/workflows/silero-aigul-live.yml (новый),
+.github/triggers/silero-aigul-live.txt (новый), docs/TTS_RESEARCH.md (§19),
+docs/WORK_LOG.md, docs/CHANGELOG.md.
+
+### Проверено
+
+dryrun_server_silero.py — 23 PASS (без движка); tts-proto-check.js — 42 PASS (37 регресс
++ 5 новых: M1–M4, K1); stage1-proto-check.js — 140/140; dryrun_server_qwen3.py — 19 PASS;
+live-прогон Silero в CI — workflow Silero Aigul Live (см. review/silero-aigul-live/).
+НЕ проверено и НЕ выполнялось: deploy на реальный VPS, реальный DNS/HTTPS — за владельцем
+по README-vps.md; live deployment не изображён.
+
+### Известные проблемы / дальше
+
+- Единственный голос на VPS — ru_aigul (SILERO_SPEAKERS; можно дописать ru_vika/ru_zara).
+- WAV без перекодирования в MP3 (LAN/мобильный — достаточно; MP3/Opus — будущий шаг).
+- Lip-sync/3D — отдельный будущий слой (§14): Silero-аудио → анализ → виземы → 3D.
+- Следующий шаг: владелец выполняет 9 шагов README-vps.md; критерий успеха — новая фраза
+  (не из MP3) озвучивается через Web→VPS→Silero.
+
+---
+
 ## 2026-09-26 — XXII. Этап 5: 3D Female Aven (эксперимент) + бесплатный лёгкий VPS TTS + viewer/compare/runtime
 
 - **Дата:** 2026-09-26

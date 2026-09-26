@@ -856,3 +856,81 @@ CI-раннера, `torch.set_num_threads(1)`.
 но держит ~0,6–0,7 ГБ RSS; RHVoice почти ничего не занимает и быстрее, но звучит синтетичнее.
 Качество речи (WER по этапу 1: 0,011 у обоих) и финальный выбор тембра — за владельцем
 (prototype/voice-compare.html). Голос НЕ выбран до прослушивания владельцем.
+
+## 19. Этап 6 (2026-09-26): Silero ru_aigul → рабочий Natural Voice через VPS владельца
+
+**Голос ВЫБРАН владельцем: Silero v5 CIS (MIT) `ru_aigul`** — Natural Voice Female Aven.
+Новых сравнений TTS не проводилось; Qwen3/vd17-design остаётся только reference качества.
+Схема: Aven Web (GitHub Pages, HTTPS) → VPS TTS API (server.py 0.4.0, Silero в памяти) →
+audio → браузер. Modal/GPU cloud/платные API не используются (запрет владельца).
+
+### 19.1 server.py 0.4.0 — production-like режим
+
+Поверх исследовательского 0.3.0 добавлено (env-переменные, код один и тот же для research и VPS):
+
+| Механизм | Поведение |
+|---|---|
+| `AVEN_TTS_HEALTH=minimal` | health = `{ok, status, server, version, max_chars, default_voice}` — без engines/voices/uptime, ничего лишнего о сервере |
+| `AVEN_TTS_DEFAULT_VOICE` | `health.default_voice` — фронт предвыбирает голос сервера |
+| `AVEN_TTS_RATE_N` / `_WINDOW_S` | rate limit по IP на `/api/tts/synthesize` (12/60 c), до чтения тела → `429` + `Retry-After`; 0 — выключен |
+| `AVEN_TTS_BUSY_TIMEOUT_S` | ожидание лока движка (1 CPU, сериализация) → `503` |
+| лимиты | тело > 20 КБ → `413`; текст > 600 симв. → `413`; пустой текст/неизвестный голос → `400` |
+| методы | `PUT/DELETE/PATCH` и POST не на synthesize → `405` + заголовок `Allow` |
+| `sanitize_text` | управляющие символы (кроме `\t\n\r`) вырезаются |
+| приватность | текст запроса не логируется/не пишется (в логе — длина и время); warmup предпочитает DEFAULT_VOICE |
+
+CORS-allowlist 0.3.0 сохранён (nub36.github.io + localhost + `AVEN_TTS_ORIGINS`).
+
+### 19.2 Frontend: Natural = только сервер владельца
+
+`prototype/js/tts/providers.js`: NaturalTTSProviderExperimental озвучивает **только** голоса
+self-hosted сервера. Готовые MP3-образцы исследования убраны из основного сценария
+(воспроизведение файла ≠ Natural Voice); сравнение кандидатов — отдельно в voice-lab*.html
+на собственных данных (свой код, window.AvenVoiceSamples там читается напрямую).
+`checkServer` понимает minimal health (голоса добираются с `/api/tts/voices`, сохраняется
+`default_voice`); менеджер speak() предвыбирает default_voice, если сохранённый голос
+пропал. Настройки: Движок «Natural Voice (Silero · свой сервер)», Голос «Aigul · Silero CIS»,
+статус-пилл «сервер недоступен — ответы озвучатся системным голосом». «Прослушать» для
+Natural шлёт тестовую фразу владельца: «Авен проверяет натуральный голос. Сейчас 18 часов
+43 минуты, пробег автомобиля 104520 километров.» (нормализация: «восемнадцать часов сорок
+три минуты… сто четыре тысячи пятьсот двадцать километров»). System TTS не тронут —
+fallback всегда; экранного текста не меняем (normalize только для речи).
+
+### 19.3 VPS runtime (production-like experimental)
+
+`research/tts/runtime/vps/deploy-vps.sh`: одна команда ставит Silero (torch CPU + модель
+92 МБ с models.silero.ai, в git веса НЕ попадают), systemd `aven-tts` (Silero в памяти
+с первого старта, автозапуск, Restart=on-failure, MemoryMax=1500M, hardening), env 0.4.0
+(minimal health + default_voice + rate limit 12/60 c + busy-timeout 20 c), self-check —
+синтез фразы владельца голосом Aigul. Обновление/откат кода: `AVEN_REF=<ветка|SHA>`.
+HTTPS — Caddy (Let's Encrypt автоматом; DNS A-запись `tts.<домен владельца>` — домен
+НЕ придумывался, инструкция даёт точный record). `README-vps.md` — пошаговая инструкция
+для владельца (Windows) из 9 шагов: панель VPS → IP/логин → DNS → SSH → команды →
+health → подключение в Aven → новая фраза → как убедиться, что говорит Silero, а не
+System TTS. **На реальный VPS агент ничего не ставил; live deployment НЕ выполнялся и
+не изображается.**
+
+### 19.4 Тесты этапа 6
+
+- `research/tts/tests/dryrun_server_silero.py` — контракт сервера БЕЗ движка (реальные
+  HTTP-серверы в сабпроцессах): 23 PASS — minimal health/default_voice, 405+Allow,
+  413 (тело/текст), 400, 429+Retry-After, CORS-allowlist, логи без текста запроса,
+  юниты sanitize_text/RateLimiter.
+- `research/tts/tests/live_server_silero.py` — LIVE-батарея на настоящем Silero (CI,
+  `taskset -c 0`): health minimal (точный набор ключей), синтез фраз владельца
+  (произвольный текст, «Авен», числа, время, даты, рубли, километры, литры, короткие/
+  длинные, тестовая фраза успеха), настоящий RIFF/WAV, synth_s/RTF, WAV→MP3 для
+  прослушивания, 413/400, rate limit 429 на отдельном инстансе. Workflow
+  `.github/workflows/silero-aigul-live.yml`; publish ботом → `review/silero-aigul-live/`.
+- Регресс: `tts-proto-check.js` — 42 PASS (37 прежних + M1–M4 minimal health/default_voice/
+  отсутствие bundled-образцов + K1 фраза владельца); `dryrun_server_qwen3.py` — 19 PASS;
+  `stage1-proto-check.js` — 140/140.
+
+### 19.5 Статусы честно
+
+Проверено в песочнице: dry-run контракт (23), jsdom-пути фронтенда (42+140), qwen3-регресс (19).
+Проверено в CI: live-синтез Silero ru_aigul на server.py 0.4.0 (workflow Silero Aigul Live;
+MP3 и метрики — review/silero-aigul-live/). НЕ проверено (нет доступа): реальный deploy на
+VPS владельца, Caddy+DNS+HTTPS на реальном домене, systemd на Ubuntu 24.04 — для этого
+README-vps.md (9 шагов). Липсинк/3D — вне этапа 6: Silero-аудио → lip-sync → виземы —
+следующий отдельный слой (§14, §18.3).
