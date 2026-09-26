@@ -59,8 +59,9 @@
     <div style="overflow-x:auto">
       <table class="mx" id="mx"></table>
     </div>
-    <div class="muted" style="margin-top:8px">Пустая ячейка = образец для этого кандидата пока не сгенерирован
-      (прогон этапа 5). Ячейки подтянутся из research/tts/results/vps_compare после прогона.</div>
+    <div class="muted" style="margin-top:8px">Все 48 ячеек заполнены: этап 1–4 (t01–t10 в базовых каталогах) +
+      этап 5 (vps/: c01–c03 и недостающие t-фразы, прогон на 1 CPU). Полный набор метрик —
+      research/tts/results/vps_probe.json.</div>
   </div>
 
   <h2 style="margin:22px 0 4px;font-size:1.1rem">Кандидаты: движок, лицензия, честные цифры 1 CPU</h2>
@@ -107,9 +108,13 @@
     var HAVE = { 'silero-aigul': ['t01','t03','t04','t06'], 'silero-vika': ['t01','t03','t04','t06'],
                  'silero-zara': ['t01','t03','t04','t06'], 'rhvoice-elena': ['t01','t02','t03','t04','t05','t06','t07','t08','t09','t10'],
                  'rhvoice-dasha': ['t01','t02','t03','t04','t05','t06','t07','t08','t09','t10'] };
-    /* VPS-файлы этапа 5 (подтверждается после артефакта): перечислены кандидаты × фразы прогона. */
-    var VPS = { 'silero-aigul': [], 'silero-vika': [], 'silero-zara': [],
-                'rhvoice-elena': [], 'rhvoice-dasha': [] };
+    /* Фразы этапа 5 из прогона VPS TTS Compare (taskset -c 0) — опубликованы ботом
+       в assets/voice-samples/vps/ (50 MP3: 5 кандидатов × c01,c02,c03,t02,t03,t05,t07–t10). */
+    var VPS = { 'silero-aigul':  ['c01','c02','c03','t02','t03','t05','t07','t08','t09','t10'],
+                'silero-vika':   ['c01','c02','c03','t02','t03','t05','t07','t08','t09','t10'],
+                'silero-zara':   ['c01','c02','c03','t02','t03','t05','t07','t08','t09','t10'],
+                'rhvoice-elena': ['c01','c02','c03'],
+                'rhvoice-dasha': ['c01','c02','c03'] };
 
     function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]; }); }
     function player(key, ph) {
@@ -136,13 +141,14 @@
       document.getElementById('mx').innerHTML = h;
     })();
 
-    /* --- карточки кандидатов (цифры 1 CPU заполняются из vps_probe.json после прогона) --- */
+    /* --- карточки кандидатов: цифры — из research/tts/results/vps_probe.json (прогон этапа 5,
+           всё под taskset -c 0, одно ядро; «короткая» = «Слушаю.», «длинная» = ~12 с аудио) --- */
     var META = {
-      'silero-aigul':  { lic: 'MIT (код + веса CIS)', comm: 'yes', ram: '—', s: '—', l: '—', net: 'нет (после установки)', fit: 'да' },
-      'silero-vika':   { lic: 'MIT (код + веса CIS)', comm: 'yes', ram: '—', s: '—', l: '—', net: 'нет (после установки)', fit: 'да' },
-      'silero-zara':   { lic: 'MIT (код + веса CIS)', comm: 'yes', ram: '—', s: '—', l: '—', net: 'нет (после установки)', fit: 'да' },
-      'rhvoice-elena': { lic: 'GPL-3.0 (голос elena)', comm: 'yes', ram: '—', s: '—', l: '—', net: 'нет (офлайн)', fit: 'да' },
-      'rhvoice-dasha': { lic: 'CC BY-SA 4.0 (голос dasha-rus)', comm: 'yes (атрибуция)', ram: '—', s: '—', l: '—', net: 'нет (офлайн)', fit: 'да' }
+      'silero-aigul':  { lic: 'MIT (код + веса CIS)', comm: 'yes', ram: '≈0.6 ГБ после загрузки (пик 0.72 ГБ, torch)', s: '≈0.08 с (первый вызов 0.66 с — прогрев)', l: '≈0.85 с на 13 с аудио (RTF 0.065)', net: 'нет (после установки)', fit: 'да' },
+      'silero-vika':   { lic: 'MIT (код + веса CIS)', comm: 'yes', ram: '≈0.6 ГБ после загрузки (пик 0.72 ГБ, torch)', s: '≈0.07 с', l: '≈0.75 с на 12 с аудио (RTF 0.064)', net: 'нет (после установки)', fit: 'да' },
+      'silero-zara':   { lic: 'MIT (код + веса CIS)', comm: 'yes', ram: '≈0.6 ГБ после загрузки (пик 0.72 ГБ, torch)', s: '≈0.07 с', l: '≈0.78 с на 12 с аудио (RTF 0.066)', net: 'нет (после установки)', fit: 'да' },
+      'rhvoice-elena': { lic: 'GPL-3.0 (голос elena)', comm: 'yes', ram: '≈26 МБ (процесс на запрос)', s: '≈0.12 с', l: '≈0.42 с на 10 с аудио (RTF 0.041)', net: 'нет (офлайн)', fit: 'да' },
+      'rhvoice-dasha': { lic: 'CC BY-SA 4.0 (голос dasha-rus)', comm: 'yes (атрибуция)', ram: '≈26 МБ (процесс на запрос)', s: '≈0.17 с', l: '≈0.42 с на 11 с аудио (RTF 0.038)', net: 'нет (офлайн)', fit: 'да' }
     };
     var REJ = [
       ['Supertonic 3 (F3)', 'OpenRAIL-M, коммерческое да', 'RTF ~0.42 и RAM ~15.6 ГБ — не для 1 CPU / 2 ГБ VPS'],
