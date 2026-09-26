@@ -13,6 +13,25 @@
 
 ## [Unreleased]
 
+### 2026-09-26 (XVII) — Этап 5: 3D Female Aven (эксперимент, отдельная страница) + выбор голоса для VPS (страница сравнения) + VPS runtime
+
+- **Добавлено (исследование, НЕ замена персонажа):** отдельная страница
+  `prototype/aven-3d.html` — ЭКСПЕРИМЕНТАЛЬНЫЙ 3D-бюст (TripoSR по утверждённому reference,
+  GLB ~120k треугольников, текстура 2048): состояния idle/listening/thinking/speaking/success/
+  important/waiting/error, амплитудный «lip-sync уровень 0», reference рядом для оценки
+  сходства, PNG-fallback. Модель не является финальной Female Aven (нет rig/blendshapes/глаз);
+  Главная страница и PNG-персонаж НЕ изменены. Полное исследование — docs/AVATAR_3D_RESEARCH.md,
+  обзор рендеров — review/3d-aven-bust.
+- **Добавлено:** `prototype/voice-compare.html` — сравнение vd17-эталона с 5 бесплатными
+  финалистами TTS для VPS владельца (Silero ru_aigul/ru_vika/ru_zara MIT; RHVoice elena
+  GPL-3.0 / dasha-rus CC BY-SA 4.0) по одинаковым типам фраз, с лицензиями и честными цифрами
+  «1 CPU». Голос НЕ выбран — финальный выбор за владельцем на слух.
+- **Добавлено (research, для владельца):** `research/tts/runtime/vps/` — деплой лёгкого
+  TTS-сервера на VPS одной командой (systemd + инструкция HTTPS через Caddy); системный
+  speechSynthesis остаётся обязательным fallback. На реальный VPS ничего не устанавливалось.
+- **Добавлено (CI):** ручные workflow `Avatar 3D Research` и `VPS TTS Compare` (публикуют
+  компактный результат в ветку ботом; ничего платного, GPU не используется).
+
 ### 2026-09-26 (XVI) — Natural Voice `vd17-design`: реальный путь к запуску — Qwen3-движок в TTS-сервере, честные статусы и таймаут в прототипе
 
 - **Исправлено (прототип):** причина «не подключён — HTTP 404» у Natural TTS — по указанному адресу работал
