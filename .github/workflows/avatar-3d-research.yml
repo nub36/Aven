@@ -55,11 +55,12 @@ jobs:
         with:
           python-version: '3.11'
 
-      # moderngl (bake-texture) создаёт headless GL-контекст через EGL → нужна mesa/llvmpipe
+      # bake-texture использует moderngl (GL 3.3). glcontext на Linux безусловно выбирает
+      # x11-бэкенд → в headless CI нужен виртуальный дисплей (Xvfb) + mesa (llvmpipe).
       - name: Системные библиотеки GL (headless bake-texture)
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libgl1 libegl1 libgl1-mesa-dri >/dev/null
+          sudo apt-get install -y -qq xvfb libgl1 libegl1 libgl1-mesa-dri libglx-mesa0 >/dev/null
 
       - name: Python-зависимости (torch CPU + TripoSR)
         run: |
@@ -91,7 +92,8 @@ jobs:
           set -e -o pipefail
           mkdir -p out/logs out/tripo
           # 0 = master reference (утверждённое лицо), 1 = transparent PNG (запасной вход)
-          taskset -c 0-3 python /tmp/TripoSR/run.py \
+          # xvfb-run: virtual X display для moderngl (bake-texture); -a — авто-выбор DISPLAY
+          xvfb-run -a taskset -c 0-3 python /tmp/TripoSR/run.py \
             prototype/assets/character/master/female-aven-reference.jpg \
             prototype/assets/character/web/female-aven-transparent.png \
             --device cpu --output-dir out/tripo \
