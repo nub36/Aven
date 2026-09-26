@@ -85,6 +85,9 @@ function loadModel(url) {
   if (modelRoot) { scene.remove(modelRoot); modelRoot = null; }
   morphs = {}; caps.blink = caps.jaw = caps.smile = caps.brows = false;
   document.getElementById('fallback').hidden = true;
+  const stats = document.getElementById('modelStats');
+  if (stats) stats.textContent = 'Загрузка GLB: ' + url + ' …';
+  window.__aven3d = { url, status: 'loading', meshes: 0, triangles: 0 };
   new GLTFLoader().load(url, (gltf) => {
   modelRoot = gltf.scene;
   const box = new THREE.Box3().setFromObject(modelRoot);
@@ -120,11 +123,25 @@ function loadModel(url) {
     `morph-таргетов: ${Object.keys(morphs).length}` + (Object.keys(morphs).length ?
     ` (${Object.keys(morphs).slice(0, 6).join(', ')}${Object.keys(morphs).length > 6 ? '…' : ''})` : '');
   console.log('[aven3d] morphs:', Object.keys(morphs));
-}, undefined, (err) => {
+  // Успешная загрузка: fallback обязан быть выключен (PNG не подменяет 3D).
+  document.getElementById('fallback').hidden = true;
+  let meshes = 0;
+  modelRoot.traverse((o) => { if (o.isMesh) meshes++; });
+  window.__aven3d = { url, status: 'loaded', meshes, triangles: Math.round(tris), vertices: verts,
+                      morphs: Object.keys(morphs).length };
+  console.log('[aven3d] GLB загружен:', url, meshes, 'mesh,', Math.round(tris), 'треугольников');
+}, (ev) => {
+  if (ev && ev.total) {
+    const stats = document.getElementById('modelStats');
+    if (stats) stats.textContent = `Загрузка GLB: ${Math.round(ev.loaded / ev.total * 100)}%`;
+  }
+}, (err) => {
   console.warn('[aven3d] GLB не загрузился:', err);
+  window.__aven3d = { url, status: 'error', error: String(err && (err.message || err)) };
   document.getElementById('fallback').hidden = false;
   document.getElementById('fbReason').textContent =
-    'Файл ' + url + ' не найден или браузер не поддержал WebGL/GLB.';
+    'Файл ' + new URL(url, location.href).href + ' не загрузился: ' +
+    String(err && (err.message || err)) + '.';
 });
 }
 
