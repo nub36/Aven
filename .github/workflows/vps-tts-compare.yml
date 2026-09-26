@@ -65,7 +65,10 @@ jobs:
           git remote add origin https://github.com/RHVoice/RHVoice.git
           git fetch --depth 1 origin "$RHVOICE_COMMIT"
           git checkout -q FETCH_HEAD
-          git submodule update --init --depth 1 data/voices/elena data/voices/dasha-rus
+          git submodule update --init --depth 1 --recursive \
+            external cmake/thirdParty/sanitizers src/third-party/cldr
+          git submodule update --init --depth 1 \
+            data/languages/Russian data/voices/elena data/voices/dasha-rus
           scons -j"$(nproc)" >/tmp/rhvoice-build.log 2>&1 || { tail -40 /tmp/rhvoice-build.log; exit 1; }
           sudo scons install >/dev/null 2>&1 || { tail -20 /tmp/rhvoice-build.log; exit 1; }
           which RHVoice-test

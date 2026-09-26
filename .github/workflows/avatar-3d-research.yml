@@ -56,11 +56,16 @@ jobs:
         run: |
           set -e
           pip install torch --index-url https://download.pytorch.org/whl/cpu
+          # trimesh>=4.4 обязателен: 4.0.5 падает на numpy 2.x (удалён ndarray.ptp);
+          # rembg[cpu] без extra не тянет onnxruntime → import rembg падает (проверено)
           pip install "omegaconf==2.3.0" "Pillow" "einops==0.7.0" "transformers==4.35.0" \
-                      "trimesh==4.0.5" rembg "huggingface-hub" "imageio[ffmpeg]" "xatlas==0.0.9" \
-                      fast-simplification numpy
-          # torchmcubes (marching cubes как расширение torch) — компилируется, пиннинг коммита
-          pip install "git+https://github.com/tatsy/torchmcubes.git@879926d0ef58e6ce0ac2630fdecb5e53af7ed3ff"
+                      "trimesh>=4.4,<5" "rembg[cpu]" "huggingface-hub" "imageio[ffmpeg]" "xatlas==0.0.9" \
+                      fast-simplification scipy numpy
+          # torchmcubes (marching cubes как расширение torch) — компилируется против УЖЕ установленного
+          # torch: сборка строго без build-isolation, build-депы ставим заранее (иначе RuntimeError
+          # "must be built against an installed PyTorch")
+          pip install scikit-build-core pybind11 ninja cmake
+          pip install --no-build-isolation "git+https://github.com/tatsy/torchmcubes.git@879926d0ef58e6ce0ac2630fdecb5e53af7ed3ff"
 
       - name: Клон TripoSR (пиннинг)
         run: |

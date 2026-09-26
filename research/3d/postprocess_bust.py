@@ -5,10 +5,17 @@
 
 Что делает:
   * грузит OBJ с текстурой (trimesh), перестраивает нормали;
-  * децимация до realtime-friendly размера (fast-simplification, ~120k треугольников);
+  * децимация до realtime-friendly размера (fast-simplification, ~120k треугольников).
+    ВАЖНО: fast-simplification не знает про UV — после децимации UV переопроектируются
+    на исходные вершины через cKDTree (ближайшая вершина исходного меша), текстура
+    сохраняется; честно отмечаем uv="reprojected" в stats. Если децимация не нужна
+    (меш уже легче цели), UV остаются родными (uv="native");
   * центрирование/масштаб под стандарт «бюст 1.6 юнита высотой, основание на y=0»;
   * экспорт GLB (текстура встраивается) для браузерного viewer'а (Three.js);
   * честная сводка: вершины/треугольники/размер файла → stats.json.
+
+Зависимости: trimesh>=4.4 (совместим с numpy 2.x; на 4.0.5 падает на удалённом
+ndarray.ptp), fast-simplification, scipy, Pillow.
 
 ВАЖНО (docs/AVATAR_3D_RESEARCH.md): результат — ЭКСПЕРИМЕНТАЛЬНАЯ автоматическая
 реконструкция по одному фото. Это НЕ утверждённая Female Aven и НЕ финальная модель:
@@ -24,6 +31,7 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
 import trimesh
 
 TARGET_FACES = 120_000   # realtime-friendly для браузера (Three.js, средние устройства)
@@ -41,14 +49,36 @@ def process(src_dir: Path, label: str, dst_glb: Path, stats: dict) -> None:
         # без текстуры GLB получится с vertex colors — честно фиксируем в stats
         stats["texture"] = "vertex colors (текстура не найдена)"
     else:
-        stats["texture"] = f"{mesh.visual.material.image.size} px"
+        img = getattr(mesh.visual.material, "image", None) or mesh.visual.image
+        stats["texture"] = f"{img.size} px" if img is not None else "texture (image not loaded)"
 
     stats["src_faces"] = int(len(mesh.faces))
     stats["src_vertices"] = int(len(mesh.vertices))
 
-    # децимация (сохраняем UV/материал: fast-simplification через trimesh)
+    # децимация. fast-simplification теряет UV/текстуру → сохраняем и переопроектируем
+    had_texture = isinstance(mesh.visual, trimesh.visual.TextureVisuals)
+    if had_texture:
+        orig_uv = np.asarray(mesh.visual.uv, dtype=np.float64) if mesh.visual.uv is not None else None
+        orig_v = np.asarray(mesh.vertices, dtype=np.float64)
+        tex_image = getattr(mesh.visual.material, "image", None) or mesh.visual.image
+    else:
+        orig_uv = None
+
     if len(mesh.faces) > TARGET_FACES:
         mesh = mesh.simplify_quadric_decimation(face_count=TARGET_FACES)
+        if had_texture and orig_uv is not None and tex_image is not None:
+            # UV по ближайшей исходной вершине (cKDTree): децимированные вершины лежат
+            # на исходной поверхности, поэтому соответствие достаточно точное для
+            # запечённой текстуры; на границах UV-островов возможно лёгкое смешение.
+            from scipy.spatial import cKDTree
+            _, idx = cKDTree(orig_v).query(np.asarray(mesh.vertices, dtype=np.float64), k=1)
+            mat = trimesh.visual.texture.SimpleMaterial(image=tex_image)
+            mesh.visual = trimesh.visual.TextureVisuals(uv=orig_uv[idx], material=mat, image=tex_image)
+            stats["uv"] = "reprojected (nearest vertex after decimation)"
+        else:
+            stats["uv"] = "lost (decimation без текстуры)"
+    else:
+        stats["uv"] = "native" if had_texture else "none"
     stats["faces"] = int(len(mesh.faces))
     stats["vertices"] = int(len(mesh.vertices))
 
