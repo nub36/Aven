@@ -1,6 +1,6 @@
 /* Aven — Visual Prototype. Страницы: Главная, День, Календарь, Задачи, Заметки. Не production. */
 (function () {
-  const A = window.Aven, S = window.AvenState, D = window.AvenDemo.staticData;
+  const A = window.Aven, S = window.AvenState;
   A.pages = A.pages || {};
   const s = () => S.s();
 
@@ -99,14 +99,113 @@
     };
   }
 
+  /* ---------- агрегаты Главной и Дня из текущих данных (без хардкода, MVP_SCOPE §10.1) ---------- */
+  function daysToISO(iso) { return diffDays(iso, todayISO()); }
+  function homeFinance(st) {
+    const today = todayISO();
+    const pref = today.slice(0, 7);
+    const exp = (st.ops || []).filter((o) => o.type === 'expense');
+    const todaySum = exp.filter((o) => o.dateISO === today).reduce((acc, o) => A.sumMoney(acc, o.amount || 0), 0);
+    const month = exp.filter((o) => String(o.dateISO || '').slice(0, 7) === pref);
+    const largest = month.slice().sort((a, b) => A.minor(b.amount || 0) - A.minor(a.amount || 0))[0] || null;
+    return { todaySum, monthCount: month.length, largest };
+  }
+  function carServiceLeft(car) {
+    const last = (car.service || []).slice().sort((a, b) => (Number(b.km) || 0) - (Number(a.km) || 0))[0];
+    if (!last) return null;
+    return (Number(last.km) || 0) + (Number(car.serviceIntervalKm) || 10000) - (Number(car.mileage) || 0);
+  }
+  function carDocsAttention(car) {
+    return (car.docs || []).filter((d) => {
+      if (!d.untilISO) return false;
+      return daysToISO(d.untilISO) <= (Number(d.remindDays) || 0);
+    }).length;
+  }
+  /* тот же порог, что у A.warrantyStatus: < 0 — истекла, < 90 — скоро закончится */
+  function warrantyKind(p) {
+    if (!p || p.status === 'sold' || p.status === 'archived') return 'skip';
+    if (!p.warrantyISO) return 'none';
+    const d = daysToISO(p.warrantyISO);
+    if (d < 0) return 'expired';
+    if (d < 90) return 'warn';
+    return 'ok';
+  }
+  function homeWarranties(st) {
+    const items = (st.purchases || []).filter((p) => ['skip', 'none'].indexOf(warrantyKind(p)) < 0);
+    return {
+      active: items.filter((p) => warrantyKind(p) === 'ok').length,
+      ending: items.filter((p) => ['warn', 'expired'].indexOf(warrantyKind(p)) >= 0)
+    };
+  }
+  function homeNotes(st) {
+    const active = (st.notes || []).filter((n) => !n.archived);
+    const pinned = active.filter((n) => n.pinned);
+    const recent = active.slice().sort((a, b) => String(b.updatedISO || '').localeCompare(String(a.updatedISO || '')));
+    const seen = {};
+    return pinned.concat(recent).filter((n) => (seen[n.id] ? false : (seen[n.id] = true))).slice(0, 4);
+  }
+  /* «Требует внимания» в разделе «День»: расчёт по текущим данным, без фоновых проверок.
+     Пункты берутся только из включённых модулей (Настройки → Модули). */
+  function attentionItems(st) {
+    const items = [];
+    const MOD = (st.settings || {}).modules || {};
+    (st.tasks || []).forEach((t) => {
+      const d = t && t.dueDate;
+      if (MOD.tasks === false) return;
+      if (t && !t.done && !t.archived && d && daysToISO(d) < 0) {
+        items.push({ icon: '☑️', title: t.title, sub: 'задача просрочена · ' + humanDate(d), href: '#/tasks', cls: 'warn' });
+      }
+    });
+    (MOD.auto === false ? [] : (st.car.docs || [])).forEach((doc) => {
+      if (!doc.untilISO) return;
+      const days = daysToISO(doc.untilISO);
+      if (days <= (Number(doc.remindDays) || 0)) {
+        items.push({
+          icon: '📄', title: doc.title,
+          sub: days < 0 ? 'срок истёк ' + humanDate(doc.untilISO) : 'срок ' + humanDate(doc.untilISO),
+          href: '#/auto', cls: days < 0 ? 'danger' : 'warn'
+        });
+      }
+    });
+    (MOD.shopping === false ? [] : (st.purchases || [])).forEach((p) => {
+      const kind = warrantyKind(p);
+      if (kind === 'warn' || kind === 'expired') {
+        items.push({
+          icon: p.emoji || '📦', title: p.name,
+          sub: kind === 'expired' ? 'гарантия истекла ' + humanDate(p.warrantyISO) : 'гарантия до ' + humanDate(p.warrantyISO),
+          href: '#/shopping', cls: kind === 'expired' ? 'danger' : 'warn'
+        });
+      }
+    });
+    return items;
+  }
+
   /* ================= ГЛАВНАЯ ================= */
   A.pages.home = function () {
     const st = s();
-    const cards = Object.assign({ today: true, tasks: true, expenses: true, car: true, quick: true, actions: true }, st.settings.homeCards || {});
+    const cards = Object.assign({ today: true, tasks: true, expenses: true, car: true, shopping: true, notes: true, quick: true, actions: true }, st.settings.homeCards || {});
+    /* карточка видна только если включён источник: раздел-модуль (Настройки → Модули) */
+    const MOD = st.settings.modules || {};
+    if (MOD.calendar === false) cards.today = false;
+    if (MOD.tasks === false) cards.tasks = false;
+    if (MOD.finance === false) cards.expenses = false;
+    if (MOD.auto === false) cards.car = false;
+    if (MOD.shopping === false) cards.shopping = false;
+    if (MOD.notes === false) cards.notes = false;
     const todayTasks = st.tasks.filter((t) => !t.archived && taskBucket(t) === 'today');
     const todayEvents = eventsForDate(todayISO());
     const upcoming = nextEvents(1)[0];
     const latestHistory = (st.history || []).slice(0, 5);
+    const fin = homeFinance(st);
+    const taskStats = {
+      open: st.tasks.filter((t) => !t.done && !t.archived).length,
+      done: st.tasks.filter((t) => t.done && !t.archived).length,
+      overdue: st.tasks.filter((t) => !t.done && !t.archived && t.dueDate && daysToISO(t.dueDate) < 0).length
+    };
+    const svcLeft = carServiceLeft(st.car);
+    const docsAttn = carDocsAttention(st.car);
+    const warr = homeWarranties(st);
+    const topNotes = homeNotes(st);
     const charOn = !!(window.AvenChar && !window.AvenChar.isOff() && window.AvenChar.current().id === 'female');
     const last = A._lastReply ? A.esc(A._lastReply) : 'Напишите команду — или нажмите на Aven справа.';
     const html = `
@@ -168,15 +267,19 @@
             <input type="checkbox" ${t.done ? 'checked' : ''}>
             <span class="label">${A.esc(t.title)}</span>
           </label>`).join('') : '<div class="empty">Активных задач на сегодня нет</div>'}
-        <div style="margin-top:10px"><span class="pill">Выполнено сегодня: 1</span></div>
+        <div class="btn-row" style="margin-top:10px">
+          <span class="pill">открытых: ${taskStats.open}</span>
+          <span class="pill ok">выполнено: ${taskStats.done}</span>
+          ${taskStats.overdue ? `<span class="pill warn">просрочено: ${taskStats.overdue}</span>` : ''}
+        </div>
       </div>` : ''}
 
       ${cards.expenses ? `
       <div class="card">
         <div class="head"><h3>Расходы</h3><a href="#/finance" class="btn small">Финансы →</a></div>
-        <div class="row-item"><div class="grow"><div class="t">Сегодня</div></div><b class="num">${A.money(3420)}</b></div>
+        <div class="row-item"><div class="grow"><div class="t">Сегодня</div></div><b class="num">${A.money(fin.todaySum)}</b></div>
         <div class="row-item"><div class="grow"><div class="t">Месяц</div></div><b class="num">${A.money(st.finMonth.expense)}</b></div>
-        <div class="row-item"><div class="grow"><div class="s">Крупнейшая: АЗС Лукойл</div></div><span class="num s">${A.money(3200)}</span></div>
+        ${fin.largest ? `<div class="row-item"><div class="grow"><div class="s">Крупнейшая в месяце: ${A.esc(fin.largest.title)}</div></div><span class="num s">${A.money(fin.largest.amount)}</span></div>` : '<div class="empty">Операций в этом месяце нет</div>'}
       </div>` : ''}
 
       ${cards.car ? `
@@ -184,7 +287,23 @@
         <div class="head"><h3>Автомобиль</h3><a href="#/auto" class="btn small">Авто →</a></div>
         <div class="row-item"><div class="grow"><div class="t">${A.esc(st.car.model)}</div><div class="s">${st.car.year} · основной</div></div></div>
         <div class="row-item"><div class="grow"><div class="s">Пробег</div></div><b class="num">${st.car.mileage.toLocaleString('ru-RU')} км</b></div>
-        <div class="row-item"><div class="grow"><div class="s">До замены масла</div></div><span class="pill warn">2 480 км</span></div>
+        <div class="row-item"><div class="grow"><div class="s">До следующего ТО</div></div><span class="pill ${svcLeft != null && svcLeft < 0 ? 'danger' : svcLeft != null && svcLeft < 1000 ? 'warn' : ''}">${svcLeft == null ? '—' : Math.max(0, svcLeft).toLocaleString('ru-RU') + ' км'}</span></div>
+        <div class="row-item"><div class="grow"><div class="s">Документы</div></div>${docsAttn ? `<span class="pill warn">к вниманию: ${docsAttn}</span>` : '<span class="pill ok">без предупреждений</span>'}</div>
+      </div>` : ''}
+
+      ${cards.shopping ? `
+      <div class="card">
+        <div class="head"><h3>Гарантии</h3><a href="#/shopping" class="btn small">Покупки →</a></div>
+        <div class="row-item"><div class="grow"><div class="t">Действуют</div></div><b class="num">${warr.active}</b></div>
+        ${warr.ending.length ? warr.ending.slice(0, 3).map((p) => `
+          <div class="row-item"><div class="grow"><div class="t">${A.esc(p.emoji || '📦')} ${A.esc(p.name)}</div><div class="s">гарантия до ${A.esc(humanDate(p.warrantyISO))}</div></div><span class="pill ${warrantyKind(p) === 'expired' ? 'danger' : 'warn'}">${daysToISO(p.warrantyISO) < 0 ? 'истекла' : Math.max(0, daysToISO(p.warrantyISO)) + ' дн.'}</span></div>`).join('') : '<div class="empty">Ничего не истекает в ближайшие 90 дней</div>'}
+      </div>` : ''}
+
+      ${cards.notes ? `
+      <div class="card">
+        <div class="head"><h3>Заметки</h3><a href="#/notes" class="btn small">Все →</a></div>
+        ${topNotes.length ? topNotes.map((n) => `
+          <div class="row-item"><div class="grow"><div class="t">${n.pinned ? '📌 ' : ''}${A.esc(n.title)}</div><div class="s">${A.esc(n.folder)}${(n.tags || []).length ? ' · ' + A.esc(n.tags.join(', ')) : ''}</div></div><span class="s" style="color:var(--muted)">${A.esc(dateLabel(n.updatedISO))}</span></div>`).join('') : '<div class="empty">Заметок пока нет</div>'}
       </div>` : ''}
 
       ${cards.actions ? `
@@ -239,6 +358,9 @@
     const evs = eventsForDate(iso);
     const dayTasks = st.tasks.filter((t) => taskForTab(t, dayTab));
     const doneActions = (st.history || []).filter((h) => /\.(create|update|delete)$/.test(h.action || '')).slice(0, 4);
+    const dayNotes = (((st.settings || {}).modules || {}).notes === false ? [] : (st.notes || []))
+      .filter((n) => !n.archived && n.updatedISO === iso).slice(0, 4);
+    const attention = attentionItems(st);
     const timeline = [];
     evs.forEach((e) => timeline.push({ t: eventTime(e), n: e.title, type: e.importance === 'важное' ? 'important' : 'event', sub: e.place || repeatLabel(e) || 'событие' }));
     dayTasks.filter((t) => !t.done).forEach((t) => timeline.push({ t: taskDueLabel(t), n: t.title, type: 'task', sub: 'задача · ' + t.project }));
@@ -251,7 +373,7 @@
     <div class="page-head">
       <div>
         <h1>День</h1>
-        <div class="sub">${A.esc(dateLabel(iso))} · события из Календаря + задачи + последние действия · демо</div>
+        <div class="sub">${A.esc(dateLabel(iso))} · события из Календаря + задачи + заметки дня + «требует внимания» · демо</div>
       </div>
       <div class="btn-row">
         <button class="btn" data-action="day-add-event">＋ Добавить событие</button>
@@ -271,9 +393,9 @@
             <div style="display:flex;gap:12px"><span class="time">${A.esc(i.t)}</span><div><b>${A.esc(i.n)}</b>
             <div class="s" style="color:var(--muted);font-size:.8rem">${A.esc(i.sub)}</div></div></div>
           </div>`).join('')}</div>` : '<div class="empty">На этот день ничего не запланировано. Создайте событие или задачу.</div>'}
-        <h3 style="margin-top:18px">Напоминания</h3>
-        ${D.reminders.map((r) => `
-          <div class="row-item"><span class="time">${A.esc(r.t)}</span><div class="grow"><div class="t">${A.esc(r.n)}</div></div>🔔</div>`).join('')}
+        <h3 style="margin-top:18px">Заметки этого дня</h3>
+        ${dayNotes.length ? dayNotes.map((n) => `
+          <div class="row-item"><span class="time">📝</span><div class="grow"><div class="t">${n.pinned ? '📌 ' : ''}${A.esc(n.title)}</div><div class="s">${A.esc(n.folder)}</div></div></div>`).join('') : '<div class="empty">В этот день заметок не меняли</div>'}
       </div>
       <div class="card">
         <h3>Задачи</h3>
@@ -289,6 +411,12 @@
           <div class="row-item"><span class="time">•</span><div class="grow"><div class="t">${A.esc(h.title)}</div><div class="s">${A.esc(h.object || h.action)} · ${A.esc(h.when)}</div></div></div>`).join('')}
         ${!st.tasks.some((t) => t.done) && !doneActions.length ? '<div class="empty">Пока ничего</div>' : ''}
       </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="head"><h3>Требует внимания</h3><span class="pill">расчёт по текущим данным</span></div>
+      ${attention.length ? `<div class="grid cols-3">${attention.map((i) => `
+        <div class="row-item"><span class="time">${A.esc(i.icon)}</span><div class="grow"><div class="t">${A.esc(i.title)}</div><div class="s">${A.esc(i.sub)}</div></div><span class="pill ${i.cls}">${i.href === '#/tasks' ? 'задачи' : i.href === '#/auto' ? 'авто' : 'покупки'}</span></div>`).join('')}</div>` : '<div class="empty">Просроченных задач, истекающих документов и гарантий нет</div>'}
+      <div class="s" style="color:var(--muted);font-size:.82rem;margin-top:10px">Напоминания и уведомления — Stage 1.1 (MVP_SCOPE §4.2): здесь только расчёт по текущим данным разделов, без фоновых проверок.</div>
     </div>`;
     return { html, mount: (root) => { A.bindTabs(root.querySelector('#day-tabs'), (v) => { dayTab = v; A.render(); }); } };
   };
