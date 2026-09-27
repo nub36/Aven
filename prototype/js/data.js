@@ -87,7 +87,12 @@ window.AvenDemo = (function () {
           night: '23:00',
           afterWork: '19:00'
         },
-        homeCards: { today: true, tasks: true, expenses: true, car: true, reminders: true, quick: true, actions: true },
+        suggestions: {
+          /* Локальные объяснимые предложения по уже существующим данным. Это правила,
+             не AI/LLM; выключение не меняет задачи, события и другие сущности. */
+          enabled: true
+        },
+        homeCards: { suggestions: true, today: true, tasks: true, expenses: true, car: true, reminders: true, quick: true, actions: true },
         modules: { calendar: true, tasks: true, notes: true, finance: true, auto: true, shopping: true, tools: true },
         experiments: { canvas: false, aiRouter: false, geoReminders: false }
       },
@@ -248,6 +253,10 @@ window.AvenDemo = (function () {
         { id: 'r2', title: 'Продлить абонемент в бассейн', note: 'Заканчивается на этой неделе', dateISO: today, time: '19:00', link: '', createdISO: iso(-1), updatedISO: iso(-1) },
         { id: 'r3', title: 'Поздравить маму с годовщиной', note: '', dateISO: tomorrow, time: '10:00', link: '', createdISO: iso(-1), updatedISO: iso(-1) }
       ],
+
+      /* Пользовательская реакция хранится отдельно от вычисляемых предложений:
+         stable suggestion id → dismissed/snoozeUntilISO. */
+      suggestionState: {},
 
       /* Состояние Центра уведомлений по каждому пункту (прочитано / отложено / скрыто).
          Ключ — стабильный идентификатор пункта (тип:источник), значение — что с ним сделал

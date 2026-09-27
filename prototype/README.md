@@ -59,6 +59,8 @@ prototype/
     ├── actions.js      — Common Action Layer для задач/событий (DOM-free, state → result/history)
     ├── notify.js       — Напоминания и Центр уведомлений: движок AvenNotify (DOM-free, сборка/счётчики/
     │                     действия read-snooze-dismiss + CRUD напоминаний, History/Undo) и страница «Уведомления»
+    ├── suggestions.js  — AvenSuggestions: локальные объяснимые правила, stable IDs, dismiss/snooze,
+    │                     Common Actions и History/Undo (DOM-free)
     ├── tutorial.js     — reusable Guided Tutorial engine (overlay, progress, optional existing TTS narration)
     ├── help.js         — Help Center: статьи, локальный поиск, contextual help
     ├── tts/normalize.js — нормализация текста ТОЛЬКО для речи (числа, время, даты, деньги, единицы)
@@ -80,11 +82,26 @@ prototype/tests/
 │                           инструмент, в репозитории нет package.json/node_modules — см. шапку файла)
 ├── tts-proto-check.js    — голос Natural end-to-end (jsdom, 42 проверки сценариев A–J и нормализации: Главная →
 │                           normalize → контракт сервера → воспроизведение → состояния → честный fallback)
-└── notifications-check.js — раздел «Уведомления» (jsdom, 49 проверок: движок AvenNotify, действия+Undo,
-                            CRUD напоминаний, настройки источников, страница, интеграция, Help/Tutorial)
+├── notifications-check.js — раздел «Уведомления» (jsdom, 49 проверок: движок AvenNotify, действия+Undo,
+│                            CRUD напоминаний, настройки источников, страница, интеграция, Help/Tutorial)
+└── suggestions-check.js — Suggestions (jsdom, 46 проверок: правила/причины/IDs/order, suppression,
+                           Common Actions, History/Undo, Home/Day/Assistant, Settings, Help/Tutorial)
 ```
 
 Зависимостей нет. Сборка не нужна.
+
+## Suggestions / Предложения Aven
+
+`AvenSuggestions.getSuggestions(context)` локально и детерминированно анализирует существующие задачи,
+события, авто и покупки. Результат всегда содержит причину, приоритет, контекст даты, действия и ссылки
+на исходные записи. Главная показывает не более трёх карточек; «День» передаёт свою уже выбранную дату;
+Assistant только читает тот же список. Это не AI, не облачная аналитика и не уведомления.
+
+Пользователь может отложить или скрыть карточку. В `suggestionState` хранится только эта реакция, а не
+копия вычисляемого текста; stable ID предотвращает дубликаты. Реакции пишутся в History и отменяются.
+Создание задачи подготовки вызывает существующий Common Task Action. При выполнении условия карточка
+исчезает автоматически. Единый переключатель находится в «Настройки → Главная». Help содержит пять
+статей, tutorial — семь шагов и использует прежнее optional TTS; без голоса весь текст доступен.
 
 `voice-lab.html` — A/B-сравнение голосов исследования TTS (docs/TTS_RESEARCH.md). Натуральный голос
 для произвольного текста — через исследовательский сервер: `python research/tts/server.py` (см. docstring).

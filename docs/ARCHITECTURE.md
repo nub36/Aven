@@ -83,6 +83,16 @@ Tutorial Engine → declarative tutorial definitions → overlay/highlight/progr
 
 Это фиксирует направление UX-подсистемы прототипа, но не утверждает production framework.
 
+### 3.3. Suggestions (прототипное направление, не ADR)
+
+`AvenSuggestions` — тонкий DOM-free read/decision слой над общим состоянием: `state + date context →
+ordered explainable suggestions`. Вычисляемая карточка не копируется в данные; сохраняется только реакция
+пользователя (`suggestionState[id]`: dismiss/snooze). Stable ID строится из правила, исходной сущности и
+даты контекста, поэтому повторный render не создаёт дубль. Мутация реальной сущности делегируется Action
+Core, а suppression записывается в общий History/Undo. Home, Day, Assistant и будущие Morning/Evening
+используют один контракт. Notification сообщает о факте/сроке; Suggestion предлагает действие — read/unread
+модель уведомлений в Suggestions не переносится. Правила локальные, детерминированные и не требуют AI.
+
 ## 4. Action Core
 
 Независимо от источника команда превращается в **стандартное действие**.

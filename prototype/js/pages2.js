@@ -993,6 +993,7 @@
         { who: 'aven', text: 'Завтра у вас два события: планёрка в 10:00 и спортзал в 18:30. Напомнить о них заранее?' }
       ];
     }
+    const assistantSuggestions = window.AvenSuggestions ? window.AvenSuggestions.getSuggestions({ surface: 'assistant', dateISO: window.AvenActions.dates.todayISO() }).slice(0, 2) : [];
     const html = `
     <div class="assistant">
       <div class="a-inner">
@@ -1006,6 +1007,10 @@
           <p>Что сделать?</p>
         </div>
         <div class="chat" id="chat"></div>
+        ${assistantSuggestions.length ? `<div class="assistant-suggestions" aria-label="Текущие предложения Aven">
+          <div class="dc-label">Предложения по текущим данным</div>
+          ${assistantSuggestions.map((item) => `<a class="btn small" href="${A.esc(((item.actions || []).filter((x) => x.href)[0] || {}).href || '#/home')}" title="Почему: ${A.esc(item.reason)}">✦ ${A.esc(item.title)}</a>`).join('')}
+        </div>` : ''}
         <div class="sugg">
           <button class="btn small" data-action="sugg" data-q="Что сегодня?">Что сегодня?</button>
           <button class="btn small" data-action="sugg" data-q="Добавить расход">Добавить расход</button>
@@ -1068,6 +1073,12 @@
     return 'Просроченные задачи: ' + tasks.map((t) => t.title + ' — срок ' + C.format.taskDueLabel(t)).join('; ') + '.';
   }
 
+  function assistantSuggestionSummary() {
+    const list = window.AvenSuggestions ? window.AvenSuggestions.getSuggestions({ surface: 'assistant', dateISO: window.AvenActions.dates.todayISO() }).slice(0, 3) : [];
+    if (!list.length) return 'Сейчас предложений нет: по доступным локальным данным не найден полезный следующий шаг.';
+    return 'Текущие предложения: ' + list.map((x) => x.title + '. Почему: ' + x.reason).join(' ');
+  }
+
   function pushAven(text, speak) {
     A._chat.push({ who: 'aven', text: text });
     A._lastReply = text; // для строки статуса на Главной
@@ -1087,6 +1098,7 @@
       if (window.AvenFlows) window.AvenFlows.cancel();
       return window.AvenChar ? window.AvenChar.phrase('cancel') : 'Отменено.';
     }
+    if (/(предлож|рекоменд|что стоит сделать)/.test(tn)) return assistantSuggestionSummary();
     if (/(просроч| overdue)/.test(tn) && /задач/.test(tn)) return assistantOverdueSummary();
     if (/(что|план|дела).*(завтра)|завтра.*(что|план|дела)/.test(tn)) return assistantDaySummary(window.AvenActions.dates.todayISO(1));
     if (/(что|план|дела).*(сегодня)|сегодня.*(что|план|дела)/.test(tn)) return assistantDaySummary(window.AvenActions.dates.todayISO());

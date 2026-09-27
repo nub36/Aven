@@ -80,7 +80,7 @@
   const TYPE_ICO = {
     task: '✅', expense: '💰', income: '💰', note: '📝', event: '📅', settings: '⚙️',
     session: '🔐', auth: '🔐', system: '🛠️', car: '🚗', purchase: '🛍️',
-    reminder: '🔔', notification: '🔔', other: '•'
+    reminder: '🔔', notification: '🔔', suggestion: '✦', other: '•'
   };
 
   const KIND_LABEL = {

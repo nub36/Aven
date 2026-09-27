@@ -6,6 +6,25 @@
 
 ---
 
+## 2026-09-27 — XXXIX. Suggestions / Предложения Aven
+
+- **Дата и база:** 2026-09-27; ветка `arena/01a0e3a8-aven` приведена к свежему `origin/main = ed53f1ba8589f94c395eba89aa521472da154c01` после `fetch --prune`. PR #15 остаётся OPEN и не тронут.
+- **Почему этот этап:** порядок данных в `MVP_SCOPE §3/§4.2` прямо задаёт `Авто → Покупки → Напоминания/уведомления → Suggestions → утро/вечер`; первые три этапа уже завершены. Поэтому реализован один следующий крупный этап — Suggestions; Morning/Evening не начинался.
+- **Baseline:** actions-core 18/18, help-tutorial 33/33, stage1-proto 232/232, tts-proto 42/42, aven3d-viewer 43/43, mobile-ui-polish 20/20, notifications 49/49, navigation 63/63 — всё зелёное.
+- **Архитектура:** добавлен DOM-free `AvenSuggestions` (`prototype/js/suggestions.js`). Он читает общий `AvenState`, использует фиксированную дату `AvenActions.dates`, не меняет state при анализе и возвращает детерминированные структуры с stable `id`, priority, title/message/reason, context, actions и source/entity references. Дубликаты удаляются до сортировки.
+- **Правила:** просроченные задачи; задачи на выбранную дату; загруженный день (события + задачи); подготовка к будущему событию; близкое/просроченное обслуживание авто; покупки с гарантией, истекающей в 90 дней. Нет медицинских/юридических/финансовых прогнозов и данных незавершённых модулей.
+- **Подавление шума:** top-3 на Home/Day, stable IDs, отдельный `suggestionState`, dismiss, snooze/unsnooze с ISO-сроком, автоматическое возвращение после срока и автоматическое исчезновение при устранении источника. Suggestions не имеют notification read/unread semantics.
+- **Действия и Undo:** навигационные действия открывают существующие разделы; «создать задачу подготовки» вызывает Common `tasks.createTask(..., {source:'suggestion'})`. `suggestion.dismiss/snooze/restore/unsnooze` записываются в History с реальным undo payload `value`; Undo возвращает фактическую видимость.
+- **UI:** Home показывает не более трёх спокойных карточек с явным «Почему», основной кнопкой, «Отложить» и «Скрыть». Day использует существующий selected-day state. Assistant только читает top suggestions и умеет ответить на простой запрос о предложениях — новый NLP не добавлен. Настройки → Главная получили единый ON/OFF и видимость блока.
+- **Help/Tutorial:** пять статей объясняют источник данных, причину, действия, dismiss/snooze, auto-resolution, отличие от уведомлений и ограничения без технического жаргона. Tutorial из 7 шагов использует существующий движок и existing optional TTS; без TTS остаётся полный текст.
+- **Responsive/a11y:** карточки используют design tokens light/dark, спокойный priority accent, wrap/grid actions, touch targets; кнопки/ссылки семантические, имеют labels, не зависят от hover/цвета. Отдельные правила ≤480px; mobile drawer PR #22 не менялся.
+- **Тесты:** новый `suggestions-check.js` — 46/46 (детерминизм, IDs/order/dedup, причины/refs, settings, dismiss/snooze/expiry, persistence, Common Actions, History/Undo, auto-resolution, Home/Day, Notification distinction, Assistant, Help/Tutorial/a11y DOM). Полный regression из 9 suite — **546/546**, `node --check` и `git diff --check` зелёные.
+- **Ограничения проверки:** реальный браузер и Android в этой сессии недоступны; jsdom не выдаётся за подтверждение layout/touch. Production backend/cloud/DB, Morning/Evening, NLP/LLM, Xenia, 3D и TTS infrastructure не менялись.
+- **Изменённые области:** `prototype/js/suggestions.js`, state defaults, Home/Day/Assistant/Settings/Help/Tutorial/History UI, responsive CSS, отдельный regression test и связанные документы.
+- **Следующий крупный этап (НЕ начат):** Morning/Evening в разделе «День», после отдельного подтверждения дефолтов периодов и scope.
+
+---
+
 ## 2026-09-27 — XXXVIII. Напоминания и Центр уведомлений (раздел «Уведомления»)
 
 - **Дата:** 2026-09-27 (Arena-сессия на ветке `arena/01a0e359-aven`, ответвлена от `origin/main = e2d1ccf`). Перед работой: `git fetch origin --prune`, ветка чистая; PR #15 (3D Female Aven) открыт — не трогали.

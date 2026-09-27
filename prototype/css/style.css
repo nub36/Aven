@@ -972,6 +972,27 @@ body.nav-open .nav-backdrop { opacity: 1; animation: backdrop-in .22s ease both;
 @keyframes modal-in { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: none; } }
 @keyframes popover-in { from { opacity: 0; transform: translateY(8px) scale(.99); } to { opacity: 1; transform: none; } }
 
+/* Suggestions: calm, explainable recommendations — distinct from notification alerts. */
+.suggestions-panel { margin: 16px 0; border-color: color-mix(in srgb, var(--accent) 24%, var(--border)); }
+.suggestions-panel .head h2, .suggestions-panel .head h3 { margin-bottom: 2px; }
+.suggest-list { display: grid; gap: 10px; }
+.suggest-card {
+  display: flex; gap: 12px; align-items: flex-start; min-width: 0;
+  padding: 13px; border: 1px solid var(--border); border-radius: 14px;
+  background: color-mix(in srgb, var(--panel-2) 72%, transparent);
+}
+.suggest-card.priority-critical, .suggest-card.priority-high { border-left: 4px solid var(--warn); }
+.suggest-mark { color: var(--accent); font-size: 1.2rem; line-height: 1.25; }
+.suggest-top { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.suggest-card p { margin: 5px 0 6px; line-height: 1.45; }
+.suggest-reason { color: var(--muted); font-size: .84rem; line-height: 1.45; }
+.suggest-reason b { color: var(--text); }
+.suggest-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.suggest-actions .btn { min-height: 40px; }
+.suggest-note { margin-top: 10px; color: var(--muted); font-size: .82rem; }
+.assistant-suggestions { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; padding: 8px 0; }
+.assistant-suggestions .dc-label { width: 100%; }
+
 /* Mobile-first repair: drawer nav, shrinking containers, compact calendar. */
 @media (max-width: 860px) {
   :root { --space-page: 14px; --topbar-h: 58px; }
@@ -1089,6 +1110,13 @@ body.nav-open .nav-backdrop { opacity: 1; animation: backdrop-in .22s ease both;
   .help-side { position: static; }
   .help-article-top { align-items: flex-start; }
 }
+@media (max-width: 480px) {
+  .suggest-card { padding: 11px; gap: 9px; }
+  .suggest-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .suggest-actions .btn { width: 100%; justify-content: center; }
+  .suggestions-panel > .head { align-items: flex-start; }
+}
+
 @media (max-width: 430px) {
   .content { padding: 12px; }
   .card { padding: 12px; }
