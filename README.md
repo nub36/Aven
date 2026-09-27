@@ -42,6 +42,8 @@
 | [docs/COMMAND_ENGINE.md](docs/COMMAND_ENGINE.md) | Command Engine: intents, actions, разбор естественной речи без AI |
 | [docs/VOICE.md](docs/VOICE.md) | Голосовой слой: STT/TTS, настройки, ограничения платформ |
 | [docs/TTS_RESEARCH.md](docs/TTS_RESEARCH.md) | Исследование натурального голоса (этапы 1, 2, 2.1): движки, метрики, GPU/latency, произношение «Авен» |
+| [docs/AVATAR_3D_RESEARCH.md](docs/AVATAR_3D_RESEARCH.md) | 3D Female Aven V1: TripoSR POC, viewer, ограничения (TECHNICAL 3D POC) |
+| [docs/AVATAR_3D_V2_PLAN.md](docs/AVATAR_3D_V2_PLAN.md) | 3D Female Aven **V2**: исследование pipeline (MetaHuman/MPFB/TRELLIS/FLAME), лицензии, reference turnaround, production-план |
 | [docs/STACK_RESEARCH.md](docs/STACK_RESEARCH.md) | Исследование стека Stage 1: альтернативы, лицензии, риски, стоимость владения, план проверок, вопросы владельцу |
 | [docs/MVP_SCOPE.md](docs/MVP_SCOPE.md) | Состав Stage 1 и первого MVP: критерии отбора разделов, предлагаемый срез, спецификации и критерии приёмки, вопросы владельцу |
 | [docs/AUTOMATION.md](docs/AUTOMATION.md) | Automation Canvas, блоки, готовые автоматизации |

@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Female Aven — проверка дополнительных ракурсов</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body { padding: 20px; max-width: 1180px; margin: 0 auto; }
+    .v2-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .v2-head h1 { margin: 0; font-size: 1.4rem; }
+    .muted { color: var(--muted); font-size: .84rem; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    section { margin: 18px 0; }
+    section > h2 { font-size: 1.06rem; margin: 0 0 8px; }
+    .sheet img, .single img { width: 100%; height: auto; display: block; border-radius: 10px; }
+    .sheet { padding: 8px; }
+    figure { margin: 0; }
+    figcaption { font-size: .8rem; color: var(--muted); margin-top: 6px; }
+    /* Нейтральный светлый studio-фон под одиночными видами: тёмные волосы/одежда читаются. */
+    .single-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    @media (max-width: 720px) { .single-grid { grid-template-columns: 1fr; } }
+    .single { position: relative; }
+    .badge { position: absolute; left: 14px; top: 14px; font-size: .74rem; padding: 4px 9px;
+             border-radius: 8px; background: rgba(20,22,28,.78); color: #fff; }
+    .badge.ok { background: rgba(30,120,60,.85); }
+    .badge.ai { background: rgba(150,40,40,.85); }
+    .pill.ok { background: rgba(40,170,90,.15); color: var(--ok); }
+    .pill.no { background: rgba(220,60,60,.13); color: var(--danger); }
+    .pill.warn2 { background: rgba(220,150,40,.16); color: #b57411; }
+    .ref-lead { display: grid; grid-template-columns: minmax(240px, .8fr) 1.2fr; gap: 14px; align-items: center; }
+    @media (max-width: 720px) { .ref-lead { grid-template-columns: 1fr; } }
+    .decision label { display: block; padding: 10px 12px; border: 1px solid var(--border, #d7dae0);
+                      border-radius: 10px; margin: 8px 0; cursor: pointer; }
+    .decision input { margin-right: 8px; }
+    .decision .k { font-weight: 600; }
+    #decision-note { margin-top: 8px; }
+    .chk { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+    .chk label { font-size: .82rem; padding: 4px 8px; border: 1px solid var(--border,#d7dae0); border-radius: 8px; }
+    ul.tight { margin: 6px 0; padding-left: 18px; } ul.tight li { margin: 3px 0; font-size: .86rem; }
+  </style>
+</head>
+<body>
+  <div class="v2-head">
+    <div>
+      <h1>Female Aven — проверка дополнительных ракурсов</h1>
+      <div class="muted">Визуальная проверка identity дополнительных views. Технический выбор
+        pipeline — отдельно (docs/AVATAR_3D_V2_PLAN.md). Главная, PNG-персонаж и POC
+        (<a href="aven-3d.html">aven-3d.html</a>) не изменены.</div>
+    </div>
+    <div class="row">
+      <a class="btn" href="index.html">← Прототип</a>
+    </div>
+  </div>
+
+  <div class="card v2-warn tts-priv warn" style="margin:10px 0 6px;">
+    <b>Только фронтальный reference утверждён владельцем.</b> Остальные ракурсы созданы AI и
+    <b>НЕ являются каноническими</b>, пока владелец их не одобрит. Статус дополнительных видов:
+    <b>AI-generated candidate reference views — Under Review</b>. Все сравнительные изображения
+    ниже получены <b>только crop/resize/компоновкой</b> существующих файлов — без генерации,
+    beautify и правок черт лица.
+  </div>
+
+  <!-- 1. Утверждённый reference -->
+  <section>
+    <h2>1. Утверждённый reference (canonical)</h2>
+    <div class="card ref-lead">
+      <figure class="single">
+        <span class="badge ok">УТВЕРЖДЁН</span>
+        <img src="assets/character/v2-reference-views/front-reference.jpg" alt="Утверждённый reference Female Aven (front)">
+      </figure>
+      <div>
+        <div class="chk">
+          <span class="pill ok">единственный canonical источник лица</span>
+          <span class="pill warn2">остальные виды — Under Review</span>
+        </div>
+        <p class="muted" style="margin:8px 0 0;">
+          Hair A · Color B (dark chocolate) · Makeup B · charcoal mock-neck. Файл:
+          <code>prototype/assets/character/master/female-aven-reference.jpg</code>. Не изменять.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Contact sheet -->
+  <section>
+    <h2>2. Contact sheet — reference в центре, ракурсы вокруг</h2>
+    <div class="card sheet">
+      <img src="assets/character/v2-reference-views/contact-sheet.jpg"
+           alt="Contact sheet: утверждённый reference в центре, 5 AI-ракурсов вокруг">
+      <figcaption>Центр (в красной рамке) — УТВЕРЖДЁННЫЙ REFERENCE. Вокруг — 5 AI-ракурсов,
+        помеченных «НЕ УТВЕРЖДЁН». Только crop/resize существующих файлов.</figcaption>
+    </div>
+  </section>
+
+  <!-- 3. Face comparison -->
+  <section>
+    <h2>3. Face comparison — одинаковый масштаб</h2>
+    <div class="card sheet">
+      <img src="assets/character/v2-reference-views/face-comparison.jpg"
+           alt="Face comparison: одинаково масштабированные crop лиц (профиль-3/4-фронт-3/4-профиль)">
+      <figcaption>Порядок turnaround: левый профиль → 3/4 слева → FRONT (утверждён) → 3/4 справа →
+        правый профиль. Сравнивайте форму головы, лоб, брови, глаза и расстояние между ними, нос,
+        переносицу и профиль носа, губы, подбородок, jawline, уши, линию волос, объём причёски.
+        Без beautify/morph — только crop/resize.</figcaption>
+    </div>
+  </section>
+
+  <!-- 4. Каждый вид отдельно -->
+  <section>
+    <h2>4. Дополнительные виды отдельно (хорошее разрешение)</h2>
+    <div class="single-grid" id="singles"></div>
+  </section>
+
+  <!-- Решение владельца -->
+  <section>
+    <h2>Решение владельца</h2>
+    <div class="card decision">
+      <p class="muted" style="margin:0 0 6px;">Это подсказка для оценки. Решение
+        <b>не сохраняется</b> и не считается принятым автоматически — итог фиксируется владельцем
+        отдельно.</p>
+      <form id="decision-form">
+        <label><input type="radio" name="dec" value="A">
+          <span class="k">A</span> — ракурсы достаточно сохраняют identity, можно использовать как
+          вспомогательные reference.</label>
+        <label><input type="radio" name="dec" value="B">
+          <span class="k">B</span> — часть ракурсов подходит, часть нужно исключить.</label>
+        <label><input type="radio" name="dec" value="C">
+          <span class="k">C</span> — identity заметно меняется, дополнительные views не использовать.</label>
+      </form>
+      <div id="decision-note" class="hint tts-priv" hidden></div>
+    </div>
+  </section>
+
+  <div class="card" style="margin-top:16px;">
+    <h2 style="font-size:1rem; margin:2px 0 6px;">Справочно: pipeline и требования V2</h2>
+    <ul class="tight">
+      <li>Технический план и кандидаты pipeline (MetaHuman / MPFB CC0 / прочее) — в
+        <code>docs/AVATAR_3D_V2_PLAN.md</code> (статус Proposed, выбор — за владельцем).</li>
+      <li>Требования к будущей модели: rig head/neck/jaw/eyes, blink, ARKit-совместимые
+        blendshapes, visemes REST/A/E/I/O/U/M-B-P/F-V, hair cards, PBR, ~30k–100k tris, 2K.</li>
+      <li>3D-модели V2 ещё нет; сначала — визуальное решение владельца по этим ракурсам.</li>
+    </ul>
+  </div>
+
+  <script>
+    const SINGLES = [
+      { src: 'assets/character/v2-reference-views/candidate-left-34.jpg',      label: 'Left 3/4' },
+      { src: 'assets/character/v2-reference-views/candidate-right-34.jpg',     label: 'Right 3/4' },
+      { src: 'assets/character/v2-reference-views/candidate-left-profile.jpg', label: 'Left Profile' },
+      { src: 'assets/character/v2-reference-views/candidate-right-profile.jpg',label: 'Right Profile' },
+      { src: 'assets/character/v2-reference-views/candidate-back-hair.jpg',    label: 'Back / Hair' },
+    ];
+    const wrap = document.getElementById('singles');
+    SINGLES.forEach(v => {
+      const fig = document.createElement('figure');
+      fig.className = 'single card';
+      fig.style.padding = '8px';
+      fig.innerHTML =
+        '<span class="badge ai">AI — НЕ УТВЕРЖДЁН</span>' +
+        '<img loading="lazy" src="' + v.src + '" alt="Female Aven — ' + v.label + ' (AI, Under Review)">' +
+        '<figcaption><b>' + v.label + '</b> · AI-generated candidate · Under Review</figcaption>';
+      wrap.appendChild(fig);
+    });
+
+    const NOTES = {
+      A: 'Вариант A: ракурсы принимаются как вспомогательные reference. Canonical-источник лица всё равно остаётся фронтальный master. (Решение не сохранено — зафиксируйте его отдельно.)',
+      B: 'Вариант B: отметьте, какие ракурсы исключить, какие оставить. (Решение не сохранено — зафиксируйте его отдельно.)',
+      C: 'Вариант C: дополнительные views не используются; для 3D-пайплайна turnaround готовит 3D-художник по одному рендеру/модели. (Решение не сохранено — зафиксируйте его отдельно.)',
+    };
+    const note = document.getElementById('decision-note');
+    document.getElementById('decision-form').addEventListener('change', e => {
+      const v = e.target.value; if (!NOTES[v]) return;
+      note.hidden = false; note.textContent = NOTES[v];
+    });
+  </script>
+</body>
+</html>

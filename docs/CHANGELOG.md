@@ -13,6 +13,37 @@
 
 ## [Unreleased]
 
+### 2026-09-26 (XXVIII) — Female Aven V2: contact sheet + face comparison + страница проверки identity
+
+- **Добавлено:** `contact-sheet.jpg` (утверждённый reference в центре, 5 AI-ракурсов вокруг с
+  пометкой «НЕ УТВЕРЖДЁН») и `face-comparison.jpg` (одинаково масштабированные crop лиц,
+  turnaround L→front→R) — в `review/3d-v2-reference-views/` и
+  `prototype/assets/character/v2-reference-views/`. Только crop/resize/компоновка существующих
+  файлов (скрипт `research/3d/build_v2_review_sheets.sh`) — **без генерации, beautify и правок
+  черт лица**. Новые изображения лиц НЕ генерировались.
+- **Изменено (`prototype/aven-3d-v2.html`):** теперь это страница **проверки identity** — reference,
+  contact sheet, face comparison, каждый вид отдельно + блок «Решение владельца» (A/B/C, подсказка,
+  не сохраняется). Чёткое предупреждение: утверждён только фронтальный reference.
+- **Формулировки:** статус доп. видов приведён к **AI-generated candidate reference views —
+  Under Review**; убраны утверждения о доказанном сохранении identity. ADR-016 остаётся Proposed.
+
+### 2026-09-26 (XXVII) — Female Aven 3D V2: план pipeline + reference turnaround (prototype/docs)
+
+- **Добавлено (docs/AVATAR_3D_V2_PLAN.md):** честное исследование pipeline для качественной
+  Female Aven V2 (MetaHuman ★, MPFB CC0, TRELLIS/Hunyuan3D, FLAME — с лицензиями и пригодностью) и
+  **production-план**. Итог честный — **вариант B**: доступными бесплатными автоматическими
+  инструментами (без GPU/Blender/Unreal) надёжно получить качественную риггованную identity-модель
+  нельзя, поэтому очередной плохой GLB **не создавался**.
+- **Добавлено (reference turnaround):** из утверждённого фронтального reference получены доп.
+  виды (3/4 слева/справа, левый/правый профиль, вид сзади) — `review/3d-v2-reference-views/` и
+  `prototype/assets/character/v2-reference-views/`. Статус — **AI-generated candidate reference
+  views — Under Review** (сходство identity не подтверждено, не canonical до одобрения владельцем).
+  Внешность не менялась.
+- **Добавлено (prototype/aven-3d-v2.html):** страница оценки — turnaround + сводка pipeline/
+  требований/лицензий. Честный статус: 3D-модели V2 ещё нет. Главная, PNG-персонаж и POC-viewer
+  `aven-3d.html` не изменены; TTS (Silero ru_aigul) и VPS/nginx/HTTPS не тронуты.
+- **Решение:** ADR-016 (Proposed) в docs/DECISIONS.md; V1 TripoSR зафиксирован как TECHNICAL 3D POC.
+
 ### 2026-09-26 (XXVI) — 3D viewer пригоден для оценки: ориентация, ракурсы, свет (prototype)
 
 - **Исправлено (prototype/aven-3d.html):** экспериментальный 3D-бюст больше не «лежит

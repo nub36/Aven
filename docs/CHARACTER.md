@@ -85,6 +85,22 @@ Aven может иметь **вымышленный визуальный обр�
   REST/A/E/I/O/U/M-B-P/F-V с mapping, hair cards, realtime-бюджет, PBR, лицензионная
   проверка) — в `review/3d-character-concepts/README.md`.
 
+### 6.4 3D V2 pipeline (2026-09-26) — см. AVATAR_3D_V2_PLAN.md, ADR-016
+
+- V1 (TripoSR) зафиксирован как **TECHNICAL 3D POC** (не Female Aven): грубая геометрия, лицо
+  плохо держит reference, нет rig/глаз/век/jaw/blendshapes. Его viewer (`aven-3d.html`) не
+  улучшается, на Главную не ставится.
+- **V2 pipeline (рекомендация):** основной — Epic **Mesh to MetaHuman** (полный ARKit-52 риг,
+  отдельные глаза/зубы/веки/jaw, шея, грумы, web-GLB; бесплатно для не-Unreal при выручке <$1M);
+  запасной CC0 — **MPFB 2 / MakeHuman** + скульпт художника. FLAME/MICA/DECA отклонены
+  (non-commercial). Требует ПК с GPU/художника и решения владельца.
+- **Reference turnaround:** доп. виды (front + 3/4 L/R + профили L/R + back) — в
+  `prototype/assets/character/v2-reference-views/` и `review/3d-v2-reference-views/`; проверка
+  identity на `prototype/aven-3d-v2.html` (contact sheet + face comparison, только crop/resize).
+  Статус — **AI-generated candidate reference views — Under Review**: сходство identity не
+  подтверждено, виды не canonical до одобрения владельцем. Canonical-источник лица — фронтальный
+  master. Внешность не менялась.
+
 ### 6.3 Честный статус предыдущего 3D-прототипа
 
 - Коммит предыдущего 3D-прототипа (`ddd1c31`: процедурная Three.js-голова, states, blink,
