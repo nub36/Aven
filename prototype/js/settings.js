@@ -295,10 +295,13 @@
 
     if (cat === 'home') {
       const C = st.settings.homeCards;
-      const rows = [['today', 'Карточка «Сегодня»'], ['tasks', 'Карточка «Задачи»'], ['expenses', 'Карточка «Расходы»'], ['car', 'Карточка «Автомобиль»'], ['shopping', 'Карточка «Гарантии» (покупки)'], ['notes', 'Карточка «Заметки»'], ['reminders', 'Карточка «Уведомления»'], ['actions', 'Карточка «Последние действия»'], ['quick', 'Быстрые действия']];
+      const rows = [['suggestions', 'Блок «Предложения Aven»'], ['today', 'Карточка «Сегодня»'], ['tasks', 'Карточка «Задачи»'], ['expenses', 'Карточка «Расходы»'], ['car', 'Карточка «Автомобиль»'], ['shopping', 'Карточка «Гарантии» (покупки)'], ['notes', 'Карточка «Заметки»'], ['reminders', 'Карточка «Уведомления»'], ['actions', 'Карточка «Последние действия»'], ['quick', 'Быстрые действия']];
+      const SG = st.settings.suggestions || { enabled: true };
       return `
       <h2 class="set-h">Главная</h2><p class="set-sub">Включение/отключение карточек · порядок — в перспективе (вопрос №25)</p>
-      <div class="card">${rows.map(([id, label]) => setRow(label, '', sw('settings.homeCards.' + id, C[id]))).join('')}
+      <div class="card">
+      ${setRow('Предложения Aven', 'локальные подсказки по вашим задачам, событиям, авто и покупкам', sw('settings.suggestions.enabled', SG.enabled !== false))}
+      ${rows.map(([id, label]) => setRow(label, '', sw('settings.homeCards.' + id, C[id] !== false))).join('')}
       <div class="s" style="color:var(--muted);font-size:.82rem;padding-top:10px">Изменения сразу применяются на главной странице.</div></div>`;
     }
 

@@ -99,10 +99,33 @@
     return [];
   }
 
+  /* Suggestions are not notifications: these cards propose a next action and always show why.
+     Generation/state stays DOM-free in AvenSuggestions; this is only the shared Home/Day renderer. */
+  function suggestionCards(items, context, limit) {
+    const list = (items || []).slice(0, limit || 3);
+    if (!list.length) return '<div class="empty">Сейчас нет полезных предложений для этого контекста</div>';
+    return `<div class="suggest-list">${list.map((item) => `
+      <article class="suggest-card priority-${A.esc(item.priority)}" data-suggestion-id="${A.esc(item.id)}">
+        <div class="suggest-mark" aria-hidden="true">✦</div>
+        <div class="grow">
+          <div class="suggest-top"><b>${A.esc(item.title)}</b><span class="pill ${item.priority === 'critical' ? 'danger' : item.priority === 'high' ? 'warn' : 'accent'}">${item.priority === 'critical' ? 'срочно' : item.priority === 'high' ? 'важно' : 'идея'}</span></div>
+          <p>${A.esc(item.message)}</p>
+          <div class="suggest-reason"><b>Почему:</b> ${A.esc(item.reason)}</div>
+          <div class="suggest-actions">
+            ${(item.actions || []).map((act) => act.href
+              ? `<a class="btn small ${act.id === 'open' || act.id === 'open-day' ? 'primary' : ''}" href="${A.esc(act.href)}">${A.esc(act.label)}</a>`
+              : `<button class="btn small primary" data-action="suggest-perform" data-id="${A.esc(item.id)}" data-suggest-action="${A.esc(act.id)}" data-date="${A.esc((context || {}).dateISO || '')}">${A.esc(act.label)}</button>`).join('')}
+            <button class="btn small" data-action="suggest-snooze" data-id="${A.esc(item.id)}" data-date="${A.esc((context || {}).dateISO || '')}" aria-label="Отложить предложение «${A.esc(item.title)}» на один день">Отложить</button>
+            <button class="btn small" data-action="suggest-dismiss" data-id="${A.esc(item.id)}" data-date="${A.esc((context || {}).dateISO || '')}" aria-label="Скрыть предложение «${A.esc(item.title)}»">Скрыть</button>
+          </div>
+        </div>
+      </article>`).join('')}</div>`;
+  }
+
   /* ================= ГЛАВНАЯ ================= */
   A.pages.home = function () {
     const st = s();
-    const cards = Object.assign({ today: true, tasks: true, expenses: true, car: true, shopping: true, notes: true, reminders: true, quick: true, actions: true }, st.settings.homeCards || {});
+    const cards = Object.assign({ suggestions: true, today: true, tasks: true, expenses: true, car: true, shopping: true, notes: true, reminders: true, quick: true, actions: true }, st.settings.homeCards || {});
     /* карточка видна только если включён источник: раздел-модуль (Настройки → Модули) */
     const MOD = st.settings.modules || {};
     if (MOD.calendar === false) cards.today = false;
@@ -127,6 +150,7 @@
     const topNotes = homeNotes(st);
     const notifTop = window.AvenNotify ? window.AvenNotify.build() : [];
     const notifUnread = window.AvenNotify ? window.AvenNotify.unreadCount() : 0;
+    const homeSuggestions = window.AvenSuggestions ? window.AvenSuggestions.getSuggestions({ surface: 'home', dateISO: todayISO() }) : [];
     const charOn = !!(window.AvenChar && !window.AvenChar.isOff() && window.AvenChar.current().id === 'female');
     const last = A._lastReply ? A.esc(A._lastReply) : 'Напишите команду — или нажмите на Aven справа.';
     const html = `
@@ -170,6 +194,12 @@
         <span class="hc-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
       </div>` : ''}
     </div>
+
+    ${cards.suggestions ? `<section class="card suggestions-panel" data-tour="home-suggestions" aria-labelledby="home-suggestions-title">
+      <div class="head"><div><h2 id="home-suggestions-title">Предложения Aven</h2><div class="s">Полезные следующие действия по вашим текущим данным</div></div><button class="btn small" data-action="tutorial-start" data-tour-id="suggestions">Как это работает?</button></div>
+      ${suggestionCards(homeSuggestions, { surface: 'home', dateISO: todayISO() }, 3)}
+      <div class="suggest-note">Это не уведомления: здесь Aven предлагает действие. Причина всегда указана, а предложение можно отложить или скрыть.</div>
+    </section>` : ''}
 
     <div class="home-grid" data-tour="home-summary">
       ${cards.today ? `
@@ -301,6 +331,7 @@
     const dayNotes = (((st.settings || {}).modules || {}).notes === false ? [] : (st.notes || []))
       .filter((n) => !n.archived && n.updatedISO === iso).slice(0, 4);
     const attention = attentionItems();
+    const daySuggestions = window.AvenSuggestions ? window.AvenSuggestions.getSuggestions({ surface: 'day', dateISO: iso }) : [];
     const timeline = [];
     evs.forEach((e) => timeline.push({ id: e.id, date: iso, t: eventTime(e), n: e.title, type: e.importance === 'важное' ? 'important' : 'event', sub: (e.place || e.category || repeatLabel(e) || 'событие') + (reminderLabel(e.reminder) !== 'нет' ? ' · напоминание: ' + reminderLabel(e.reminder) : '') }));
     activeTasks.forEach((t) => timeline.push({ id: t.id, t: taskTime(t) || taskDueLabel(t), n: t.title, type: 'task', sub: 'задача · ' + (t.project || 'без проекта') + (taskTags(t).length ? ' · #' + taskTags(t).join(' #') : '') }));
@@ -373,6 +404,10 @@
         ${!completedTasks.length && !doneActions.length ? '<div class="empty">Пока ничего</div>' : ''}
       </div>
     </div>
+    <section class="card suggestions-panel" style="margin-top:16px" data-tour="day-suggestions" aria-labelledby="day-suggestions-title">
+      <div class="head"><div><h3 id="day-suggestions-title">Предложения для выбранного дня</h3><div class="s">Контекст: ${A.esc(dateLabel(iso))}</div></div></div>
+      ${suggestionCards(daySuggestions, { surface: 'day', dateISO: iso }, 3)}
+    </section>
     <div class="card" style="margin-top:16px" data-tour="day-attention">
       <div class="head"><h3>Требует внимания</h3><span class="pill">расчёт по текущим данным</span></div>
       ${attention.length ? `<div class="grid cols-3">${attention.map((i) => `
@@ -785,6 +820,25 @@
     },
 
     'go-assistant': () => { location.hash = '#/assistant'; },
+
+    'suggest-dismiss': (el) => {
+      const context = { surface: location.hash === '#/day' ? 'day' : 'home', dateISO: el.dataset.date || todayISO() };
+      const res = window.AvenSuggestions.dismiss(el.dataset.id, context);
+      if (!res.ok) { A.toast('Предложение уже исчезло: исходные данные изменились'); return; }
+      A.toast('Предложение скрыто · можно отменить в Истории'); A.render();
+    },
+    'suggest-snooze': (el) => {
+      const context = { surface: location.hash === '#/day' ? 'day' : 'home', dateISO: el.dataset.date || todayISO() };
+      const res = window.AvenSuggestions.snooze(el.dataset.id, 1, context);
+      if (!res.ok) { A.toast('Предложение уже исчезло: исходные данные изменились'); return; }
+      A.toast('Предложение отложено до ' + Core().dates.humanDate(res.until) + ' · можно отменить в Истории'); A.render();
+    },
+    'suggest-perform': (el) => {
+      const context = { surface: location.hash === '#/day' ? 'day' : 'home', dateISO: el.dataset.date || todayISO() };
+      const res = window.AvenSuggestions.perform(el.dataset.id, el.dataset.suggestAction, context);
+      if (!res.ok) { A.toast('Действие недоступно: источник предложения изменился'); A.render(); return; }
+      A.toast('Задача создана через общий слой действий · можно отменить в Истории'); A.render();
+    },
 
     'toggle-task': (el) => {
       const t = Core().tasks.getTask(el.dataset.id).entity;
