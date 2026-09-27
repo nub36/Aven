@@ -68,6 +68,14 @@ async function load(hash) {
       /@media[^{]*max-width:\s*860px[\s\S]*\.sidebar\s*\{[^}]*overflow-y\s*:\s*auto/i.test(css));
     ok('CSS3 нет устаревшего горизонтального превращения сайдбара в ряд (flex-direction:row на mobile)',
       !/@media[^{]*860px[\s\S]*\.sidebar\s*\{[^}]*flex-direction\s*:\s*row/i.test(css));
+    ok('CSS4 mobile drawer has viewport fallback and dynamic height',
+      /height:\s*100vh/.test(css) && /height:\s*100dvh/.test(css));
+    ok('CSS5 mobile drawer reserves bottom scroll space',
+      /scroll-padding-bottom:\s*calc\(/.test(css) && /padding-bottom:\s*calc\(env\(safe-area-inset-bottom\)/.test(css));
+    ok('CSS6 stacking contract is drawer > backdrop > page',
+      /\.sidebar\s*\{[\s\S]*?z-index:\s*220/.test(css) && /\.nav-backdrop\s*\{[\s\S]*?z-index:\s*210/.test(css) && /\.app\s*\{[^}]*z-index:\s*auto/.test(css));
+    ok('CSS7 drawer remains interactive while backdrop accepts outside taps',
+      !/\.sidebar\s*\{[^}]*pointer-events\s*:\s*none/i.test(css) && /\.nav-backdrop\s*\{[\s\S]*?position:\s*fixed/.test(css));
   }
 
   /* ---------- Полный набор маршрутов присутствует в отрисованном drawer ---------- */
