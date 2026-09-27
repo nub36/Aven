@@ -8,8 +8,9 @@
 
   /* ================= сквозные хелперы (доступны другим страницам) ================= */
 
+  /* Время в отметках истории — в часовом поясе профиля (Профиль → Часовой пояс). */
   A.nowLabel = function () {
-    const d = new Date(), p = (n) => String(n).padStart(2, '0');
+    const d = A.nowDate ? A.nowDate() : new Date(), p = (n) => String(n).padStart(2, '0');
     return 'сегодня, ' + p(d.getHours()) + ':' + p(d.getMinutes());
   };
 

@@ -17,11 +17,23 @@ window.Aven = (function () {
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   };
+  /* Деньги, время и «сейчас» берутся из общего слоя действий: валюта и часовой пояс
+     задаются в профиле и должны применяться одинаково во всех разделах (MVP_SCOPE §5.2). */
+  const Core = () => window.AvenActions;
   api.money = function (n) {
+    if (Core() && Core().format && Core().format.money) return Core().format.money(n);
     return new Intl.NumberFormat('ru-RU').format(Math.round(n)) + ' ₽';
   };
+  api.time = function (hhmm) {
+    if (Core() && Core().format && Core().format.time) return Core().format.time(hhmm);
+    return String(hhmm == null ? '' : hhmm);
+  };
+  api.nowDate = function () {
+    if (Core() && Core().dates && Core().dates.nowDate) return Core().dates.nowDate();
+    return new Date();
+  };
   api.greeting = function () {
-    const h = new Date().getHours();
+    const h = api.nowDate().getHours();
     if (h < 6) return 'Доброй ночи';
     if (h < 12) return 'Доброе утро';
     if (h < 18) return 'Добрый день';

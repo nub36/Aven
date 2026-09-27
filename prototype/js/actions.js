@@ -1,4 +1,4 @@
-/* Aven — Visual Prototype. Common Action Layer для задач и событий.
+/* Aven — Visual Prototype. Common Action Layer для задач, событий, профиля и настроек.
    Тонкий слой над demo-state: DOM не используется. UI, демо Assistant/flows и будущий
    Text Command / Voice→STT должны вызывать эти же операции, а не дублировать бизнес-логику.
    Не production: состояние — localStorage/JS memory прототипа, без backend/API. */
@@ -26,10 +26,12 @@ window.AvenActions = (function () {
   }
   function diffDays(aISO, bISO) { return Math.round((parseISO(aISO) - parseISO(bISO)) / 86400000); }
   function addDays(iso, offset) { const d = parseISO(iso || todayISO()); d.setDate(d.getDate() + (offset || 0)); return localISO(d); }
+  /* Единая точка форматирования даты: результат зависит от «Формат даты» в профиле
+     (MVP_SCOPE §5.2, приёмка 3). Все разделы зовут humanDate, поэтому настройка
+     применяется сквозным образом, а не в одном экране. */
   function humanDate(iso) {
     if (!iso) return '—';
-    const d = parseISO(iso);
-    return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
+    return formatDateByProfile(iso);
   }
   function dateLabel(iso) {
     if (!iso) return 'без даты';
@@ -51,8 +53,10 @@ window.AvenActions = (function () {
     if (!raw) return '';
     const m = /^(\d{1,2})[:.](\d{2})$/.exec(raw);
     if (!m) return TIME_RE.test(raw) ? raw : '';
-    const h = Math.max(0, Math.min(23, Number(m[1]) || 0));
-    const mm = Math.max(0, Math.min(59, Number(m[2]) || 0));
+    /* Значение вне суток — это ошибка ввода, а не «почти правильно»: молча
+       подменять 25:99 на 23:59 нельзя, иначе сохранится не то, что ввёл человек. */
+    const h = Number(m[1]), mm = Number(m[2]);
+    if (!isFinite(h) || !isFinite(mm) || h > 23 || mm > 59) return '';
     return pad(h) + ':' + pad(mm);
   }
   function clone(x) { return JSON.parse(JSON.stringify(x)); }
@@ -71,6 +75,382 @@ window.AvenActions = (function () {
     if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
     return String(v || '').split(',').map((x) => x.trim()).filter(Boolean);
   }
+
+  /* ================= ПРОФИЛЬ, НАСТРОЙКИ И ФОРМАТЫ =================
+     MVP_SCOPE §4.1 п.2 (Профиль) и п.10 (Настройки), §5.2 (приёмка форматов), §8.
+     ADR-011: изменение настройки — такое же действие, как любое другое: одна точка входа,
+     проверка значения, запись в историю, Undo. Экран настроек ничего не пишет в состояние
+     сам; он только вызывает эти функции — как позже будут делать текстовые и голосовые
+     команды. Слой не знает про DOM. */
+
+  const CURRENCIES = [
+    { value: '₽ (RUB)', label: '₽ · Рубль (RUB)', sign: '₽', locale: 'ru-RU', position: 'suffix' },
+    { value: '$ (USD)', label: '$ · Доллар США (USD)', sign: '$', locale: 'en-US', position: 'prefix' },
+    { value: '€ (EUR)', label: '€ · Евро (EUR)', sign: '€', locale: 'de-DE', position: 'suffix' },
+    { value: '₸ (KZT)', label: '₸ · Тенге (KZT)', sign: '₸', locale: 'ru-RU', position: 'suffix' },
+    { value: '₴ (UAH)', label: '₴ · Гривна (UAH)', sign: '₴', locale: 'ru-RU', position: 'suffix' },
+    { value: '£ (GBP)', label: '£ · Фунт стерлингов (GBP)', sign: '£', locale: 'en-GB', position: 'prefix' }
+  ];
+  const DATE_FORMATS = [
+    { value: 'ДД.ММ.ГГГГ', label: 'ДД.ММ.ГГГГ — 27.09.2026' },
+    { value: 'ГГГГ-ММ-ДД', label: 'ГГГГ-ММ-ДД — 2026-09-27' },
+    { value: 'ММ/ДД/ГГГГ', label: 'ММ/ДД/ГГГГ — 09/27/2026' },
+    { value: 'Д месяца ГГГГ', label: 'Д месяца ГГГГ — 27 сентября 2026' }
+  ];
+  const TIME_FORMATS = [
+    { value: '24 ч', label: '24 часа — 18:30' },
+    { value: '12 ч', label: '12 часов — 6:30 PM' }
+  ];
+  const WEEK_STARTS = [
+    { value: 'Понедельник', label: 'Понедельник', index: 1 },
+    { value: 'Воскресенье', label: 'Воскресенье', index: 0 }
+  ];
+  const TIMEZONES = [
+    { value: 'UTC+0', label: 'UTC+0 · Лондон', offset: 0 },
+    { value: 'UTC+1', label: 'UTC+1 · Берлин', offset: 60 },
+    { value: 'UTC+2', label: 'UTC+2 · Калининград, Хельсинки', offset: 120 },
+    { value: 'UTC+3', label: 'UTC+3 · Москва', offset: 180 },
+    { value: 'UTC+4', label: 'UTC+4 · Самара', offset: 240 },
+    { value: 'UTC+5', label: 'UTC+5 · Екатеринбург', offset: 300 },
+    { value: 'UTC+6', label: 'UTC+6 · Омск', offset: 360 },
+    { value: 'UTC+7', label: 'UTC+7 · Красноярск', offset: 420 },
+    { value: 'UTC+8', label: 'UTC+8 · Иркутск', offset: 480 },
+    { value: 'UTC+10', label: 'UTC+10 · Владивосток', offset: 600 },
+    { value: 'UTC-5', label: 'UTC−5 · Нью-Йорк', offset: -300 }
+  ];
+  const LANGUAGES = [
+    { value: 'ru-RU', label: 'Русский' },
+    { value: 'en-US', label: 'English — перспектива, пока недоступен', disabled: true }
+  ];
+  const ANSWER_STYLES = [
+    { value: 'краткие', label: 'краткие' },
+    { value: 'подробные', label: 'подробные' }
+  ];
+  const CONFIRM_LEVELS = [
+    { value: 'перед опасными действиями', label: 'перед опасными действиями' },
+    { value: 'перед удалениями', label: 'перед удалениями' },
+    { value: 'всегда спрашивать', label: 'всегда спрашивать' }
+  ];
+  const TEXT_SIZES = [
+    { value: 'sm', label: 'Мелкий' }, { value: 'md', label: 'Обычный' }, { value: 'lg', label: 'Крупный' }
+  ];
+  const THEMES = [
+    { value: 'light', label: 'Светлая' }, { value: 'dark', label: 'Тёмная' }, { value: 'system', label: 'Как в системе' }
+  ];
+
+  /* Значения, сохранённые раньше или введённые вручную, приводим к списку вариантов,
+     чтобы select не оказался «пустым», а форматирование — сломанным. */
+  const LEGACY_VALUES = {
+    'settings.behavior.confirmation': { 'только перед опасными': 'перед опасными действиями' },
+    'profile.locale': { 'ru': 'ru-RU', 'Русский': 'ru-RU' },
+    'settings.theme': { 'auto': 'system' },
+    'profile.currency': { 'RUB': '₽ (RUB)', 'USD': '$ (USD)', 'EUR': '€ (EUR)' },
+    'profile.timeFormat': { '24': '24 ч', '12': '12 ч' }
+  };
+
+  /* Описание полей: одно место для подписи, типа, вариантов и проверки.
+     Используется экраном настроек, страницей профиля, историей и тестами. */
+  const FIELDS = [
+    { path: 'profile.name', label: 'Имя', type: 'text', group: 'profile', maxLength: 60, required: true,
+      hint: 'как к вам обращаться в отчётах и истории' },
+    { path: 'profile.greeting', label: 'Обращение', type: 'text', group: 'profile', maxLength: 60, required: true,
+      hint: 'как Aven обращается к вам на Главной' },
+    { path: 'profile.locale', label: 'Язык', type: 'select', group: 'profile', options: LANGUAGES },
+    { path: 'profile.city', label: 'Регион / город', type: 'text', group: 'profile', maxLength: 80 },
+    { path: 'profile.tz', label: 'Часовой пояс', type: 'select', group: 'profile', options: TIMEZONES,
+      hint: 'определяет «сейчас»: приветствие, утро/вечер и отметки времени' },
+    { path: 'profile.currency', label: 'Валюта', type: 'select', group: 'profile', options: CURRENCIES,
+      hint: 'применяется ко всем суммам во всех разделах' },
+    { path: 'profile.dateFormat', label: 'Формат даты', type: 'select', group: 'profile', options: DATE_FORMATS },
+    { path: 'profile.timeFormat', label: 'Формат времени', type: 'select', group: 'profile', options: TIME_FORMATS },
+    { path: 'profile.weekStart', label: 'Начало недели', type: 'select', group: 'profile', options: WEEK_STARTS,
+      hint: 'первый столбец в сетке календаря' },
+
+    { path: 'settings.behavior.answers', label: 'Ответы', type: 'select', group: 'aven', options: ANSWER_STYLES },
+    { path: 'settings.behavior.confirmation', label: 'Уровень подтверждений', type: 'select', group: 'aven', options: CONFIRM_LEVELS },
+    { path: 'settings.behavior.morning', label: '«Утро» начинается в', type: 'time', group: 'aven', order: 1 },
+    { path: 'settings.behavior.day', label: '«День» начинается в', type: 'time', group: 'aven', order: 2 },
+    { path: 'settings.behavior.evening', label: '«Вечер» начинается в', type: 'time', group: 'aven', order: 3 },
+    { path: 'settings.behavior.night', label: '«Ночь» начинается в', type: 'time', group: 'aven', order: 4 },
+    { path: 'settings.behavior.afterWork', label: '«После работы» — с', type: 'time', group: 'aven' },
+
+    { path: 'settings.textSize', label: 'Размер текста', type: 'select', group: 'a11y', options: TEXT_SIZES },
+    { path: 'settings.theme', label: 'Тема оформления', type: 'select', group: 'a11y', options: THEMES },
+
+    { path: 'settings.notify.quietFrom', label: 'Тихие часы — с', type: 'time', group: 'notify' },
+    { path: 'settings.notify.quietTo', label: 'Тихие часы — до', type: 'time', group: 'notify' },
+    { path: 'settings.notify.horizonDays', label: 'Горизонт напоминаний, дней', type: 'number', group: 'notify', min: 1, max: 60 }
+  ];
+
+  /* Подписи для переключателей и прочих путей: слой действий не должен зависеть от
+     того, что написано в разметке экрана. */
+  const SETTING_LABELS = {
+    'settings.daily.morning': 'Показывать утренний обзор',
+    'settings.daily.evening': 'Показывать вечерний обзор',
+    'settings.character.enabled': 'Показывать персонажа',
+    'settings.character.id': 'Персонаж',
+    'settings.character.name': 'Своё имя персонажа',
+    'settings.character.floating': 'Плавающий Aven',
+    'settings.character.greet': 'Приветствие при запуске',
+    'settings.character.voiceProfile': 'Голосовой профиль персонажа',
+    'settings.voice.enabled': 'Голосовые ответы',
+    'settings.voice.alwaysVoice': 'Всегда отвечать голосом',
+    'settings.voice.voiceURI': 'Системный голос',
+    'settings.voice.engine': 'Движок озвучивания',
+    'settings.voice.rate': 'Скорость речи',
+    'settings.voice.pitch': 'Высота голоса',
+    'settings.voice.volume': 'Громкость',
+    'settings.voice.natural.voice': 'Голос Natural',
+    'settings.voice.natural.serverUrl': 'Адрес сервера озвучки',
+    'settings.voice.natural.timeoutSec': 'Таймаут сервера озвучки, с',
+    'settings.voice.natural.cache': 'Кэш озвучки',
+    'settings.voice.stt.enabled': 'Голосовой ввод (STT)',
+    'settings.voice.stt.interim': 'Промежуточный текст',
+    'settings.voice.stt.autoSend': 'Автоотправка распознанного',
+    'settings.notify.inapp': 'Уведомления в приложении',
+    'settings.notify.voiceAllowed': 'Произносить уведомления голосом',
+    'settings.notify.quietHours': 'Тихие часы',
+    'settings.notify.soundBefore': 'Звук перед голосом',
+    'settings.suggestions.enabled': 'Предложения Aven',
+    'settings.reduceMotion': 'Уменьшить анимации',
+    'settings.experiments.canvas': 'Automation Canvas (превью)',
+    'settings.experiments.aiRouter': 'AI Router (заглушка)',
+    'settings.experiments.geoReminders': 'Гео-напоминания'
+  };
+  const SETTING_LABEL_PREFIX = [
+    ['settings.modules.', 'Модуль'],
+    ['settings.homeCards.', 'Карточка Главной'],
+    ['settings.notify.sources.', 'Источник уведомлений']
+  ];
+  /* Настройки, которые PROJECT_PLAN №19 относит к чувствительным: приватность,
+     безопасность, удаление данных, роли и права. */
+  const SENSITIVE_PREFIX = ['privacy.', 'settings.privacy', 'settings.notify.privateInfo', 'auth.'];
+
+  function getPath(root, path) {
+    const parts = String(path || '').split('.');
+    let o = root;
+    for (let i = 0; i < parts.length; i++) {
+      if (o == null || typeof o !== 'object') return undefined;
+      o = o[parts[i]];
+    }
+    return o;
+  }
+  function setPath(root, path, value) {
+    const parts = String(path || '').split('.');
+    const key = parts.pop();
+    let o = root;
+    for (let i = 0; i < parts.length; i++) {
+      if (o[parts[i]] == null || typeof o[parts[i]] !== 'object') o[parts[i]] = {};
+      o = o[parts[i]];
+    }
+    o[key] = value;
+    return true;
+  }
+  function fieldByPath(path) { return FIELDS.filter((f) => f.path === path)[0] || null; }
+  function fieldsOf(group) { return FIELDS.filter((f) => f.group === group).map((f) => Object.assign({}, f)); }
+  function labelOf(path, fallback) {
+    const f = fieldByPath(path);
+    if (f) return f.label;
+    if (SETTING_LABELS[path]) return SETTING_LABELS[path];
+    for (let i = 0; i < SETTING_LABEL_PREFIX.length; i++) {
+      const p = SETTING_LABEL_PREFIX[i];
+      if (path.indexOf(p[0]) === 0) return p[1] + ' «' + path.slice(p[0].length) + '»';
+    }
+    return fallback || path;
+  }
+  function isSensitive(path) {
+    return SENSITIVE_PREFIX.some((p) => String(path || '').indexOf(p) === 0);
+  }
+  function optionOf(list, value) { return (list || []).filter((o) => o.value === value)[0] || null; }
+  function normalizeStored(path, value) {
+    const legacy = LEGACY_VALUES[path];
+    if (legacy && legacy[value] != null) return legacy[value];
+    return value;
+  }
+  /* Прочитать значение настройки/профиля с учётом устаревших вариантов и значения по умолчанию. */
+  function readValue(path) {
+    const f = fieldByPath(path);
+    let v = normalizeStored(path, getPath(s(), path));
+    if (f && f.type === 'select' && f.options && !optionOf(f.options, v)) {
+      const first = f.options.filter((o) => !o.disabled)[0];
+      if (v == null || v === '') v = first ? first.value : v;
+    }
+    return v;
+  }
+  function displayValue(path, value) {
+    const f = fieldByPath(path);
+    if (typeof value === 'boolean') return value ? 'включено' : 'выключено';
+    if (value == null || value === '') return '—';
+    if (f && f.type === 'select') {
+      const o = optionOf(f.options, value);
+      if (o) return String(o.label).split(' — ')[0];
+    }
+    return String(value);
+  }
+
+  /* --------- проверка значения (одна для UI, будущих команд и тестов) --------- */
+  function validateField(path, raw) {
+    const f = fieldByPath(path);
+    if (!f) return { ok: true, value: raw };
+    if (f.type === 'text') {
+      const v = String(raw == null ? '' : raw).trim();
+      if (f.required && !v) return { ok: false, code: 'VALUE_REQUIRED', message: f.label + ': значение не может быть пустым' };
+      if (f.maxLength && v.length > f.maxLength) return { ok: false, code: 'VALUE_TOO_LONG', message: f.label + ': не длиннее ' + f.maxLength + ' символов' };
+      if (f.email && v && !/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(v)) return { ok: false, code: 'VALUE_NOT_EMAIL', message: f.label + ': нужен адрес вида имя@пример.ру' };
+      return { ok: true, value: v };
+    }
+    if (f.type === 'select') {
+      const v = normalizeStored(path, String(raw == null ? '' : raw));
+      const o = optionOf(f.options, v);
+      if (!o) return { ok: false, code: 'VALUE_NOT_ALLOWED', message: f.label + ': такого варианта нет в списке' };
+      if (o.disabled) return { ok: false, code: 'VALUE_NOT_AVAILABLE', message: f.label + ': вариант «' + o.label + '» пока недоступен' };
+      return { ok: true, value: v };
+    }
+    if (f.type === 'time') {
+      const v = normalizeTime(raw);
+      if (!v) return { ok: false, code: 'VALUE_NOT_TIME', message: f.label + ': нужно время в виде ЧЧ:ММ' };
+      if (f.order) {
+        const order = FIELDS.filter((x) => x.order).sort((a, b) => a.order - b.order);
+        const planned = order.map((x) => (x.path === path ? v : normalizeTime(getPath(s(), x.path))));
+        for (let i = 1; i < planned.length; i++) {
+          if (planned[i] <= planned[i - 1]) {
+            return { ok: false, code: 'TIME_ORDER', message: 'Границы суток должны идти по возрастанию: утро → день → вечер → ночь' };
+          }
+        }
+      }
+      return { ok: true, value: v };
+    }
+    if (f.type === 'number') {
+      const n = Math.round(Number(raw));
+      if (!isFinite(n)) return { ok: false, code: 'VALUE_NOT_NUMBER', message: f.label + ': нужно число' };
+      if (f.min != null && n < f.min) return { ok: false, code: 'VALUE_TOO_SMALL', message: f.label + ': не меньше ' + f.min };
+      if (f.max != null && n > f.max) return { ok: false, code: 'VALUE_TOO_BIG', message: f.label + ': не больше ' + f.max };
+      return { ok: true, value: n };
+    }
+    return { ok: true, value: raw };
+  }
+
+  /* --------- единая запись значения --------- */
+  function writeValue(path, raw, opts) {
+    opts = opts || {};
+    const isProfile = String(path || '').indexOf('profile.') === 0;
+    const action = opts.action || (isProfile ? 'profile.update' : 'settings.update');
+    if (!path) return err(action, 'PATH_REQUIRED', 'Не указано, что менять');
+    const check = validateField(path, raw);
+    if (!check.ok) return err(action, check.code, check.message, { path });
+    const value = check.value;
+    const prev = getPath(s(), path);
+    const label = opts.label || labelOf(path);
+    if (same(prev, value)) {
+      return ok(action, { path, value, label }, { unchanged: true, previous: prev, entry: null });
+    }
+    setPath(s(), path, value);
+    save();
+    let entry = null;
+    if (opts.silent !== true) {
+      entry = log({
+        action, title: isProfile ? 'Профиль изменён' : 'Настройка изменена',
+        object: (isProfile ? 'Профиль · ' : 'Настройки · ') + label,
+        objectType: 'settings', source: opts.source || 'ui',
+        undoable: true, sensitive: opts.sensitive != null ? !!opts.sensitive : isSensitive(path),
+        changes: [{ field: label, from: displayValue(path, prev), to: displayValue(path, value) }],
+        undo: { type: 'value', path, value: prev === undefined ? null : prev }
+      });
+    }
+    return ok(action, { path, value, label }, { entry, previous: prev });
+  }
+
+  function setProfileField(field, raw, opts) {
+    const path = String(field || '').indexOf('profile.') === 0 ? field : 'profile.' + field;
+    return writeValue(path, raw, Object.assign({ action: 'profile.update' }, opts || {}));
+  }
+  function updateProfile(patch, opts) {
+    const keys = Object.keys(patch || {});
+    const results = [];
+    for (let i = 0; i < keys.length; i++) {
+      const r = setProfileField(keys[i], patch[keys[i]], opts);
+      if (!r.ok) return r;
+      results.push(r);
+    }
+    return ok('profile.update', getProfile(), { results, changed: results.filter((r) => !r.unchanged).length });
+  }
+  function getProfile() {
+    const p = Object.assign({}, s().profile || {});
+    fieldsOf('profile').forEach((f) => { p[f.path.split('.')[1]] = readValue(f.path); });
+    return p;
+  }
+  function setSetting(path, raw, opts) {
+    const full = String(path || '').indexOf('settings.') === 0 || String(path || '').indexOf('profile.') === 0
+      ? path : 'settings.' + path;
+    return writeValue(full, raw, opts);
+  }
+  function getSetting(path) {
+    const full = String(path || '').indexOf('settings.') === 0 || String(path || '').indexOf('profile.') === 0
+      ? path : 'settings.' + path;
+    return readValue(full);
+  }
+
+  /* --------- форматы, зависящие от профиля --------- */
+  function currencyInfo() {
+    return optionOf(CURRENCIES, readValue('profile.currency')) || CURRENCIES[0];
+  }
+  function money(n) {
+    const c = currencyInfo();
+    const num = new Intl.NumberFormat(c.locale).format(Math.round(Number(n) || 0));
+    return c.position === 'prefix' ? c.sign + num : num + ' ' + c.sign;
+  }
+  const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+    'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+  function formatDateByProfile(iso) {
+    const raw = String(iso || '');
+    if (!ISO_RE.test(raw)) {
+      if (!raw) return '—';
+      const d0 = parseISO(raw);
+      if (isNaN(d0.getTime())) return raw;
+    }
+    const d = parseISO(raw);
+    const dd = pad(d.getDate()), mm = pad(d.getMonth() + 1), yyyy = d.getFullYear();
+    switch (readValue('profile.dateFormat')) {
+      case 'ГГГГ-ММ-ДД': return yyyy + '-' + mm + '-' + dd;
+      case 'ММ/ДД/ГГГГ': return mm + '/' + dd + '/' + yyyy;
+      case 'Д месяца ГГГГ': return d.getDate() + ' ' + MONTHS_GEN[d.getMonth()] + ' ' + yyyy;
+      default: return dd + '.' + mm + '.' + yyyy;
+    }
+  }
+  /* Показ времени. Хранение всегда остаётся 24-часовым ЧЧ:ММ — меняется только отображение. */
+  function formatTimeByProfile(hhmm) {
+    const v = normalizeTime(hhmm);
+    if (!v) return String(hhmm == null ? '' : hhmm);
+    if (readValue('profile.timeFormat') !== '12 ч') return v;
+    const parts = v.split(':');
+    let h = Number(parts[0]);
+    const suffix = h < 12 ? 'AM' : 'PM';
+    h = h % 12; if (h === 0) h = 12;
+    return h + ':' + parts[1] + ' ' + suffix;
+  }
+  function weekStartIndex() {
+    const o = optionOf(WEEK_STARTS, readValue('profile.weekStart'));
+    return o ? o.index : 1;
+  }
+  function tzOffsetMinutes() {
+    const o = optionOf(TIMEZONES, readValue('profile.tz'));
+    if (o) return o.offset;
+    const m = /^UTC([+-])(\d{1,2})(?::(\d{2}))?$/.exec(String(readValue('profile.tz') || ''));
+    if (!m) return 0;
+    return (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3] || 0));
+  }
+  function tzLabel() {
+    const o = optionOf(TIMEZONES, readValue('profile.tz'));
+    return o ? o.label : String(readValue('profile.tz') || 'UTC+0');
+  }
+  /* «Сейчас» в часовом поясе профиля. Это единственное место, где прототип решает,
+     который сейчас час: приветствие, утро/вечер и отметки времени берут его отсюда. */
+  function nowDate() {
+    const d = new Date();
+    return new Date(d.getTime() + (d.getTimezoneOffset() + tzOffsetMinutes()) * 60000);
+  }
+  function nowMinutes() { const d = nowDate(); return d.getHours() * 60 + d.getMinutes(); }
+  function nowHM() { const d = nowDate(); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
 
   /* ================= TASKS ================= */
   function taskCompleted(t) { return t ? (t.completed != null ? !!t.completed : (t.done != null ? !!t.done : t.status === 'completed')) : false; }
@@ -109,7 +489,7 @@ window.AvenActions = (function () {
     const d = taskDeadline(t) || taskDate(t);
     if (!d) return 'без срока';
     const tm = taskTime(t);
-    return dateLabel(d) + (tm ? ' · ' + tm : '');
+    return dateLabel(d) + (tm ? ' · ' + formatTimeByProfile(tm) : '');
   }
   function taskChanges(prev, next) {
     const labels = { title: 'Название', description: 'Описание', date: 'Дата', time: 'Время', deadline: 'Дедлайн',
@@ -314,8 +694,8 @@ window.AvenActions = (function () {
   function eventStart(e) { return normalizeTime((e && (e.startTime || e.time)) || ''); }
   function eventEnd(e) { return normalizeTime((e && (e.endTime || e.end)) || ''); }
   function eventDesc(e) { return (e && (e.description != null ? e.description : e.desc)) || ''; }
-  function eventTime(e) { return e && e.allDay ? 'весь день' : (eventStart(e) || 'без времени'); }
-  function eventObject(e) { return 'Событие «' + (e.title || 'Без названия') + '» · ' + humanDate(e.date) + (e.allDay ? ' · весь день' : (eventStart(e) ? ' · ' + eventStart(e) : '')); }
+  function eventTime(e) { return e && e.allDay ? 'весь день' : (formatTimeByProfile(eventStart(e)) || 'без времени'); }
+  function eventObject(e) { return 'Событие «' + (e.title || 'Без названия') + '» · ' + humanDate(e.date) + (e.allDay ? ' · весь день' : (eventStart(e) ? ' · ' + formatTimeByProfile(eventStart(e)) : '')); }
   function repeatLabel(e) { return ({ daily: 'ежедневно', weekly: 'еженедельно', monthly: 'ежемесячно', yearly: 'ежегодно' }[(e && e.repeat) || 'none']) || ''; }
   function reminderLabel(r) {
     if (!r) return 'нет';
@@ -505,8 +885,18 @@ window.AvenActions = (function () {
   }
 
   return {
-    dates: { todayISO, localISO, parseISO, diffDays, addDays, humanDate, dateLabel, normalizeDate },
-    format: { taskDueLabel, eventTime, eventStart, eventEnd, repeatLabel, reminderLabel },
+    dates: { todayISO, localISO, parseISO, diffDays, addDays, humanDate, dateLabel, normalizeDate,
+      nowDate, nowMinutes, nowHM, tzOffsetMinutes, tzLabel },
+    format: { taskDueLabel, eventTime, eventStart, eventEnd, repeatLabel, reminderLabel,
+      money, date: formatDateByProfile, time: formatTimeByProfile, weekStartIndex, currency: currencyInfo },
+    profile: { get: getProfile, setField: setProfileField, update: updateProfile,
+      fields: () => fieldsOf('profile'), read: readValue, display: displayValue, validate: validateField },
+    settings: { get: getSetting, set: setSetting, fields: fieldsOf, label: labelOf,
+      field: (p) => { const f = fieldByPath(p); return f ? Object.assign({}, f) : null; },
+      read: readValue, display: displayValue, validate: validateField, isSensitive },
+    options: { currencies: CURRENCIES, dateFormats: DATE_FORMATS, timeFormats: TIME_FORMATS,
+      weekStarts: WEEK_STARTS, timezones: TIMEZONES, languages: LANGUAGES,
+      answerStyles: ANSWER_STYLES, confirmLevels: CONFIRM_LEVELS, textSizes: TEXT_SIZES, themes: THEMES },
     tasks: { createTask, updateTask, completeTask, reopenTask, deleteTask, getTask, getTasks, getTasksForDate, getOverdueTasks,
       normalize: applyTaskAliases, isCompleted: taskCompleted, date: taskDate, deadline: taskDeadline, time: taskTime,
       priority: taskPriority, description: taskDescription, tags: taskTags, snapshot: taskSnapshot },
