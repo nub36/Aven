@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aven — 3D Female Aven V2 · viewer кандидата</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body { padding: 20px; max-width: 1220px; margin: 0 auto; }
+    .v3d-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .v3d-head h1 { margin: 0; font-size: 1.4rem; }
+    .muted { color: var(--muted); font-size: .84rem; }
+    .v2-layout { display: grid; grid-template-columns: minmax(340px, 1.25fr) minmax(300px, 1fr); gap: 14px; }
+    @media (max-width: 920px) { .v2-layout { grid-template-columns: 1fr; } }
+    /* Нейтральный светлый фон: тёмные волосы и одежда должны читаться и в light,
+       и в dark UI. Никаких glow-эффектов, маскирующих недостатки модели. */
+    .v2-stage { position: relative; border-radius: 14px; overflow: hidden; min-height: 520px;
+                background: linear-gradient(180deg, #d8dade 0%, #c4c7ce 55%, #b0b4bd 100%); }
+    .v2-stage canvas { display: block; width: 100%; height: 100%; }
+    .v2-stage .fallback { position: absolute; inset: 0; display: grid; place-items: center;
+                          padding: 18px; text-align: center; color: #23262e; }
+    .v2-stage .fallback[hidden] { display: none; }
+    .v2-stage .fallback img { max-height: 72%; max-width: 90%; border-radius: 10px; }
+    .v2-viewbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 4px; }
+    .v2-viewbar button.active { outline: 2px solid var(--accent); }
+    .v2-viewbar label { font-size: .84rem; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+    .v2-controls { display: flex; flex-direction: column; gap: 10px; }
+    .v2-controls fieldset { border: 1px solid rgba(127,127,127,.35); border-radius: 10px; padding: 8px 10px; margin: 0; }
+    .v2-controls legend { font-size: .8rem; color: var(--muted); padding: 0 6px; }
+    .v2-controls .row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .v2-controls button { min-width: 74px; }
+    .v2-controls button.active { outline: 2px solid var(--accent); }
+    .v2-ref img { width: 100%; border-radius: 10px; }
+    .v2-ref .muted { margin-top: 6px; }
+    table.tech { width: 100%; border-collapse: collapse; font-size: .84rem; }
+    table.tech td { padding: 3px 8px 3px 0; vertical-align: top; }
+    table.tech td:first-child { color: var(--muted); white-space: nowrap; }
+    .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .78rem;
+            background: rgba(127,127,127,.16); }
+    .pill.ok { background: rgba(40,170,90,.15); color: var(--ok); }
+    .pill.no { background: rgba(220,60,60,.13); color: var(--danger); }
+    .hint { padding: 10px 12px; border-radius: 10px; }
+  </style>
+</head>
+<body>
+  <div class="v3d-head">
+    <div>
+      <h1>3D Female Aven · V2 viewer (кандидат)</h1>
+      <div class="muted">Отдельная страница проверки кандидата V2. Главная страница и PNG-персонаж НЕ изменены.
+        Пайплайн: docs/AVATAR_3D_V2_PLAN.md; оценка сходства — только владелец.</div>
+    </div>
+    <div class="row" id="v2Caps"></div>
+  </div>
+
+  <div class="v2-layout">
+    <div>
+      <div class="v2-stage" id="stage">
+        <div class="fallback" id="fallback">
+          <div>
+            <div>WebGL недоступен — показан канонический reference.</div>
+            <img src="assets/character/v2-reference-views/front-reference.jpg" alt="Female Aven reference">
+          </div>
+        </div>
+      </div>
+      <div class="v2-viewbar">
+        <strong style="font-size:.86rem">Ракурс:</strong>
+        <button class="pill" data-view="front">Спереди</button>
+        <button class="pill" data-view="left">Слева</button>
+        <button class="pill" data-view="right">Справа</button>
+        <button class="pill" data-view="back">Сзади</button>
+        <label><input type="checkbox" id="autorotate"> вращение</label>
+        <span class="muted" id="viewState"></span>
+      </div>
+      <div class="v2-controls">
+        <fieldset>
+          <legend>Тест лицевой анимации (морфы ARKit + visemes)</legend>
+          <div class="row">
+            <button data-expr="blink">Blink</button>
+            <button data-expr="jaw">Jaw open</button>
+            <button data-expr="smile">Улыбка</button>
+            <button data-expr="frown">Хмурость</button>
+          </div>
+          <div class="row" style="margin-top:6px">
+            <button data-expr="brow">Брови вверх</button>
+            <button data-expr="browdown">Брови вниз</button>
+            <button data-expr="squint">Прищур</button>
+            <button data-expr="wide">Глаза широко</button>
+          </div>
+          <div class="row" style="margin-top:6px">
+            <strong style="font-size:.8rem;color:var(--muted)">Глаза (кости):</strong>
+            <button data-gaze="left">←</button>
+            <button data-gaze="right">→</button>
+            <button data-gaze="up">↑</button>
+            <button data-gaze="down">↓</button>
+            <button data-gaze="center">•</button>
+          </div>
+          <div class="row" style="margin-top:6px">
+            <strong style="font-size:.8rem;color:var(--muted)">Visemes:</strong>
+            <button data-viseme="viseme_sil">REST</button>
+            <button data-viseme="viseme_A">A</button>
+            <button data-viseme="viseme_E">E</button>
+            <button data-viseme="viseme_I">I</button>
+            <button data-viseme="viseme_O">O</button>
+            <button data-viseme="viseme_U">U</button>
+            <button data-viseme="viseme_MB">M/B/P</button>
+            <button data-viseme="viseme_FV">F/V</button>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <button id="resetAll" class="pill">Сбросить всё</button>
+            <span class="muted" id="exprState" style="align-self:center"></span>
+          </div>
+        </fieldset>
+      </div>
+    </div>
+
+    <div>
+      <div class="v2-ref">
+        <img src="assets/character/v2-reference-views/front-reference.jpg" alt="Female Aven — утверждённый reference">
+        <div class="muted">Канонический reference (master). Сравнение силуэта и пропорций — по нему.</div>
+      </div>
+      <div class="hint" style="margin-top:12px">
+        <strong style="font-size:.9rem">Технический блок</strong>
+        <div class="muted" id="modelStats">Загрузка stats…</div>
+        <table class="tech" id="techTable" hidden></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- importmap: vendored three.js 0.180 (MIT). Проверено сессией PoC:
+       three.core.min.js обязательно рядом с three.module.min.js. -->
+  <script type="importmap">
+    { "imports": {
+        "three": "./assets/vendor/three/three.module.min.js",
+        "three/loaders/GLTFLoader.js": "./assets/vendor/three/loaders/GLTFLoader.js",
+        "three/controls/OrbitControls.js": "./assets/vendor/three/controls/OrbitControls.js"
+    } }
+  </script>
+  <script>
+    // window.onerror -> флаг для авто-fallback (как в aven-3d.html)
+    window.__v2err = false;
+    window.addEventListener('error', (e) => {
+      if (e.message && /import|module/i.test(e.message)) window.__v2err = true;
+    });
+  </script>
+  <script type="module" src="js/aven3d-v2-model.js"></script>
+</body>
+</html>

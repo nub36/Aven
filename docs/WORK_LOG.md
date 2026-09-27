@@ -6,6 +6,72 @@
 
 ---
 
+## 2026-09-27 — XXIX. Female Aven 3D V2: автоматическая сборка кандидата (Stage 1–7), GLB + viewer
+
+- **Дата:** 2026-09-27
+- **Задача (владелец):** построить Female Aven 3D V2 (бюст: голова+шея+плечи/верх груди) с сохранением
+  identity утверждённого reference; выбрать practical pipeline из исследованных; результат A (GLB+viewer)
+  или B (подготовка к ручному этапу); после отчёта — СТОП.
+
+### Что конкретно сделано
+
+- **Pipeline маршрута B (MPFB2 CC0) реализован полностью автоматически** (без ручного этапа владельца),
+  `research/3d/v2/fit_01..fit_07`:
+  - fit_01: 478 landmarks на 6 ракурсах; fit_02: MPFB2 hm08 CC0 (age 0.5 = взрослый);
+  - fit_03: preshape + структурные камеры (front/left/right); fit_04: TPS-warp identity
+    + выравнивание профильной глубины (IRLS/Huber: spread 0.231→0.093; resid median 2.62px)
+    + перенос 34 expression-юнитов с нормировкой амплитуды (RMS, кап [0.5,3]);
+  - fit_05: бюст 5533v/11062t; fit_06: 51 ARKit + 7 visemes; fit_07: сборка 8 мешей + GLB.
+- **Три критичных бага найдено и исправлено** (подробности — AVATAR_3D_V2_PLAN §11):
+  1) профильная ось my — система КАДРа, не тела (лицо выпирало на 10–20см) → depth-alignment;
+  2) Blender 5.0 создаёт shape keys с value=1.0 (все 58 морфов активны одновременно) → sk.value=0;
+  3) bone-parenting к ХВОСТУ кости → matrix_parent_inverse по эмпирической формуле.
+- **Риг**: 7 костей (root/spine/neck/head/jaw/eye.L/eye.R); pivot глазных костей = измеренный центр
+  глазного яблока (Δ=0.0мм в GLB); влияния глазных костей сняты с кожи; глаза/зубы/язык/ресницы/волосы —
+  bone-parented, Body/Clothes — skin.
+- **Деливераблы**: `prototype/assets/3d/female-aven-v2.glb` (5.41 МБ, 25 430 tris, 58+10 морфов,
+  weights 0, vertex colors губ/бровей/скальфа, 4 CC0-текстуры), `female-aven-v2.stats.json`
+  (+ glb_verts/glb_tris из самого GLB), viewer `prototype/aven-3d-v2-model.html` (+js) с ракурсами,
+  вращением/zoom, тестом выражений (ARKit-комбинации + 8 visemes + gaze КОСТЯМИ с фолбэком на морфы),
+  техблоком и каноническим reference рядом; превью-лист `review/3d-v2-model/female-aven-v2-preview.jpg`
+  (reference + 6 ракурсов + 4 выражения, только compose без AI-генерации).
+
+### Какие файлы изменены
+
+- Новые: `prototype/aven-3d-v2-model.html`, `prototype/js/aven3d-v2-model.js`,
+  `prototype/tests/aven3d-v2-model-check.js`, `prototype/assets/3d/female-aven-v2.glb` (+stats.json),
+  `research/3d/v2/fit_01..07_*.py` (7 скриптов + compose_model_sheet.py), `review/3d-v2-model/*`.
+- Обновлены: `docs/AVATAR_3D_V2_PLAN.md` (§11 результат), `docs/DECISIONS.md` (ADR-114), этот журнал.
+
+### Что проверено/протестировано
+
+- `node prototype/tests/aven3d-v2-model-check.js` — **69 ✓ / 0 ✗**: структура GLB (8 мешей, skin 7 костей,
+  иерархия parenting, weights 0), амплитуды морфов на реальной геометрии (jawOpen 44мм, blink 9.8мм,
+  brow 3.3мм, smile 17.4мм — анти-регрессия демпфирования), pivot eye.L = центр глаза (Δ=0.0мм),
+  blink двигает только область глаз (115/115), jawOpen вниз; stats↔GLB; статика viewer'а (ESM, importmap,
+  ассеты).
+- Регресс: `aven3d-viewer-check.js` 43 OK; `stage1-proto-check.js` 140/0 (jsdom во /tmp/lab).
+- Pixel-QC превью (нейтральная база, thr15): smile 115px, jawOpen 547px, blink 301px, viseme_O 193px;
+  модель в кадре во всех 6 ракурсах (front x[95,544]/y[273,631] в 640×800).
+
+### Известные проблемы
+
+- Landmarks-fit ≠ художественный sculpt: тонкая форма — приближение; **сходство оценивает владелец**
+  (у агента нет vision). V2 НЕ включена ни на Главную, ни в PNG-fallback.
+- Волосы — упрощённая 2-слойная mesh-карта (Hair A по силуэту), не стрендовый груминг.
+- glTF-морфы Blender пишет sparse-аксессорами (дельты) — учтено в тестах.
+
+### Что рекомендуется делать следующим
+
+1. **Владельцу:** открыть `prototype/aven-3d-v2-model.html` (после merge —
+   https://nub36.github.io/Aven/aven-3d-v2-model.html) и сравнить с каноническим reference;
+   лист `review/3d-v2-model/female-aven-v2-preview.jpg`. Утвердить или отклонить (ADR-114).
+2. При утверждении — следующий этап lip-sync (Aigul → visemes → морфы), НЕ выполняется до явного
+   решения владельца. При отклонении — материалы готовы к ручному Blender/MetaHuman-этапу
+   (AVATAR_3D_V2_PLAN §7): blend-файл сборки, references, скрипты, измерения.
+
+---
+
 ## 2026-09-26 — XXVIII. Female Aven V2: contact sheet, face comparison, страница проверки identity
 
 - **Дата:** 2026-09-26 (продолжение этапа V2, PR #14 открыт).
