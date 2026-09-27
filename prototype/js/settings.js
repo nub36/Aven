@@ -112,6 +112,13 @@
         ${setRow('«Вечер» начинается в', '', `<input type="time" value="${B.evening}" style="width:130px">`)}
         ${setRow('«Ночь» начинается в', '', `<input type="time" value="${B.night}" style="width:130px">`)}
         ${setRow('«После работы» — с', '', `<input type="time" value="${B.afterWork}" style="width:130px">`)}
+      </div>
+      <h3 class="set-h">Дневные сценарии</h3>
+      <p class="set-sub">Утренний обзор и итоги дня работают с уже существующими задачами, событиями и уведомлениями</p>
+      <div class="card">
+        ${setRow('Показывать утренний обзор', 'подсказка на «Главной» утром; сам раздел остаётся доступен всегда', sw('settings.daily.morning', ((st.settings.daily || {}).morning !== false)))}
+        ${setRow('Показывать вечерний обзор', 'подсказка на «Главной» вечером; итоги дня можно открыть в любой момент', sw('settings.daily.evening', ((st.settings.daily || {}).evening !== false)))}
+        <div class="tts-priv">Какой сейчас период — определяется временем выше («Утро», «Вечер»). Это только подсказка в интерфейсе: прототип не будит и не шлёт оповещения при закрытой вкладке.</div>
       </div>`;
 
     if (cat === 'character') {

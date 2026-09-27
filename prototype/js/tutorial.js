@@ -73,6 +73,40 @@ window.AvenTutorial = (function () {
         { target: 'notif-honest', title: 'Честно об ограничениях', text: 'Это уведомления внутри приложения. Пока вкладка закрыта, писем и push‑сообщений не будет — для этого нужен сервер. Какие источники показывать, настраивается в «Настройках».' }
       ]
     },
+    morning: {
+      id: 'morning', route: 'morning', title: 'Утренний обзор',
+      steps: [
+        { target: 'daily-step-summary', title: 'Сводка дня', prepare: () => window.Aven.dailySetStep('morning', 'summary'),
+          text: 'Первый шаг показывает дату и короткую сводку: сколько сегодня событий, открытых задач, что уже выполнено и есть ли просроченное. Это те же данные, что в «Задачах» и «Календаре».' },
+        { target: 'daily-step-next', title: 'Ближайшее событие', prepare: () => window.Aven.dailySetStep('morning', 'next'),
+          text: 'Второй шаг показывает ближайшее событие и все события этого дня. Кнопка «Открыть» ведёт к обычной карточке события в «Календаре».' },
+        { target: 'daily-step-tasks', title: 'Задачи на сегодня', prepare: () => window.Aven.dailySetStep('morning', 'tasks'),
+          text: 'Здесь задачи сегодняшнего дня. Их можно выполнить, вернуть или открыть. Отметка выполнения сразу видна в разделе «Задачи» и в «Дне», а отменить её можно в «Истории».' },
+        { target: 'daily-step-attention', title: 'Что требует внимания', prepare: () => window.Aven.dailySetStep('morning', 'attention'),
+          text: 'Просроченные задачи и важные уведомления собраны в одном шаге. Это факты и сроки, а не новые записи: полный список — в разделе «Уведомления».' },
+        { target: 'daily-step-suggestions', title: 'Предложения Aven', prepare: () => window.Aven.dailySetStep('morning', 'suggestions'),
+          text: 'Предложения — это следующий полезный шаг с указанной причиной. Их можно выполнить, отложить или скрыть; они не дублируют уведомления.' },
+        { target: 'daily-controls', title: 'Переход в «День»', prepare: () => window.Aven.dailySetStep('morning', 'finish'),
+          text: 'Кнопка «Завершить и открыть День» заканчивает обзор и переводит в рабочий раздел «День». Обзор можно пропустить в любой момент — ничего не блокируется.' }
+      ]
+    },
+    evening: {
+      id: 'evening', route: 'evening', title: 'Итоги дня',
+      steps: [
+        { target: 'daily-step-summary', title: 'Итоги', prepare: () => window.Aven.dailySetStep('evening', 'summary'),
+          text: 'Первый шаг показывает, сколько задач выполнено и осталось, что просрочено и какие события прошли. Только фактические данные, без оценок дня.' },
+        { target: 'daily-step-completed', title: 'Выполненное', prepare: () => window.Aven.dailySetStep('evening', 'completed'),
+          text: 'Список задач, отмеченных выполненными в этот день. Если отметка была ошибочной, кнопка «Вернуть» снова откроет задачу.' },
+        { target: 'daily-step-remaining', title: 'Оставшееся', prepare: () => window.Aven.dailySetStep('evening', 'remaining'),
+          text: 'Незакрытые задачи дня, просроченное и важные уведомления. Отсюда удобно решить, что сделать сейчас, а что перенести.' },
+        { target: 'daily-step-remaining', title: 'Перенос на завтра', prepare: () => window.Aven.dailySetStep('evening', 'remaining'),
+          text: 'Кнопка «На завтра» меняет дату и срок задачи обычным способом. Новая дата сразу появится в «Задачах», «Дне» и «Календаре», а «История» вернёт прежнюю.' },
+        { target: 'daily-step-tomorrow', title: 'Завтра', prepare: () => window.Aven.dailySetStep('evening', 'tomorrow'),
+          text: 'Шаг «Завтра» показывает уже запланированные события и задачи. Можно добавить задачу на завтра или сразу открыть завтрашний «День».' },
+        { target: 'daily-controls', title: 'Завершение', prepare: () => window.Aven.dailySetStep('evening', 'finish'),
+          text: 'Кнопка «Завершить и открыть День» подводит итоги и переводит в «День». Вернуться к итогам можно позже — сценарий ничего не блокирует.' }
+      ]
+    },
     help: {
       id: 'help', route: 'help', title: 'Помощь',
       steps: [
@@ -196,6 +230,9 @@ window.AvenTutorial = (function () {
     const step = def && def.steps[active.step];
     if (!def || !step) return close();
     const ui = ensureEls();
+    /* Шаг может подготовить экран (например, открыть нужный шаг дневного сценария).
+       Это не бизнес-логика: обучение только переключает представление. */
+    if (typeof step.prepare === 'function') { try { step.prepare(); } catch (e) { /* обучение не должно ломать страницу */ } }
     clearTarget();
     const target = document.querySelector(targetSelector(step.target));
     if (target) {
@@ -297,11 +334,14 @@ window.AvenTutorial = (function () {
   }
   function repeat() { speakStep(); }
 
-  A.helpActions = function (topic) {
+  /* tourId позволяет разделить категорию Help и идентификатор обучения
+     (например, справка «Утро и вечер» — обучение «Утренний обзор»). */
+  A.helpActions = function (topic, tourId) {
     const id = A.esc(topic || 'home');
+    const tour = A.esc(tourId || topic || 'home');
     return `<div class="context-help btn-row" data-tour="context-help">
       <button class="btn small" data-action="help-topic" data-topic="${id}">? Справка</button>
-      <button class="btn small" data-action="tutorial-start" data-tour-id="${id}">▶ Обучение</button>
+      <button class="btn small" data-action="tutorial-start" data-tour-id="${tour}">▶ Обучение</button>
     </div>`;
   };
 
