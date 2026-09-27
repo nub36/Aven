@@ -7,6 +7,8 @@
     { group: null, items: [
       { id: 'home', icon: '🏠', label: 'Главная' },
       { id: 'day', icon: '🌤️', label: 'День' },
+      { id: 'morning', icon: '🌅', label: 'Утренний обзор' },
+      { id: 'evening', icon: '🌙', label: 'Итоги дня' },
       { id: 'notifications', icon: '🔔', label: 'Уведомления' },
       { id: 'calendar', icon: '📅', label: 'Календарь', mod: 'calendar' },
       { id: 'tasks', icon: '✅', label: 'Задачи', mod: 'tasks' },
@@ -33,7 +35,7 @@
   ];
 
   const TITLES = {
-    home: 'Главная', day: 'День', notifications: 'Уведомления', calendar: 'Календарь', tasks: 'Задачи', notes: 'Заметки',
+    home: 'Главная', day: 'День', morning: 'Утренний обзор', evening: 'Итоги дня', notifications: 'Уведомления', calendar: 'Календарь', tasks: 'Задачи', notes: 'Заметки',
     finance: 'Финансы', auto: 'Авто', shopping: 'Покупки / Имущество', tools: 'Инструменты', help: 'Помощь',
     assistant: 'Aven Assistant', automation: 'Автоматизации', settings: 'Настройки', profile: 'Профиль',
     history: 'История действий', admin: 'Админка',

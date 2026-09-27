@@ -68,6 +68,8 @@ prototype/
     ├── flows.js        — демо state machine: многошаговая заправка, важное событие через actions
     ├── pages1.js       — Главная (hero с Female Aven), День, Календарь, Задачи, Заметки
     ├── pages2.js       — Финансы, Авто, Покупки, Автоматизации, Assistant (+персонаж/STT)
+    ├── daily.js        — AvenDaily: DOM-free сводки утра/вечера над общими данными (без мутаций)
+    ├── daily-ui.js     — экраны «Утренний обзор» (#/morning) и «Итоги дня» (#/evening)
     ├── tools.js        — Инструменты (часть функций реально работает)
     ├── settings.js     — Настройки и Профиль (+категория «Персонаж», метки этапов у разделов вне 1.0)
     ├── history.js      — История действий + Undo (сквозной слой: A.logAction / A.undoAction)
@@ -89,6 +91,29 @@ prototype/tests/
 ```
 
 Зависимостей нет. Сборка не нужна.
+
+## Утро и вечер (дневные сценарии)
+
+`AvenDaily.getMorning(context)` и `AvenDaily.getEvening(context)` — DOM-free сводки над уже существующими
+данными. Они читают задачи, события и даты через Common Actions, уведомления — через `AvenNotify`,
+предложения — через `AvenSuggestions`, ничего не мутируют и возвращают `summary`, списки сущностей,
+`nextEvent`/`tomorrow`, флаги пустых состояний и `errors` (сбой одного источника не ломает обзор).
+Даты берутся из общего demo clock, поэтому «сегодня»/«завтра» совпадают с «Днём», «Задачами»,
+«Календарём», «Уведомлениями» и Suggestions.
+
+Экран `#/morning` — 6 шагов: сводка дня → ближайшее событие и события дня → задачи на сегодня →
+просроченное и важные уведомления → предложения → завершение с переходом в «День».
+Экран `#/evening` — 5 шагов: итоги и прошедшие события → выполненное сегодня → оставшееся и просроченное →
+подготовка завтра → завершение.
+
+Действия — только существующие: `toggle-task` (выполнить/вернуть), `task-edit`, открытие события, переход
+к уведомлению, действие Suggestion. Перенос на завтра (`AvenDaily.rescheduleToTomorrow`) и создание задачи
+на завтра (`planTomorrowTask`) — тонкие обёртки над `task.update`/`task.create`, поэтому Undo реально
+возвращает исходную дату. Сохраняется только маркер прохождения `dailyState.{morning|evening}.dateISO`.
+
+Сценарий не обязателен: «Пропустить» и «Закрыть» доступны на любом шаге, «Главная» лишь предлагает
+подходящий сценарий по времени суток из настроек (`settings.behavior`), а `settings.daily.morning/evening`
+отключают только эту подсказку. Фоновых будильников, писем и push при закрытой вкладке нет.
 
 ## Suggestions / Предложения Aven
 
@@ -163,6 +188,15 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 - **Метки этапов** — разделы меню и настроек, не входящие в срез 1.0, помечены бейджем
   («1.1», «Stage 2», «Stage 3», «Stage 4», «перспектива», «опция (ADR-014)») и показывают предупреждение:
   прототип проектирует весь UI, но не делает вид, что всё это войдёт в первый релиз ([ADR-010](../docs/DECISIONS.md)).
+
+**Четырнадцатая итерация (2026-09-27) — утро и вечер** (MVP_SCOPE §4.2.3, FEATURES §3.7):
+- добавлены `js/daily.js` (`AvenDaily`, без DOM) и `js/daily-ui.js` (экраны `#/morning` и `#/evening`);
+- сводки строятся только из существующих задач, событий, уведомлений и предложений; собственных сущностей и копии сводки нет — сохраняется лишь маркер `dailyState.{morning|evening}.dateISO`;
+- действия (выполнить/вернуть, открыть, перенести на завтра, создать задачу на завтра, действие Suggestion) идут через Common Actions с History/Undo;
+- «Главная» предлагает сценарий по времени суток (границы из `settings.behavior`), «День» получил кнопки обоих сценариев и остался рабочим центром даты; в меню добавлены оба пункта;
+- Help: новая категория «Утро и вечер» (10 статей), Tutorial: туры `morning` и `evening` по 6 шагов (шаг тура переключает шаг сценария);
+- Настройки → Aven: «Показывать утренний обзор» / «Показывать вечерний обзор» + честная приписка про отсутствие фоновых будильников;
+- проверка: `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — 139/139; полный regression из десяти suite — 685/685. Реальная браузерная/Android-проверка не выполнялась (Chromium недоступен).
 
 **Двенадцатая итерация (2026-09-27) — Напоминания и Центр уведомлений** (MVP_SCOPE §4.2.1, FEATURES §4):
 - добавлен раздел `#/notifications`: движок `js/notify.js` (`AvenNotify`, без DOM) собирает пункты из общих данных (просроченные/сегодняшние задачи, события дня, напоминания к событиям, документы авто, гарантии, ручные напоминания), считает непрочитанные/активные/срочные и даёт действия read/markAllRead/snooze/dismiss/restore + CRUD напоминаний — всё с History/Undo;
@@ -310,7 +344,7 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 **Проверка:** `node prototype/tests/actions-core-check.js` — **18 проверок Common Actions без DOM**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/help-tutorial-check.js` — **33 проверки Help/Tutorial/responsive/TTS narration**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js`
-(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial).
+(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**. Полный набор из десяти suite — **685 проверок, 0 провалов**.
 `stage1-proto-check.js` покрывает: меню и метки этапов, история с
 Undo/фильтрами/экспортом, все 8 разделов админки с подтверждениями и аудитом, тема, экраны аккаунта,
 роут-гард, сквозная история и настоящий Undo в задачах/заметках/финансах/авто/покупках/автоматизациях,

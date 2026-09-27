@@ -89,9 +89,30 @@ Tutorial Engine → declarative tutorial definitions → overlay/highlight/progr
 ordered explainable suggestions`. Вычисляемая карточка не копируется в данные; сохраняется только реакция
 пользователя (`suggestionState[id]`: dismiss/snooze). Stable ID строится из правила, исходной сущности и
 даты контекста, поэтому повторный render не создаёт дубль. Мутация реальной сущности делегируется Action
-Core, а suppression записывается в общий History/Undo. Home, Day, Assistant и будущие Morning/Evening
+Core, а suppression записывается в общий History/Undo. Home, Day, Assistant и Morning/Evening
 используют один контракт. Notification сообщает о факте/сроке; Suggestion предлагает действие — read/unread
 модель уведомлений в Suggestions не переносится. Правила локальные, детерминированные и не требуют AI.
+
+### 3.4. Daily Summary (утро/вечер; прототипное направление, не ADR)
+
+`AvenDaily` — тонкий DOM-free агрегатор над уже существующими слоями: `getMorning(context)` и
+`getEvening(context)` читают общий state через Common Actions (`tasks/events/dates`), движок уведомлений
+(`AvenNotify`) и `AvenSuggestions`, и возвращают структурированную сводку
+(`summary`, списки сущностей, `nextEvent`, `tomorrow`, `empty`, `errors`). Контракт:
+
+- **read-only:** получение сводки не мутирует состояние и не создаёт новых сущностей;
+- **shared entities:** возвращаются те же задачи/события/уведомления/предложения, что и в разделах;
+- **deterministic:** все даты берутся из общего demo clock (`AvenActions.dates`), поэтому «сегодня»/«завтра»
+  совпадают с «Днём», «Задачами», «Календарём», «Уведомлениями» и Suggestions;
+- **error resilience:** сбой одного источника попадает в `errors[]` и не ломает остальную сводку;
+- **мутации отдельно:** `rescheduleToTomorrow` и `planTomorrowTask` — тонкие обёртки над `task.update` /
+  `task.create` Action Core, поэтому History/Undo работает без отдельного механизма;
+- **минимальное состояние сценария:** `dailyState.{morning|evening} = { dateISO }` — только маркер
+  прохождения; копия сводки не сохраняется и вторым источником данных не становится;
+- **готовность к Assistant:** `summaryText(kind)` отдаёт готовый текст для будущих команд «Что у меня
+  сегодня?»/«Как прошёл день?»/«Что завтра?» без нового parser/NLP.
+
+Morning/Evening — guided-слой поверх этих данных; «День» остаётся рабочим центром выбранной даты.
 
 ## 4. Action Core
 

@@ -92,6 +92,13 @@ window.AvenDemo = (function () {
              не AI/LLM; выключение не меняет задачи, события и другие сущности. */
           enabled: true
         },
+        daily: {
+          /* Дневные сценарии (утренний обзор и итоги дня). Это только подсказка на «Главной»
+             и отдельные экраны: фоновых будильников и оповещений при закрытой вкладке нет.
+             Границы «утро/день/вечер/ночь» берутся из settings.behavior. */
+          morning: true,
+          evening: true
+        },
         homeCards: { suggestions: true, today: true, tasks: true, expenses: true, car: true, reminders: true, quick: true, actions: true },
         modules: { calendar: true, tasks: true, notes: true, finance: true, auto: true, shopping: true, tools: true },
         experiments: { canvas: false, aiRouter: false, geoReminders: false }

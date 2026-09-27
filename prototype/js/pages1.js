@@ -122,6 +122,40 @@
       </article>`).join('')}</div>`;
   }
 
+  /* Главная предлагает дневной сценарий: утром — обзор, вечером — итоги.
+     Это подсказка, а не блокировка: оба сценария всегда доступны кнопками и в меню.
+     Время суток берётся из настроек «Утро/День/Вечер/Ночь» (Настройки → Aven). */
+  function dailyBanner() {
+    if (!window.AvenDaily) return '';
+    const cfg = window.AvenDaily.config();
+    if (!cfg.morningEnabled && !cfg.eveningEnabled) return '';
+    const flow = window.AvenDaily.suggestedFlow();
+    const morningDone = window.AvenDaily.isReviewed('morning', todayISO());
+    const eveningDone = window.AvenDaily.isReviewed('evening', todayISO());
+    const primary = flow === 'evening' ? 'evening' : 'morning';
+    const lead = flow === 'evening'
+      ? 'Пора подвести итоги дня и подготовить завтра.'
+      : flow === 'morning'
+        ? 'Начните день с короткого обзора: что сегодня и на что обратить внимание.'
+        : 'Дневные сценарии доступны в любой момент — утренний обзор и итоги дня.';
+    return `<section class="card daily-banner" data-tour="home-daily" aria-labelledby="home-daily-title">
+      <div class="grow">
+        <h2 id="home-daily-title">${primary === 'evening' ? '🌙 Итоги дня' : '🌅 Утренний обзор'}</h2>
+        <div class="s">${A.esc(lead)}</div>
+      </div>
+      <div class="btn-row">
+        ${cfg.morningEnabled ? `<button class="btn ${primary === 'morning' ? 'primary' : ''}" data-action="daily-open" data-kind="morning">${morningDone ? 'Утренний обзор ✓' : 'Утренний обзор'}</button>` : ''}
+        ${cfg.eveningEnabled ? `<button class="btn ${primary === 'evening' ? 'primary' : ''}" data-action="daily-open" data-kind="evening">${eveningDone ? 'Итоги дня ✓' : 'Подвести итоги дня'}</button>` : ''}
+      </div>
+    </section>`;
+  }
+
+  /* Общие для нескольких экранов рендереры и формы: Morning/Evening используют ИХ,
+     а не собственные копии, чтобы карточки предложений и формы задач были одинаковыми везде. */
+  A.suggestionCards = function (items, context, limit) { return suggestionCards(items, context, limit); };
+  A.openTaskForm = function (existing, dateHint) { return taskForm(existing, dateHint); };
+  A.openEventForm = function (existing, dateHint) { return eventForm(existing, dateHint); };
+
   /* ================= ГЛАВНАЯ ================= */
   A.pages.home = function () {
     const st = s();
@@ -194,6 +228,8 @@
         <span class="hc-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
       </div>` : ''}
     </div>
+
+    ${dailyBanner()}
 
     ${cards.suggestions ? `<section class="card suggestions-panel" data-tour="home-suggestions" aria-labelledby="home-suggestions-title">
       <div class="head"><div><h2 id="home-suggestions-title">Предложения Aven</h2><div class="s">Полезные следующие действия по вашим текущим данным</div></div><button class="btn small" data-action="tutorial-start" data-tour-id="suggestions">Как это работает?</button></div>
@@ -314,6 +350,14 @@
     else dayTab = 'custom';
   }
   function selectedDayISO() { return daySelected || todayISO(); }
+  /* Переходы из Morning/Evening открывают «День» на той же дате: общее состояние, а не своя копия. */
+  A.setDaySelected = function (iso) {
+    const d = Core().dates.normalizeDate(iso, todayISO());
+    daySelected = d;
+    const delta = diffDays(d, todayISO());
+    dayTab = delta === 0 ? 'today' : delta === 1 ? 'tomorrow' : delta === -1 ? 'yesterday' : 'custom';
+    return d;
+  };
   function taskForDay(t, iso) {
     if (!t || t.archived) return false;
     return taskDateISO(t) === iso || taskDueISO(t) === iso;
@@ -355,6 +399,8 @@
       <div class="btn-row" data-tour="day-actions">
         <button class="btn" data-action="day-add-event">＋ Событие на дату</button>
         <button class="btn" data-action="day-add-task">＋ Задача на дату</button>
+        <button class="btn" data-action="daily-open" data-kind="morning">🌅 Утренний обзор</button>
+        <button class="btn" data-action="daily-open" data-kind="evening">🌙 Итоги дня</button>
         ${A.helpActions ? A.helpActions('day') : ''}
       </div>
     </div>
