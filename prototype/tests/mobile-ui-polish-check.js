@@ -20,12 +20,16 @@ function ok(name, cond, extra) {
   if (cond) { pass++; console.log('PASS  ' + name); }
   else { fail++; console.error('FAIL  ' + name + (extra ? ' — ' + extra : '')); }
 }
-async function load(hash) {
+async function load(hash, width) {
+  width = width || 390;
   const dom = await JSDOM.fromURL('http://127.0.0.1:' + PORT + '/index.html' + hash, {
     runScripts: 'dangerously', resources: 'usable', pretendToBeVisual: true,
     beforeParse(w) {
-      Object.defineProperty(w, 'innerWidth', { configurable: true, value: 390 });
-      w.matchMedia = (q) => ({ matches: /max-width:\s*860px/.test(q) || /max-width:\s*640px/.test(q), media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+      Object.defineProperty(w, 'innerWidth', { configurable: true, value: width });
+      w.matchMedia = (q) => {
+        const max = /max-width:\s*(\d+)px/.exec(q);
+        return { matches: !!max && width <= Number(max[1]), media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} };
+      };
       w.scrollTo = () => {};
     }
   });
@@ -44,6 +48,19 @@ async function load(hash) {
   ok('CSS: admin nav scroll is local', /\.set-nav\s*\{[^}]*max-width:\s*100%[^}]*overflow-x:\s*auto/s.test(css));
   ok('CSS: reduced motion covers pseudo-elements', /prefers-reduced-motion:\s*reduce/.test(css) && /\*,\s*\*::before,\s*\*::after/.test(css));
   ok('Admin: wide tables have explicit mobile card semantics', /tbl adm-table/.test(admin) && /data-label="Действия"/.test(admin) && /data-label="Результат"/.test(admin));
+
+  const routes = ['home', 'day', 'calendar', 'tasks', 'notes', 'finance', 'auto', 'shopping', 'tools', 'help', 'assistant', 'automation', 'history', 'admin', 'settings', 'profile'];
+  for (const width of [320, 360, 390, 412, 430]) {
+    const m = await load('#/home', width);
+    let rendered = true;
+    for (const route of routes) {
+      m.w.location.hash = '#/' + route;
+      await sleep(45);
+      if (/Ошибка отрисовки/.test(m.q('#page').textContent)) rendered = false;
+    }
+    ok('DOM smoke ' + width + 'px: every existing route renders', rendered);
+    m.dom.window.close();
+  }
 
   const p = await load('#/home');
   const button = p.q('#mobile-menu-btn');
