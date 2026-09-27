@@ -130,6 +130,7 @@
   document.addEventListener('click', (e) => {
     const el = e.target.closest('[data-action]');
     if (!el) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return; // контролы — только change/input
     if (el.tagName === 'INPUT' || el.tagName === 'SELECT') return;  // по клику не трогаем: только change
     if (el.tagName === 'LABEL' && el.querySelector('input[type="checkbox"],input[type="radio"]')) return;
     const raw = el.dataset.action;
@@ -147,7 +148,8 @@
     if (!el) return;
     const isControl = el.tagName === 'INPUT' || el.tagName === 'SELECT';
     const isLabeledBox = el.tagName === 'LABEL' && (t.type === 'checkbox' || t.type === 'radio');
-    if (!isControl && !isLabeledBox) return;
+    const isAncestorBox = (t.type === 'checkbox' || t.type === 'radio');
+    if (!isControl && !isLabeledBox && !isAncestorBox) return;
     const name = el.dataset.action.split(':')[0];
     if (A.actions[name]) A.actions[name](el, e);
   });

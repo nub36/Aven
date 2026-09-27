@@ -8,14 +8,18 @@
      NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js
    NODE_PATH нужен, потому что node ищет модули рядом со скриптом, а в репозитории
    намеренно нет ни package.json, ни node_modules.
-   Скрипт сам поднимает статический сервер на 127.0.0.1:8099, прогоняет 86 проверок
+   Скрипт сам поднимает статический сервер на 127.0.0.1:8099, прогоняет 196 проверок
    и завершается с кодом 1 при любом провале.
 
    Проверки покрывают: меню и метки этапов, историю с Undo/фильтрами/экспортом,
    админку (8 разделов, опасные действия с подтверждением, аудит, миграции, бэкапы,
    флаги, аварийные переключатели и их связь с регистрацией), тему «как в системе»,
-   экраны входа/2FA/регистрации/восстановления, роут-гард и регрессию прежних страниц.
-   Спецификации: docs/MVP_SCOPE.md §4.1, §5.1, §5.9; docs/ADMIN.md; ADR-010, ADR-012. */
+   экраны входа/2FA/регистрации/восстановления, роут-гард, регрессию прежних страниц,
+   сквозную историю/Undo в разделах, редактирование/архив задач, папки/архив/автосохранение заметок,
+   фильтры/редактирование финансов, справочники счетов/категорий, авто со связью заправок/расходов/ТО
+   с финансами, покупки/имущество со статусами, сервисом и связью с финансами, и события календаря как
+   часть петли «создал → увидел в Календаре/Дне/Главной → изменил/удалил → отменил».
+   Спецификации: docs/MVP_SCOPE.md §4.1, §5.1, §5.4, §5.7–5.9; docs/ADMIN.md; ADR-010, ADR-012. */
 let JSDOM;
 try {
   JSDOM = require('jsdom').JSDOM;
@@ -393,6 +397,27 @@ async function load(hash) {
     p.w.Aven.undoAction(e3.id); await sleep(220);
     ok('G9 Undo возвращает задачу на прежнее место',
       p.st().tasks[idxBefore] && p.st().tasks[idxBefore].id === 't2', p.st().tasks[idxBefore] && p.st().tasks[idxBefore].id);
+
+    p.click(p.q('[data-action="task-edit"][data-id="t1"]')); await sleep(180);
+    p.set(p.q('#modal-root input[name="title"]'), 'Забрать документы (изменено)');
+    p.set(p.q('#modal-root input[name="dueDate"]'), new p.w.Date().toISOString().slice(0, 10));
+    p.click(p.modalSubmit()); await sleep(260);
+    const eEdit = H()[0];
+    ok('G9a редактирование задачи пишет старое/новое значение и payload fields',
+      eEdit.action === 'task.update' && eEdit.undo && eEdit.undo.type === 'fields' &&
+      (eEdit.changes || []).some((c) => c.field === 'Название' && /изменено/.test(c.to)), JSON.stringify(eEdit.changes));
+    p.w.Aven.undoAction(eEdit.id); await sleep(240);
+    ok('G9b Undo редактирования задачи возвращает прежнее название',
+      p.st().tasks.filter((t) => t.id === 't1')[0].title === 'Забрать документы');
+
+    p.click(p.q('[data-action="task-archive"][data-id="t1"]')); await sleep(250);
+    const eArch = H()[0];
+    ok('G9c архивирование задачи скрывает её из активного списка и пишется в историю',
+      p.st().tasks.filter((t) => t.id === 't1')[0].archived === true && eArch.action === 'task.update' &&
+      (eArch.changes || [])[0].field === 'Архив');
+    p.w.Aven.undoAction(eArch.id); await sleep(240);
+    ok('G9d Undo архивирования возвращает задачу в активные',
+      p.st().tasks.filter((t) => t.id === 't1')[0].archived === false);
     p.dom.window.close();
   }
 
@@ -432,6 +457,38 @@ async function load(hash) {
       !p.st().notes.some((n) => n.id === nId) && H()[0].action === 'note.delete' && H()[0].danger === true);
     p.w.Aven.undoAction(H()[0].id); await sleep(220);
     ok('G16 Undo возвращает удалённую заметку', p.st().notes.some((n) => n.id === nId));
+
+    const folderSel = p.q('[data-action="note-filter-folder"]');
+    folderSel.value = 'Авто'; p.change(folderSel); await sleep(220);
+    ok('G16a фильтр заметок по папке работает и не ломает страницу',
+      /Что купить для машины/.test(p.q('#page').textContent) && !p.broken());
+    const folderAll = p.q('[data-action="note-filter-folder"]'); folderAll.value = 'all'; p.change(folderAll); await sleep(220);
+
+    p.click(p.q('[data-action="note-folder-add"]')); await sleep(160);
+    p.set(p.q('#modal-root input[name="name"]'), 'Работа тест');
+    p.click(p.modalSubmit()); await sleep(240);
+    const eFolder = H()[0];
+    ok('G16b создание папки заметок пишет историю',
+      (p.st().noteFolders || []).indexOf('Работа тест') >= 0 && eFolder.action === 'note.folder.create');
+    p.w.Aven.undoAction(eFolder.id); await sleep(220);
+    ok('G16c Undo создания папки удаляет её из справочника', (p.st().noteFolders || []).indexOf('Работа тест') < 0);
+
+    p.click(p.q('[data-action="note-open"][data-id="' + nId + '"]')); await sleep(160);
+    p.click(p.q('[data-action="note-archive"][data-id="' + nId + '"]')); await sleep(240);
+    const eArch = H()[0];
+    ok('G16d архивирование заметки скрывает её из активных и пишется в историю',
+      p.st().notes.filter((n) => n.id === nId)[0].archived === true && eArch.action === 'note.update');
+    p.w.Aven.undoAction(eArch.id); await sleep(240);
+    ok('G16e Undo архива возвращает заметку в активные', p.st().notes.filter((n) => n.id === nId)[0].archived === false);
+
+    p.click(p.q('[data-action="note-open"][data-id="' + nId + '"]')); await sleep(160);
+    const oldBody = p.st().notes.filter((n) => n.id === nId)[0].body;
+    p.set(p.q('#note-autosave'), oldBody + '\nАвтосохранение проверки'); await sleep(520);
+    const eAuto = H()[0];
+    ok('G16f автосохранение заметки меняет текст и пишет Undo-запись',
+      eAuto.action === 'note.autosave' && /Автосохранение проверки/.test(p.st().notes.filter((n) => n.id === nId)[0].body));
+    p.w.Aven.undoAction(eAuto.id); await sleep(240);
+    ok('G16g Undo автосохранения возвращает прежний текст', p.st().notes.filter((n) => n.id === nId)[0].body === oldBody);
     p.dom.window.close();
   }
 
@@ -472,6 +529,55 @@ async function load(hash) {
       p.st().ops.some((o) => o.id === opId) && p.w.Aven.minor(p.st().finMonth.expense) === expBefore + 30 &&
       p.w.Aven.minor(p.st().finMonth.balance) === balBefore - 30);
 
+    const typeSel = p.q('[data-action="fin-filter-type"]');
+    typeSel.value = 'income'; p.change(typeSel); await sleep(220);
+    ok('G25a фильтр финансов по типу показывает доходы и не ломает страницу',
+      /Доходы/.test(p.q('#page').textContent) && !p.broken());
+    const typeSel2 = p.q('[data-action="fin-filter-type"]'); typeSel2.value = 'all'; p.change(typeSel2); await sleep(220);
+
+    const cardBefore = p.w.Aven.minor((p.st().finAccounts || [])[0].balance);
+    p.click(p.q('[data-action="fin-edit"][data-id="' + opId + '"]')); await sleep(180);
+    p.set(p.q('#modal-root input[name="amount"]'), '1.2');
+    p.click(p.modalSubmit()); await sleep(280);
+    const eEdit = H()[0];
+    ok('G25b редактирование операции пишет историю с изменением суммы и adjust для счёта',
+      eEdit.action === 'finance.expense.update' && (eEdit.changes || []).some((c) => c.field === 'Сумма') &&
+      JSON.stringify(eEdit.undo || {}).indexOf('finAccounts') >= 0, JSON.stringify(eEdit.changes));
+    ok('G25c редактирование операции пересчитало итоги и баланс счёта',
+      p.w.Aven.minor(p.st().finMonth.expense) === expBefore + 130 &&
+      p.w.Aven.minor((p.st().finAccounts || [])[0].balance) === cardBefore - 100,
+      p.w.Aven.minor(p.st().finMonth.expense) - expBefore);
+    p.w.Aven.undoAction(eEdit.id); await sleep(260);
+    ok('G25d Undo редактирования операции возвращает сумму, итоги и счёт',
+      p.st().ops.some((o) => o.id === opId && p.w.Aven.minor(o.amount) === 20) &&
+      p.w.Aven.minor(p.st().finMonth.expense) === expBefore + 30 &&
+      p.w.Aven.minor((p.st().finAccounts || [])[0].balance) === cardBefore);
+
+    const bal0 = p.w.Aven.minor(p.st().finMonth.balance);
+    p.click(p.q('[data-action="fin-account-add"]')); await sleep(160);
+    p.set(p.q('#modal-root input[name="name"]'), 'Тестовый счёт');
+    p.set(p.q('#modal-root input[name="balance"]'), '123.45');
+    p.click(p.modalSubmit()); await sleep(260);
+    const accId = p.st().finAccounts[0].id;
+    ok('G25e создание счёта добавляет баланс и запись истории',
+      p.st().finAccounts[0].name === 'Тестовый счёт' && p.w.Aven.minor(p.st().finMonth.balance) === bal0 + 12345 &&
+      H()[0].action === 'finance.account.create');
+    p.w.Aven.undoAction(H()[0].id); await sleep(260);
+    ok('G25f Undo создания счёта удаляет счёт и возвращает общий баланс',
+      !p.st().finAccounts.some((a) => a.id === accId) && p.w.Aven.minor(p.st().finMonth.balance) === bal0);
+
+    p.click(p.q('[data-action="fin-cat-add"]')); await sleep(160);
+    p.set(p.q('#modal-root input[name="name"]'), 'Здоровье тест');
+    p.click(p.modalSubmit()); await sleep(240);
+    ok('G25g создание категории добавляет справочник и историю',
+      p.st().finCategories.indexOf('Здоровье тест') >= 0 && H()[0].action === 'finance.category.create');
+    p.click(p.q('[data-action="fin-cat-del"][data-name="Здоровье тест"]')); await sleep(160);
+    p.click(p.modalSubmit()); await sleep(240);
+    ok('G25h удаление неиспользуемой категории требует подтверждения и пишется в историю',
+      p.st().finCategories.indexOf('Здоровье тест') < 0 && H()[0].action === 'finance.category.delete');
+    p.w.Aven.undoAction(H()[0].id); await sleep(240);
+    ok('G25i Undo удаления категории возвращает её в справочник', p.st().finCategories.indexOf('Здоровье тест') >= 0);
+
     p.click(p.q('[data-action="fin-export-csv"]')); await sleep(160);
     ok('G26 экспорт CSV подтверждается: файл содержит приватные данные (§7)',
       /приватные данные/.test(p.modalText()), p.modalText().slice(0, 70));
@@ -497,14 +603,150 @@ async function load(hash) {
     p.w.Aven.undoAction(p.st().history[0].id); await sleep(240);
     ok('G30 Undo возвращает прежнее значение пробега (поле вне списка)', p.st().car.mileage === km0, p.st().car.mileage);
 
+    ok('G30a авто показывает связь с финансами и вычисляемые показатели', /Финансовая связь/.test(p.q('#page').textContent) && /Затраты по авто/.test(p.q('#page').textContent));
+    const fuelLen0 = p.st().car.fuel.length;
+    const opsAuto0 = p.st().ops.length;
+    const expAuto0 = p.w.Aven.minor(p.st().finMonth.expense);
+    const balAuto0 = p.w.Aven.minor(p.st().finMonth.balance);
+    p.click(p.q('[data-action="fuel-add"]')); await sleep(180);
+    p.set(p.q('#modal-root input[name="liters"]'), '10.5');
+    p.set(p.q('#modal-root input[name="sum"]'), '1234.50');
+    p.set(p.q('#modal-root input[name="km"]'), String(km0 + 111));
+    p.click(p.modalSubmit()); await sleep(300);
+    const eFuel = p.st().history[0];
+    const newFuelId = p.st().car.fuel[0].id;
+    ok('G30b заправка создаёт связанную финоперацию и batch Undo',
+      p.st().car.fuel.length === fuelLen0 + 1 && !!p.st().car.fuel[0].financeOpId &&
+      p.st().ops.length === opsAuto0 + 1 && eFuel.action === 'car.fuel.create' && eFuel.undo.type === 'batch',
+      JSON.stringify(eFuel.undo));
+    ok('G30c заправка пересчитывает финансы и пробег',
+      p.w.Aven.minor(p.st().finMonth.expense) === expAuto0 + 123450 &&
+      p.w.Aven.minor(p.st().finMonth.balance) === balAuto0 - 123450 && p.st().car.mileage === km0 + 111,
+      p.w.Aven.minor(p.st().finMonth.expense) - expAuto0);
+    p.w.Aven.undoAction(eFuel.id); await sleep(280);
+    ok('G30d Undo заправки удаляет расход, возвращает баланс и пробег',
+      !p.st().car.fuel.some((f) => f.id === newFuelId) && p.st().ops.length === opsAuto0 &&
+      p.w.Aven.minor(p.st().finMonth.expense) === expAuto0 && p.w.Aven.minor(p.st().finMonth.balance) === balAuto0 &&
+      p.st().car.mileage === km0);
+
+    const expAuto1 = p.w.Aven.minor(p.st().finMonth.expense);
+    const opsAuto1 = p.st().ops.length;
+    p.click(p.q('[data-action="auto-expense"]')); await sleep(160);
+    p.set(p.q('#modal-root input[name="title"]'), 'Тестовый авторасход');
+    p.set(p.q('#modal-root input[name="amount"]'), '500');
+    p.click(p.modalSubmit()); await sleep(280);
+    const eAutoExpCreate = p.st().history[0];
+    const autoExpId = p.st().car.expenses[0].id;
+    const linkedOpId = p.st().car.expenses[0].financeOpId;
+    ok('G30e расход авто создаёт финоперацию и пересчитывает расходы',
+      eAutoExpCreate.action === 'car.expense.create' && !!linkedOpId && p.st().ops.length === opsAuto1 + 1 &&
+      p.w.Aven.minor(p.st().finMonth.expense) === expAuto1 + 50000);
+    p.click(p.q('#auto-tabs [data-tab="expenses"]')); await sleep(220);
+    p.click(p.q('[data-action="auto-expense-edit"][data-id="' + autoExpId + '"]')); await sleep(180);
+    p.set(p.q('#modal-root input[name="amount"]'), '700');
+    p.click(p.modalSubmit()); await sleep(280);
+    const eAutoExpEdit = p.st().history[0];
+    ok('G30f редактирование авторасхода обновляет связанную финоперацию',
+      eAutoExpEdit.action === 'car.expense.update' && eAutoExpEdit.undo.type === 'batch' &&
+      p.w.Aven.minor(p.st().car.expenses[0].amount) === 70000 &&
+      p.w.Aven.minor(p.st().ops.filter((o) => o.id === linkedOpId)[0].amount) === 70000 &&
+      p.w.Aven.minor(p.st().finMonth.expense) === expAuto1 + 70000,
+      JSON.stringify(eAutoExpEdit.undo));
+    p.w.Aven.undoAction(eAutoExpEdit.id); await sleep(280);
+    ok('G30g Undo редактирования авторасхода возвращает запись, финоперацию и итог',
+      p.w.Aven.minor(p.st().car.expenses[0].amount) === 50000 &&
+      p.w.Aven.minor(p.st().ops.filter((o) => o.id === linkedOpId)[0].amount) === 50000 &&
+      p.w.Aven.minor(p.st().finMonth.expense) === expAuto1 + 50000);
+    p.w.Aven.undoAction(eAutoExpCreate.id); await sleep(280);
+    ok('G30h Undo создания авторасхода удаляет обе записи и возвращает финансы',
+      !p.st().car.expenses.some((x) => x.id === autoExpId) && p.st().ops.length === opsAuto1 &&
+      p.w.Aven.minor(p.st().finMonth.expense) === expAuto1);
+
+    p.click(p.q('[data-action="auto-doc"]')); await sleep(160);
+    p.set(p.q('#modal-root input[name="title"]'), 'Тестовый полис');
+    p.set(p.q('#modal-root input[name="until"]'), '2027-12-31');
+    p.click(p.modalSubmit()); await sleep(240);
+    const eDoc = p.st().history[0];
+    const docId = p.st().car.docs[0].id;
+    ok('G30i документ авто добавляется в историю и отменяется', eDoc.action === 'car.doc.create' && p.st().car.docs[0].title === 'Тестовый полис');
+    p.w.Aven.undoAction(eDoc.id); await sleep(220);
+    ok('G30j Undo документа авто удаляет документ', !p.st().car.docs.some((d) => d.id === docId));
+    p.click(p.q('[data-action="auto-export-csv"]')); await sleep(160);
+    ok('G30k экспорт авто подтверждается как приватные данные', /приватные данные/.test(p.modalText()), p.modalText());
+    p.w.Aven.closeModal();
+
     await p.go('#/shopping');
+    const catFilter = p.q('[data-action="shop-filter-category"]');
+    catFilter.value = 'Электроника'; p.change(catFilter); await sleep(220);
+    ok('G31 покупки фильтруются по категории и страница не ломается',
+      p.qa('.shop-card').length >= 2 && !p.broken(), p.qa('.shop-card').length);
+    const catAll = p.q('[data-action="shop-filter-category"]');
+    catAll.value = 'all'; p.change(catAll); await sleep(220);
+
     p.click(p.q('[data-action="shop-add"]')); await sleep(160);
     p.set(p.q('#modal-root input[name="name"]'), 'Тестовая покупка');
     p.set(p.q('#modal-root input[name="price"]'), '1999.99');
     p.click(p.modalSubmit()); await sleep(260);
-    ok('G31 покупка записана в историю, цена — целые копейки',
+    ok('G31a покупка записана в историю, цена — целые копейки',
       p.st().history[0].action === 'purchase.create' && p.st().purchases[0].price === 1999.99,
       p.st().purchases[0] && p.st().purchases[0].price);
+
+    const purId = p.st().purchases[0].id;
+    p.click(p.q('[data-action="shop-edit"][data-id="' + purId + '"]')); await sleep(180);
+    p.set(p.q('#modal-root input[name="name"]'), 'Тестовая покупка (ред.)');
+    p.set(p.q('#modal-root input[name="price"]'), '2000.10');
+    p.click(p.modalSubmit()); await sleep(260);
+    const eShopEdit = p.st().history[0];
+    ok('G31b редактирование покупки пишет purchase.update с изменениями',
+      eShopEdit.action === 'purchase.update' && (eShopEdit.changes || []).some((c) => c.field === 'Цена') &&
+      p.w.Aven.minor(p.st().purchases[0].price) === 200010, JSON.stringify(eShopEdit.changes));
+    p.w.Aven.undoAction(eShopEdit.id); await sleep(240);
+    ok('G31c Undo редактирования покупки возвращает название и цену',
+      p.st().purchases[0].name === 'Тестовая покупка' && p.w.Aven.minor(p.st().purchases[0].price) === 199999,
+      p.st().purchases[0].name + ' ' + p.st().purchases[0].price);
+
+    p.click(p.q('[data-action="shop-status"][data-id="' + purId + '"]')); await sleep(160);
+    const stSel = p.q('#modal-root select[name="status"]'); stSel.value = 'sold';
+    p.click(p.modalSubmit()); await sleep(240);
+    const eShopStatus = p.st().history[0];
+    ok('G31d статус покупки меняется и пишется в историю',
+      p.st().purchases[0].status === 'sold' && eShopStatus.action === 'purchase.status.update');
+    p.w.Aven.undoAction(eShopStatus.id); await sleep(240);
+    ok('G31e Undo статуса возвращает покупку в собственность', p.st().purchases[0].status === 'owned');
+
+    p.click(p.q('[data-action="shop-service"][data-id="' + purId + '"]')); await sleep(160);
+    p.set(p.q('#modal-root input[name="title"]'), 'Тестовый ремонт');
+    p.set(p.q('#modal-root input[name="cost"]'), '123.45');
+    p.click(p.modalSubmit()); await sleep(240);
+    const eShopService = p.st().history[0];
+    ok('G31f сервисная запись добавляется к покупке и отменяется',
+      (p.st().purchases[0].repairs || [])[0].title === 'Тестовый ремонт' &&
+      eShopService.action === 'purchase.service.create' && eShopService.undo.list.indexOf('purchases.') === 0);
+    p.w.Aven.undoAction(eShopService.id); await sleep(240);
+    ok('G31g Undo сервиса удаляет ремонт из покупки', (p.st().purchases[0].repairs || []).length === 0);
+
+    const expShop0 = p.w.Aven.minor(p.st().finMonth.expense);
+    const balShop0 = p.w.Aven.minor(p.st().finMonth.balance);
+    const opsShop0 = p.st().ops.length;
+    p.click(p.q('[data-action="shop-fin-link"][data-id="' + purId + '"]')); await sleep(160);
+    ok('G31h связь покупки с финансами требует подтверждения', /баланс|расход/.test(p.modalText()), p.modalText());
+    p.click(p.modalSubmit()); await sleep(280);
+    const eShopFin = p.st().history[0];
+    ok('G31i связь с финансами создаёт расход и пересчитывает итоги',
+      eShopFin.action === 'purchase.finance.link' && eShopFin.undo.type === 'batch' &&
+      !!p.st().purchases[0].financeOpId && p.st().ops.length === opsShop0 + 1 &&
+      p.w.Aven.minor(p.st().finMonth.expense) === expShop0 + 199999 &&
+      p.w.Aven.minor(p.st().finMonth.balance) === balShop0 - 199999,
+      JSON.stringify(eShopFin.undo));
+    p.w.Aven.undoAction(eShopFin.id); await sleep(280);
+    ok('G31j Undo связи с финансами удаляет расход и возвращает баланс',
+      !p.st().purchases[0].financeOpId && p.st().ops.length === opsShop0 &&
+      p.w.Aven.minor(p.st().finMonth.expense) === expShop0 &&
+      p.w.Aven.minor(p.st().finMonth.balance) === balShop0);
+
+    p.click(p.q('[data-action="shop-export-csv"]')); await sleep(160);
+    ok('G31k экспорт покупок подтверждается как приватные данные', /приватные данные/.test(p.modalText()), p.modalText());
+    p.w.Aven.closeModal();
 
     await p.go('#/automation');
     const sw = p.q('[data-action="auto-toggle"]');
@@ -631,6 +873,69 @@ async function load(hash) {
     ok('H20 успешная смена пароля: необратимая запись в истории, значение пароля не раскрывается',
       p.st().history[0].action === 'auth.password.set' && p.st().history[0].undoable === false &&
       !/новый-пароль-1/.test(JSON.stringify(p.st().history[0])), JSON.stringify(p.st().history[0].changes));
+    p.dom.window.close();
+  }
+
+
+  /* ============ I. События / Календарь как часть петли ценности (§5.4, §5.7, §5.8, §5.9) ============ */
+  {
+    const p = await load('#/calendar');
+    const H = () => p.st().history;
+    const iso = new p.w.Date().toISOString().slice(0, 10);
+    ok('I1 календарь имеет три представления: месяц / неделя / день',
+      p.qa('#cal-tabs .tab').map((x) => x.textContent.trim()).join('|') === 'Месяц|Неделя|День');
+
+    p.click(p.q('[data-action="cal-add"]')); await sleep(160);
+    p.set(p.q('#modal-root input[name="title"]'), 'Проверочная встреча');
+    p.set(p.q('#modal-root input[name="date"]'), iso);
+    p.set(p.q('#modal-root input[name="time"]'), '15:30');
+    p.click(p.modalSubmit()); await sleep(280);
+    const evId = p.st().events[0].id;
+    ok('I2 создание события сохраняет его в demo-state',
+      p.st().events[0].title === 'Проверочная встреча' && p.st().events[0].date === iso && p.st().events[0].time === '15:30',
+      JSON.stringify(p.st().events[0]));
+    ok('I3 создание события пишет историю с payload Undo',
+      H()[0].action === 'event.create' && H()[0].undoable === true && H()[0].undo.type === 'remove', H()[0].action);
+    ok('I4 созданное событие видно в месяце календаря', !!p.q('.cal-ev[data-id="' + evId + '"]'));
+
+    await p.go('#/day');
+    ok('I5 созданное событие видно в разделе «День»', /Проверочная встреча/.test(p.q('#page').textContent));
+    await p.go('#/home');
+    ok('I6 созданное событие видно на Главной', /Проверочная встреча/.test(p.q('#page').textContent));
+
+    await p.go('#/calendar');
+    p.click(p.q('#cal-tabs .tab[data-tab="week"]')); await sleep(180);
+    ok('I7 недельное представление отрисовано и показывает событие',
+      !!p.q('.week-grid') && /Проверочная встреча/.test(p.q('#page').textContent));
+    p.click(p.q('#cal-tabs .tab[data-tab="day"]')); await sleep(180);
+    ok('I8 дневное представление отрисовано и показывает событие',
+      !!p.q('.cal-day-card') && /Проверочная встреча/.test(p.q('#page').textContent));
+
+    await p.go('#/calendar');
+    p.click(p.q('[data-action="cal-event"][data-id="' + evId + '"]')); await sleep(180);
+    ok('I9 карточка события показывает редактирование и удаление',
+      /Проверочная встреча/.test(p.modalText()) && !!p.q('[data-action="event-edit"]') && !!p.q('[data-action="event-del"]'));
+    p.click(p.q('[data-action="event-edit"]')); await sleep(180);
+    p.set(p.q('#modal-root input[name="title"]'), 'Проверочная встреча (изменено)');
+    p.click(p.modalSubmit()); await sleep(280);
+    const upd = H()[0];
+    ok('I10 редактирование события пишет старое/новое значение',
+      p.st().events.some((e) => e.id === evId && /изменено/.test(e.title)) && upd.action === 'event.update' &&
+      (upd.changes || []).some((c) => c.field === 'Название' && /Проверочная встреча$/.test(c.from)),
+      JSON.stringify(upd.changes));
+    p.w.Aven.undoAction(upd.id); await sleep(240);
+    ok('I11 Undo редактирования возвращает прежнее название события',
+      p.st().events.some((e) => e.id === evId && e.title === 'Проверочная встреча'));
+
+    p.click(p.q('[data-action="cal-event"][data-id="' + evId + '"]')); await sleep(180);
+    p.click(p.q('[data-action="event-del"]')); await sleep(180);
+    ok('I12 удаление события требует подтверждения и говорит про Undo', /Undo/.test(p.modalText()), p.modalText().slice(0, 70));
+    p.click(p.modalSubmit()); await sleep(280);
+    const del = H()[0];
+    ok('I13 событие удалено, запись опасная и отменяемая',
+      !p.st().events.some((e) => e.id === evId) && del.action === 'event.delete' && del.danger === true && del.undoable === true);
+    p.w.Aven.undoAction(del.id); await sleep(260);
+    ok('I14 Undo удаления возвращает событие', p.st().events.some((e) => e.id === evId));
     p.dom.window.close();
   }
 

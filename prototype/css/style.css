@@ -431,6 +431,7 @@ html.reduce-motion .hero[data-state="listening"] .hc-wave i { height: 60%; }
 }
 .tl-item.task::before { background: var(--ok); }
 .tl-item.done::before { background: var(--muted); }
+.tl-item.important::before { background: var(--warn); }
 
 /* calendar */
 .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
@@ -443,25 +444,57 @@ html.reduce-motion .hero[data-state="listening"] .hc-wave i { height: 60%; }
 }
 .cal-cell.other { opacity: .38; }
 .cal-cell.today { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.cal-cell.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cal-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cal-day-num { font-weight: 600; font-size: .8rem; margin-bottom: 4px; }
 .cal-ev {
   background: var(--accent-soft); color: var(--accent);
   border-radius: 6px; padding: 2px 6px; margin-bottom: 3px;
   font-size: .74rem; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.cal-ev.warn { background: var(--warn-soft); color: var(--warn); }
+.cal-ev.danger { background: var(--danger-soft); color: var(--danger); }
+.cal-more { color: var(--muted); font-size: .72rem; margin-top: 3px; }
+.week-grid { display: grid; grid-template-columns: repeat(7, minmax(110px, 1fr)); gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.week-col { min-height: 160px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; padding: 8px; }
+.week-col.today { border-color: var(--accent); }
+.week-head { width: 100%; border: 0; background: transparent; color: var(--text); font-weight: 700; text-align: left; padding: 4px 2px 8px; cursor: pointer; }
+.week-event { display: flex; flex-direction: column; gap: 2px; border-radius: 8px; padding: 7px 8px; margin-bottom: 6px; background: var(--panel); border: 1px solid var(--border); cursor: pointer; }
+.week-event b { color: var(--muted); font-size: .76rem; }
+.empty.mini { padding: 10px 4px; font-size: .78rem; }
+.cal-day-card { box-shadow: none; }
 html[data-theme="dark"] .cal-ev { color: var(--accent-strong); }
 
+/* tasks */
+.task-filters { margin-bottom: 14px; }
+.task-filters .field { margin-bottom: 0; }
+.task-filters .field > span { display: block; font-size: .78rem; color: var(--muted); margin-bottom: 4px; }
+.task-list { display: flex; flex-direction: column; gap: 6px; }
+.task-row { align-items: center; }
+.task-row.archived { opacity: .7; }
+.task-actions { margin-left: auto; display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
 /* notes */
-.notes-layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
+.notes-layout { display: grid; grid-template-columns: 360px 1fr; gap: 16px; align-items: start; }
+.note-sidebar { position: sticky; top: 12px; }
+.note-filters { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.note-filters .field { margin-bottom: 0; }
+.note-filters .field > span { display: block; font-size: .78rem; color: var(--muted); margin-bottom: 4px; }
+.note-list { display: flex; flex-direction: column; gap: 6px; }
 .note-li { padding: 11px 12px; border-radius: 10px; cursor: pointer; border: 1px solid transparent; }
 .note-li:hover { background: var(--panel-2); }
 .note-li.active { background: var(--accent-soft); border-color: transparent; }
+.note-li.archived { opacity: .75; }
 .note-li .nt { font-weight: 600; display: flex; align-items: center; gap: 6px; }
 .note-li .np { color: var(--muted); font-size: .8rem; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note-autosave-field textarea { min-height: 260px; line-height: 1.55; }
 .tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .note-body { white-space: pre-wrap; line-height: 1.55; }
 
 /* finance */
+.fin-filters { margin-bottom: 16px; }
+.fin-filters .field { margin-bottom: 0; }
+.fin-filters .field > span { display: block; font-size: .78rem; color: var(--muted); margin-bottom: 4px; }
 .bars { display: flex; align-items: flex-end; gap: 12px; height: 160px; padding-top: 10px; }
 .bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
 .bar { width: 70%; max-width: 46px; background: var(--accent); opacity: .85; border-radius: 7px 7px 3px 3px; transition: height .3s; }
@@ -481,15 +514,23 @@ html[data-theme="dark"] .cal-ev { color: var(--accent-strong); }
   background: var(--accent-soft); display: flex; align-items: center; justify-content: center;
 }
 .mileage { font-size: 1.45rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.btn-row.compact { gap: 4px; flex-wrap: nowrap; justify-content: flex-end; }
+.tbl .btn-row.compact { white-space: nowrap; }
 
 /* purchases */
+.shop-filters { margin-bottom: 16px; }
+.shop-filters .field { margin-bottom: 0; }
+.shop-filters .field > span { display: block; font-size: .78rem; color: var(--muted); margin-bottom: 4px; }
 .shop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.shop-card { text-align: left; cursor: pointer; }
+.shop-card { text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
 .shop-card .ph {
   height: 110px; border-radius: 12px; background: var(--panel-2);
   border: 1px solid var(--border); display: flex; align-items: center; justify-content: center;
-  font-size: 2.6rem; margin-bottom: 12px;
+  font-size: 2.6rem; margin-bottom: 10px;
 }
+.shop-title { font-weight: 700; font-size: 1.05rem; }
+.shop-meta { color: var(--muted); font-size: .84rem; }
+.shop-actions { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* tools */
 .tools-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
@@ -663,7 +704,9 @@ body.auth-mode .content { max-width: 480px; padding: 0 16px; margin: 6vh auto; }
   body.auth-mode .content { margin: 3vh auto; }
   .hist-item { flex-wrap: wrap; }
   .hist-actions { flex-direction: row; width: 100%; align-items: center; }
-  .hist-filters .field-row { flex-direction: column; gap: 10px; }
+  .hist-filters .field-row, .task-filters .field-row, .fin-filters .field-row, .shop-filters .field-row { flex-direction: column; gap: 10px; }
+  .task-row { flex-wrap: wrap; }
+  .task-actions { width: 100%; justify-content: flex-start; }
   .adm-principle .set-row { flex-direction: column; align-items: flex-start; }
   .tbl { display: block; overflow-x: auto; }
 }

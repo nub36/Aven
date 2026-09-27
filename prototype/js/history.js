@@ -106,8 +106,9 @@
        { type: 'remove',  list: 'tasks', id: 't101' }                — убрать созданный объект
        { type: 'fields',  list: 'tasks', id: 't101', fields: {...} } — вернуть прежние значения полей
        { type: 'value',   path: 'car.mileage', value: 152300 }        — вернуть значение вне списка
+       { type: 'batch',   steps: [{...}, {...}], adjust: [...] }       — атомарно описать несколько обратных операций
        дополнительно: adjust: [{ path: 'finMonth.expense', delta: -850 }] — поправить числовые итоги.
-       Список может быть вложенным: list: 'car.fuel'.
+       Список может быть вложенным: list: 'car.fuel' или 'purchases.0.repairs'.
      Если payload нет (демо-записи из data.js), отмена помечает запись, но данные не меняются —
      и прототип говорит об этом прямо, а не делает вид, что вернул состояние (ADR-010). */
   /* Разрешение пути в состоянии: 'ops' или 'car.fuel' (списки), 'car.mileage' (скаляр). */
@@ -135,6 +136,15 @@
     const st = s();
     const u = entry.undo;
     if (!u || !u.type) return false;
+    return applyUndoPayload(st, u);
+  }
+
+  function applyUndoPayload(st, u) {
+    if (!u || !u.type) return false;
+    if (u.type === 'batch') {                    /* несколько обратных операций одним Undo */
+      const ok = (u.steps || []).map((step) => applyUndoPayload(st, step)).every(Boolean);
+      return applyAdjust(st, u.adjust) && ok;
+    }
     if (u.type === 'value') {                     /* вернуть прежнее значение поля вне списка */
       const t = resolveParent(st, u.path);
       if (!t) return false;

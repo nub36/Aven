@@ -272,7 +272,7 @@
 
     if (cat === 'home') {
       const C = st.settings.homeCards;
-      const rows = [['today', 'Карточка «Сегодня»'], ['tasks', 'Карточка «Задачи»'], ['expenses', 'Карточка «Расходы»'], ['car', 'Карточка «Автомобиль»'], ['quick', 'Быстрые действия']];
+      const rows = [['today', 'Карточка «Сегодня»'], ['tasks', 'Карточка «Задачи»'], ['expenses', 'Карточка «Расходы»'], ['car', 'Карточка «Автомобиль»'], ['actions', 'Карточка «Последние действия»'], ['quick', 'Быстрые действия']];
       return `
       <h2 class="set-h">Главная</h2><p class="set-sub">Включение/отключение карточек · порядок — в перспективе (вопрос №25)</p>
       <div class="card">${rows.map(([id, label]) => setRow(label, '', sw('settings.homeCards.' + id, C[id]))).join('')}

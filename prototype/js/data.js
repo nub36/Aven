@@ -2,6 +2,19 @@
 window.AvenDemo = (function () {
 
   function demoState() {
+    const pad = (n) => String(n).padStart(2, '0');
+    const iso = (offset) => {
+      const d = new Date();
+      d.setHours(12, 0, 0, 0);
+      d.setDate(d.getDate() + offset);
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    };
+    const humanDate = (v) => {
+      const p = String(v || '').split('-');
+      return p.length === 3 ? p[2] + '.' + p[1] + '.' + p[0] : (v || '—');
+    };
+    const today = iso(0), tomorrow = iso(1), yesterday = iso(-1);
+
     return {
       profile: {
         name: 'Алексей',
@@ -57,49 +70,82 @@ window.AvenDemo = (function () {
           night: '23:00',
           afterWork: '19:00'
         },
-        homeCards: { today: true, tasks: true, expenses: true, car: true, quick: true },
+        homeCards: { today: true, tasks: true, expenses: true, car: true, quick: true, actions: true },
         modules: { calendar: true, tasks: true, notes: true, finance: true, auto: true, shopping: true, tools: true },
         experiments: { canvas: false, aiRouter: false, geoReminders: false }
       },
 
       tasks: [
-        { id: 't1', title: 'Забрать документы', desc: 'Готовность подтвердили вчера', date: 'today', prio: 'высокий', project: 'Личное', done: false },
-        { id: 't2', title: 'Купить фильтр', desc: 'Воздушный фильтр для BMW', date: 'soon', prio: 'средний', project: 'Авто', done: false },
-        { id: 't3', title: 'Оплатить интернет', desc: '', date: 'today', prio: 'низкий', project: 'Дом', done: true },
-        { id: 't4', title: 'Записаться к стоматологу на чистку', desc: '', date: 'soon', prio: 'средний', project: 'Здоровье', done: false },
-        { id: 't5', title: 'Позвонить в сервис по гарантии телефона', desc: '', date: 'soon', prio: 'низкий', project: 'Покупки', done: false }
+        { id: 't1', title: 'Забрать документы', desc: 'Готовность подтвердили вчера', date: 'today', dueDate: today, dueTime: '18:00', prio: 'высокий', project: 'Личное', done: false, archived: false },
+        { id: 't2', title: 'Купить фильтр', desc: 'Воздушный фильтр для BMW', date: 'soon', dueDate: tomorrow, dueTime: '', prio: 'средний', project: 'Авто', done: false, archived: false },
+        { id: 't3', title: 'Оплатить интернет', desc: '', date: 'today', dueDate: today, dueTime: '20:00', prio: 'низкий', project: 'Дом', done: true, archived: false },
+        { id: 't4', title: 'Записаться к стоматологу на чистку', desc: '', date: 'soon', dueDate: iso(4), dueTime: '', prio: 'средний', project: 'Здоровье', done: false, archived: false },
+        { id: 't5', title: 'Позвонить в сервис по гарантии телефона', desc: '', date: 'soon', dueDate: iso(2), dueTime: '12:00', prio: 'низкий', project: 'Покупки', done: false, archived: false }
       ],
 
+      noteFolders: ['Личное', 'Авто', 'Дом', 'Документы', 'Идеи'],
       notes: [
         {
-          id: 'n1', title: 'Что купить для машины', pinned: true,
-          tags: ['авто', 'список'], updated: 'сегодня',
+          id: 'n1', title: 'Что купить для машины', pinned: true, folder: 'Авто', archived: false,
+          tags: ['авто', 'список'], updated: 'сегодня', updatedISO: today,
           body: '— Воздушный фильтр\n— Щётки стеклоочистителя\n— Незамерзайка (к сезону)\n— Проверить давление в шинах'
         },
         {
-          id: 'n2', title: 'Идеи', pinned: false,
-          tags: ['идеи'], updated: 'вчера',
+          id: 'n2', title: 'Идеи', pinned: false, folder: 'Идеи', archived: false,
+          tags: ['идеи'], updated: 'вчера', updatedISO: yesterday,
           body: '— Велопарковка у подъезда: написать в УК\n— Подписка на облачный бэкап фото\n— Настроить автоматизацию «утренний обзор»'
         },
         {
-          id: 'n3', title: 'Ремонт квартиры', pinned: false,
-          tags: ['дом'], updated: '3 дня назад',
+          id: 'n3', title: 'Ремонт квартиры', pinned: false, folder: 'Дом', archived: false,
+          tags: ['дом'], updated: '3 дня назад', updatedISO: iso(-3),
           body: 'Приоритет: ванная.\n1. Гидроизоляция\n2. Плитка\n3. Сантехника\nСмета — уточнить у мастера, ориентир 120–150 тыс. ₽'
         },
         {
-          id: 'n4', title: 'Список документов', pinned: true,
-          tags: ['документы'], updated: 'на прошлой неделе',
+          id: 'n4', title: 'Список документов', pinned: true, folder: 'Документы', archived: false,
+          tags: ['документы'], updated: 'на прошлой неделе', updatedISO: iso(-7),
           body: '— Паспорт\n— СТС и страховка (машина)\n— Трудовой договор\n— Полис ДМС'
         }
       ],
 
-      ops: [
-        { id: 'o1', type: 'expense', cat: 'Авто', title: 'АЗС Лукойл', amount: 3200, date: 'сегодня', comment: '42 л' },
-        { id: 'o2', type: 'expense', cat: 'Продукты', title: 'Пятёрочка', amount: 1450, date: 'сегодня', comment: '' },
-        { id: 'o3', type: 'expense', cat: 'Дом', title: 'Интернет', amount: 790, date: 'вчера', comment: 'за месяц' },
-        { id: 'o4', type: 'income', cat: 'Доход', title: 'Зарплата', amount: 96000, date: '5 дней назад', comment: '' },
-        { id: 'o5', type: 'expense', cat: 'Другое', title: 'Аптека', amount: 560, date: '6 дней назад', comment: '' }
+      /* События календаря — теперь часть изменяемого demo-state, а не только staticData.
+         Это нужно для связанной петли Stage 1.0: создать событие → увидеть в Календаре, Дне,
+         Главной и Истории → удалить/отменить через Undo (MVP_SCOPE §5.4, §5.7, §5.8, §5.9). */
+      events: [
+        { id: 'e1', title: 'Бассейн', date: yesterday, time: '08:00', end: '09:00', allDay: false,
+          place: 'Фитнес-клуб', importance: 'обычная', repeat: 'none', desc: '' },
+        { id: 'e2', title: 'Обед с Максимом', date: yesterday, time: '13:00', end: '14:00', allDay: false,
+          place: 'Кафе у офиса', importance: 'обычная', repeat: 'none', desc: '' },
+        { id: 'e3', title: 'Стоматолог', date: today, time: '10:00', end: '11:00', allDay: false,
+          place: 'Клиника', importance: 'важное', repeat: 'none', desc: 'Проверка и план лечения' },
+        { id: 'e4', title: 'Забрать посылку', date: today, time: '14:00', end: '14:30', allDay: false,
+          place: 'Пункт выдачи', importance: 'обычная', repeat: 'none', desc: '' },
+        { id: 'e5', title: 'Планёрка', date: tomorrow, time: '10:00', end: '10:45', allDay: false,
+          place: 'Онлайн', importance: 'обычная', repeat: 'weekly', desc: 'Повторяется еженедельно (демо)' },
+        { id: 'e6', title: 'Спортзал', date: tomorrow, time: '18:30', end: '20:00', allDay: false,
+          place: 'Зал', importance: 'обычная', repeat: 'none', desc: '' },
+        { id: 'e7', title: 'День рождения Сергея', date: iso(-24), time: '', end: '', allDay: true,
+          place: '', importance: 'важное', repeat: 'yearly', desc: 'Демо: ежегодное событие' },
+        { id: 'e8', title: 'Замена масла (выполнено)', date: iso(-15), time: '13:00', end: '14:30', allDay: false,
+          place: 'Автосервис', importance: 'обычная', repeat: 'none', desc: 'Связь с авто — в 1.1' },
+        { id: 'e9', title: 'Техосмотр', date: iso(1), time: '11:00', end: '12:00', allDay: false,
+          place: 'Сервис', importance: 'важное', repeat: 'none', desc: 'Документы авто' },
+        { id: 'e10', title: 'Оплата интернета', date: iso(3), time: '09:00', end: '09:10', allDay: false,
+          place: '', importance: 'обычная', repeat: 'monthly', desc: 'Демо: ежемесячное событие' }
       ],
+
+      ops: [
+        { id: 'o1', type: 'expense', cat: 'Авто', account: 'card', title: 'АЗС Лукойл', amount: 3200, date: 'сегодня', dateISO: today, comment: '42 л' },
+        { id: 'o2', type: 'expense', cat: 'Продукты', account: 'card', title: 'Пятёрочка', amount: 1450, date: 'сегодня', dateISO: today, comment: '' },
+        { id: 'o3', type: 'expense', cat: 'Дом', account: 'card', title: 'Интернет', amount: 790, date: 'вчера', dateISO: yesterday, comment: 'за месяц' },
+        { id: 'o4', type: 'income', cat: 'Доход', account: 'card', title: 'Зарплата', amount: 96000, date: '5 дней назад', dateISO: iso(-5), comment: '' },
+        { id: 'o5', type: 'expense', cat: 'Другое', account: 'cash', title: 'Аптека', amount: 560, date: '6 дней назад', dateISO: iso(-6), comment: '' }
+      ],
+      finAccounts: [
+        { id: 'card', name: 'Основная карта', balance: 118540 },
+        { id: 'cash', name: 'Наличные', balance: 10000 },
+        { id: 'savings', name: 'Накопительный счёт', balance: 0 }
+      ],
+      finCategories: ['Авто', 'Продукты', 'Дом', 'Подписки', 'Другое', 'Доход'],
       finMonth: { expense: 47850, income: 96000, balance: 128540 },
       finChart: [
         { m: 'апр', v: 42100 }, { m: 'май', v: 47300 }, { m: 'июн', v: 38900 },
@@ -111,37 +157,49 @@ window.AvenDemo = (function () {
       ],
 
       car: {
-        model: 'BMW 530d', year: 2018, primary: true,
+        model: 'BMW 530d', year: 2018, primary: true, fuelType: 'дизель', serviceIntervalKm: 10000,
         mileage: 104520,
         consumption: '7.4 л / 100 км',
         monthCost: '18 940 ₽',
         lastService: '12.08.2026 — замена масла',
         nextService: 'через 2 480 км',
         fuel: [
-          { id: 'f1', liters: 42, sum: 3200, km: 104120, date: '29.09' },
-          { id: 'f2', liters: 40, sum: 2940, km: 103600, date: '15.09' },
-          { id: 'f3', liters: 41, sum: 3010, km: 103050, date: '01.09' }
+          { id: 'f1', liters: 42, sum: 3200, km: 104120, date: humanDate(today), dateISO: today, financeOpId: 'o1', note: 'Лукойл' },
+          { id: 'f2', liters: 40, sum: 2940, km: 103600, date: humanDate(iso(-14)), dateISO: iso(-14), financeOpId: '', note: '' },
+          { id: 'f3', liters: 41, sum: 3010, km: 103050, date: humanDate(iso(-28)), dateISO: iso(-28), financeOpId: '', note: '' }
         ],
         expenses: [
-          { id: 'ce1', title: 'Ремонт подвески', amount: 25000, date: '22.09' },
-          { id: 'ce2', title: 'Мойка', amount: 800, date: '18.09' },
-          { id: 'ce3', title: 'Щётки стеклоочистителя', amount: 1250, date: '05.09' }
+          { id: 'ce1', title: 'Ремонт подвески', amount: 25000, date: humanDate(iso(-7)), dateISO: iso(-7), category: 'Ремонт', financeOpId: '', comment: 'Передняя ось' },
+          { id: 'ce2', title: 'Мойка', amount: 800, date: humanDate(iso(-11)), dateISO: iso(-11), category: 'Уход', financeOpId: '', comment: '' },
+          { id: 'ce3', title: 'Щётки стеклоочистителя', amount: 1250, date: humanDate(iso(-24)), dateISO: iso(-24), category: 'Запчасти', financeOpId: '', comment: '' }
         ],
         service: [
-          { id: 'cs1', title: 'Замена масла и фильтра', date: '12.08.2026', cost: 8900, km: 102300 },
-          { id: 'cs2', title: 'ТО: тормозные колодки', date: '04.06.2026', cost: 14200, km: 98700 }
+          { id: 'cs1', title: 'Замена масла и фильтра', date: '12.08.2026', dateISO: '2026-08-12', cost: 8900, km: 102300, financeOpId: '', comment: 'Следующее через 10 000 км' },
+          { id: 'cs2', title: 'ТО: тормозные колодки', date: '04.06.2026', dateISO: '2026-06-04', cost: 14200, km: 98700, financeOpId: '', comment: '' }
         ],
         docs: [
-          { id: 'cd1', title: 'ОСАГО', until: '14.03.2027' },
-          { id: 'cd2', title: 'Техосмотр', until: '10.02.2027' },
-          { id: 'cd3', title: 'СТС', until: 'без срока' }
+          { id: 'cd1', title: 'ОСАГО', until: '14.03.2027', untilISO: '2027-03-14', remindDays: 30 },
+          { id: 'cd2', title: 'Техосмотр', until: '10.02.2027', untilISO: '2027-02-10', remindDays: 30 },
+          { id: 'cd3', title: 'СТС', until: 'без срока', untilISO: '', remindDays: 0 }
         ]
       },
 
+      purchaseCategories: ['Электроника', 'Дом', 'Авто', 'Одежда', 'Спорт', 'Документы', 'Другое'],
       purchases: [
-        { id: 'p1', name: 'Ноутбук', emoji: '💻', price: 89990, date: '14.03.2025', warranty: '14.03.2027', sn: 'SN-DEMO-77120', status: 'в собственности' },
-        { id: 'p2', name: 'Телефон', emoji: '📱', price: 54990, date: '02.09.2025', warranty: '02.09.2027', sn: 'SN-DEMO-44012', status: 'в собственности' },
-        { id: 'p3', name: 'Телевизор', emoji: '📺', price: 62400, date: '20.01.2024', warranty: '20.01.2026', sn: 'SN-DEMO-90344', status: 'в собственности' }
+        { id: 'p1', name: 'Ноутбук', emoji: '💻', category: 'Электроника', price: 89990,
+          date: '14.03.2025', dateISO: '2025-03-14', store: 'DNS', warranty: '14.03.2027', warrantyISO: '2027-03-14',
+          sn: 'SN-DEMO-77120', status: 'owned', condition: 'используется', financeOpId: '',
+          note: 'Рабочий ноутбук. Чек — будет файловым вложением после StorageProvider.', repairs: [
+            { id: 'pr1', title: 'Чистка системы охлаждения', date: '10.06.2026', dateISO: '2026-06-10', cost: 2500, comment: 'Профилактика' }
+          ] },
+        { id: 'p2', name: 'Телефон', emoji: '📱', category: 'Электроника', price: 54990,
+          date: '02.09.2025', dateISO: '2025-09-02', store: 're:Store', warranty: '02.09.2027', warrantyISO: '2027-09-02',
+          sn: 'SN-DEMO-44012', status: 'owned', condition: 'используется', financeOpId: '',
+          note: 'Основной телефон.', repairs: [] },
+        { id: 'p3', name: 'Телевизор', emoji: '📺', category: 'Дом', price: 62400,
+          date: '20.01.2024', dateISO: '2024-01-20', store: 'М.Видео', warranty: '15.11.2026', warrantyISO: '2026-11-15',
+          sn: 'SN-DEMO-90344', status: 'owned', condition: 'гостиная', financeOpId: '',
+          note: 'Гарантия скоро закончится — хороший пример фильтра.', repairs: [] }
       ],
 
       automations: [

@@ -21,6 +21,24 @@ window.AvenFlows = (function () {
     return null;
   }
   function fmtMoney(n) { return A ? A.money(n) : (n + ' ₽'); }
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function isoOffset(offset) {
+    const d = new Date();
+    d.setHours(12, 0, 0, 0);
+    d.setDate(d.getDate() + (offset || 0));
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+  function parseWhen(text) {
+    const t = String(text || '').toLowerCase();
+    let date = /послезавтра/.test(t) ? isoOffset(2) : /завтра/.test(t) ? isoOffset(1) : isoOffset(0);
+    const dm = /(\d{1,2})[.\-/](\d{1,2})(?:[.\-/](\d{2,4}))?/.exec(t);
+    if (dm) {
+      const y = dm[3] ? (+dm[3] < 100 ? 2000 + +dm[3] : +dm[3]) : new Date().getFullYear();
+      date = y + '-' + pad(+dm[2]) + '-' + pad(+dm[1]);
+    }
+    const tm = /(\d{1,2})[:.](\d{2})/.exec(t);
+    return { date, time: tm ? pad(+tm[1]) + ':' + pad(+tm[2]) : '12:00' };
+  }
 
   const FLOWS = {
     fuel: {
@@ -55,11 +73,23 @@ window.AvenFlows = (function () {
       ],
       finish(data) {
         const important = data.important === 'yes';
-        const msg = 'Событие «' + data.title + '» (' + data.when + ') ' + (important ? 'помечено как ВАЖНОЕ' : 'создано') + '. В прототипе попадает в раздел «День» как демо.';
-        // честно: в прототипе события статичны; добавляем в демо-ленту «сегодня», если есть
-        const day = window.AvenDemo && window.AvenDemo.staticData && window.AvenDemo.staticData.day;
-        if (day && day.today) day.today.push({ t: '—', n: data.title + (important ? ' ⚠️' : ''), type: 'event' });
-        return msg;
+        const when = parseWhen(data.when);
+        const st = s();
+        if (!Array.isArray(st.events)) st.events = [];
+        const ev = {
+          id: S.id('e'), title: data.title, date: when.date, time: when.time, end: '', allDay: false,
+          place: '', importance: important ? 'важное' : 'обычная', repeat: 'none', desc: 'Создано через демо-сценарий Assistant'
+        };
+        st.events.unshift(ev);
+        S.save();
+        if (A && A.logAction) A.logAction({
+          action: 'event.create', title: 'Событие создано', object: ev.title + ' · ' + ev.date + ' · ' + ev.time,
+          objectType: 'event', undoable: true,
+          changes: [{ field: 'Название', from: '—', to: ev.title }, { field: 'Дата/время', from: '—', to: ev.date + ' ' + ev.time },
+                    { field: 'Важность', from: '—', to: ev.importance }],
+          undo: { type: 'remove', list: 'events', id: ev.id }
+        });
+        return 'Событие «' + data.title + '» (' + data.when + ') ' + (important ? 'помечено как ВАЖНОЕ' : 'создано') + '. Оно видно в «Календаре», «Дне» и на Главной.';
       }
     }
   };
