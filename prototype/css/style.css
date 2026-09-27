@@ -977,7 +977,10 @@ body.nav-open .nav-backdrop { opacity: 1; animation: backdrop-in .22s ease both;
   :root { --space-page: 14px; --topbar-h: 58px; }
   .mobile-menu-btn { display: inline-flex; flex: 0 0 42px; width: 42px; height: 42px; }
   body.nav-open, body.modal-open, body.tour-open { overflow: hidden; }
-  .app { display: block; min-width: 0; width: 100%; }
+  /* Desktop .app is a stacking context (z-index: 1). On mobile that would
+     trap the fixed drawer below body-level overlays such as the backdrop.
+     Keep the layout, but let drawer/backdrop participate in one root layer. */
+  .app { display: block; min-width: 0; width: 100%; z-index: auto; }
   .main { width: 100%; min-width: 0; }
   .topbar { padding: 0 max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left)); gap: 8px; }
   .topbar > * { flex-shrink: 0; }
@@ -1010,7 +1013,7 @@ body.nav-open .nav-backdrop { opacity: 1; animation: backdrop-in .22s ease both;
     scroll-padding-bottom: calc(env(safe-area-inset-bottom) + 24px);
     transform: translate3d(calc(-100% - 24px), 0, 0);
     transition: transform .28s cubic-bezier(.2,.75,.25,1);
-    z-index: 120;
+    z-index: 220;
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -1025,7 +1028,7 @@ body.nav-open .nav-backdrop { opacity: 1; animation: backdrop-in .22s ease both;
   }
   body.nav-open .sidebar { transform: translateX(0); }
   .nav-backdrop {
-    position: fixed; inset: 0; z-index: 110;
+    position: fixed; inset: 0; z-index: 210;
     background: rgba(8, 10, 18, .42);
     border: 0; padding: 0; margin: 0;
   }

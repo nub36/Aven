@@ -73,7 +73,7 @@ async function load(hash) {
     ok('CSS5 mobile drawer reserves bottom scroll space',
       /scroll-padding-bottom:\s*calc\(/.test(css) && /padding-bottom:\s*calc\(env\(safe-area-inset-bottom\)/.test(css));
     ok('CSS6 stacking contract is drawer > backdrop > page',
-      /\.sidebar\s*\{[\s\S]*?z-index:\s*120/.test(css) && /\.nav-backdrop\s*\{[\s\S]*?z-index:\s*110/.test(css));
+      /\.sidebar\s*\{[\s\S]*?z-index:\s*220/.test(css) && /\.nav-backdrop\s*\{[\s\S]*?z-index:\s*210/.test(css) && /\.app\s*\{[^}]*z-index:\s*auto/.test(css));
     ok('CSS7 drawer remains interactive while backdrop accepts outside taps',
       !/\.sidebar\s*\{[^}]*pointer-events\s*:\s*none/i.test(css) && /\.nav-backdrop\s*\{[\s\S]*?position:\s*fixed/.test(css));
   }
