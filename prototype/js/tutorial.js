@@ -101,6 +101,8 @@ window.AvenTutorial = (function () {
     layer.className = 'tour-layer';
     layer.innerHTML = '<div class="tour-scrim" aria-hidden="true"></div><div class="tour-pop" role="dialog" aria-modal="false" aria-live="polite"></div>';
     document.body.appendChild(layer);
+    layer.querySelector('.tour-scrim').addEventListener('click', () => close());
+    document.body.classList.add('tour-open');
     els = { layer, pop: layer.querySelector('.tour-pop') };
     return els;
   }
@@ -111,6 +113,7 @@ window.AvenTutorial = (function () {
     stopVoice();
     clearTarget();
     if (els && els.layer && els.layer.parentNode) els.layer.parentNode.removeChild(els.layer);
+    document.body.classList.remove('tour-open');
     els = null;
     window.removeEventListener('resize', onResize);
     document.removeEventListener('keydown', onKey);

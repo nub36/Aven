@@ -111,9 +111,9 @@
     const authMode = !!AUTH[cur];
     document.body.classList.toggle('auth-mode', authMode);
     document.body.classList.toggle('assistant-mode', !authMode && cur === 'assistant');
-    document.body.classList.remove('nav-open');
-    const menuBtn = document.getElementById('mobile-menu-btn');
-    if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
+    /* Route/render cleanup must use the same path as an explicit drawer close:
+       no stale scroll lock, inert content or invisible touch-blocking backdrop. */
+    setMobileMenu(false, { restoreFocus: false });
     main.innerHTML = out.html;
     if (window.AvenPresence) { try { window.AvenPresence.apply(); } catch (e) { /* демо */ } }
     if (!authMode) document.getElementById('sidebar').innerHTML = buildSidebar(cur);
@@ -159,13 +159,26 @@
   });
 
   /* кнопки топбара и навигация */
-  function setMobileMenu(open) {
-    document.body.classList.toggle('nav-open', !!open);
+  function setMobileMenu(open, opts) {
+    open = !!open;
+    opts = opts || {};
+    const body = document.body;
+    const sidebar = document.getElementById('sidebar');
+    const main = document.querySelector('.main');
     const btn = document.getElementById('mobile-menu-btn');
+    body.classList.toggle('nav-open', open);
     if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    const mobile = !window.matchMedia || window.matchMedia('(max-width: 860px)').matches;
+    if (sidebar) sidebar.setAttribute('aria-hidden', mobile && !open ? 'true' : 'false');
+    if (main) {
+      if (open) { main.setAttribute('inert', ''); main.setAttribute('aria-hidden', 'true'); }
+      else { main.removeAttribute('inert'); main.removeAttribute('aria-hidden'); }
+    }
     if (open) {
       const first = document.querySelector('#sidebar .nav-item.active') || document.querySelector('#sidebar .nav-item');
       try { first && first.focus(); } catch (e) { /* noop */ }
+    } else if (opts.restoreFocus !== false) {
+      try { btn && btn.focus(); } catch (e) { /* noop */ }
     }
   }
 
@@ -199,7 +212,14 @@
 
   window.addEventListener('hashchange', () => {
     if (route() !== 'assistant') A._chat = A._chat; // история чата сохраняется в рамках сессии
+    setMobileMenu(false, { restoreFocus: false });
+    if (A.closeModal) A.closeModal({ restoreFocus: false });
     A.render();
+  });
+  window.addEventListener('resize', () => {
+    if (window.matchMedia && !window.matchMedia('(max-width: 860px)').matches) {
+      setMobileMenu(false, { restoreFocus: false });
+    }
   });
 
   /* первый запуск */
