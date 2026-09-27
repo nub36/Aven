@@ -59,10 +59,23 @@ window.Aven = (function () {
   api.ttsToast = function () { api.toast('Озвучивание ответа — прототип'); };
 
   /* ---------- модальные окна ---------- */
-  api.closeModal = function () {
-    const ov = document.getElementById('modal-root');
-    ov.innerHTML = '';
+  api.closeModal = function (opts) {
+    opts = opts || {};
+    const root = document.getElementById('modal-root');
+    const hadModal = !!(root && root.firstChild);
+    if (root) root.innerHTML = '';
+    document.body.classList.remove('modal-open');
+    const app = document.querySelector('.app');
+    if (app && !document.body.classList.contains('nav-open')) {
+      app.removeAttribute('inert');
+      app.removeAttribute('aria-hidden');
+    }
     document.removeEventListener('keydown', api._escHandler);
+    const prev = api._modalPreviousFocus;
+    api._modalPreviousFocus = null;
+    if (hadModal && opts.restoreFocus !== false) {
+      try { if (prev && document.contains(prev)) prev.focus(); } catch (e) { /* noop */ }
+    }
   };
   api._escHandler = function (e) { if (e.key === 'Escape') api.closeModal(); };
 
@@ -72,6 +85,11 @@ window.Aven = (function () {
    */
   api.openModal = function (opts) {
     const root = document.getElementById('modal-root');
+    if (root.firstChild) api.closeModal({ restoreFocus: false });
+    api._modalPreviousFocus = document.activeElement;
+    document.body.classList.add('modal-open');
+    const app = document.querySelector('.app');
+    if (app) { app.setAttribute('inert', ''); app.setAttribute('aria-hidden', 'true'); }
     const ov = document.createElement('div');
     ov.className = 'modal-overlay';
     ov.innerHTML =
@@ -100,7 +118,7 @@ window.Aven = (function () {
       else { api.demoToast(); api.closeModal(); }
     });
     document.addEventListener('keydown', api._escHandler);
-    const first = ov.querySelector('input, select, textarea');
+    const first = ov.querySelector('input, select, textarea, [data-submit], [data-x]');
     if (first) setTimeout(() => first.focus(), 30);
   };
 

@@ -85,20 +85,20 @@
     if (tab === 'users') return `
       <h2 class="set-h">Пользователи</h2>
       <p class="set-sub">${a.users.length} записей · блокировка, роль, 2FA, завершение сессий — опасные действия требуют подтверждения</p>
-      <div class="card">
-        <table class="tbl">
+      <div class="card table-scroll">
+        <table class="tbl adm-table">
           <thead><tr><th>Пользователь</th><th>Роль</th><th>Статус</th><th>2FA</th><th>Последний вход</th><th></th></tr></thead>
           <tbody>
             ${a.users.map((u) => `
             <tr data-id="${A.esc(u.id)}">
-              <td><div class="t">${A.esc(u.name)}</div><div class="s">${A.esc(u.email)}</div></td>
-              <td><select data-action="adm-user-role" data-id="${A.esc(u.id)}" ${u.id === 'u1' ? 'disabled title="Роль владельца не меняется в демо"' : ''}>
+              <td data-label="Пользователь"><div class="t">${A.esc(u.name)}</div><div class="s">${A.esc(u.email)}</div></td>
+              <td data-label="Роль"><select data-action="adm-user-role" data-id="${A.esc(u.id)}" ${u.id === 'u1' ? 'disabled title="Роль владельца не меняется в демо"' : ''}>
                     ${a.roles.map((r) => `<option value="${r.id}" ${r.id === u.role ? 'selected' : ''}>${A.esc(r.name)}</option>`).join('')}
                   </select></td>
-              <td>${u.status === 'активен' ? '<span class="pill ok">активен</span>' : '<span class="pill danger">заблокирован</span>'}</td>
-              <td>${u.twoFactor ? '<span class="pill ok">включена</span>' : '<span class="pill warn">не включена</span>'}</td>
-              <td class="s">${A.esc(u.last)}</td>
-              <td><div class="btn-row">
+              <td data-label="Статус">${u.status === 'активен' ? '<span class="pill ok">активен</span>' : '<span class="pill danger">заблокирован</span>'}</td>
+              <td data-label="2FA">${u.twoFactor ? '<span class="pill ok">включена</span>' : '<span class="pill warn">не включена</span>'}</td>
+              <td data-label="Последний вход" class="s">${A.esc(u.last)}</td>
+              <td data-label="Действия"><div class="btn-row">
                 ${u.id === 'u1' ? '<span class="pill">это вы</span>' : `
                   <button class="btn small" data-action="adm-user-block" data-id="${A.esc(u.id)}">${u.status === 'активен' ? 'Заблокировать' : 'Разблокировать'}</button>
                   <button class="btn small" data-action="adm-user-sessions" data-id="${A.esc(u.id)}">Завершить сессии</button>
@@ -128,14 +128,14 @@
     if (tab === 'audit') return `
       <h2 class="set-h">Аудит административных действий</h2>
       <p class="set-sub">${a.audit.length} записей · отделён от пользовательской истории (ADR-012)</p>
-      <div class="card">
-        <table class="tbl">
+      <div class="card table-scroll">
+        <table class="tbl adm-table">
           <thead><tr><th>Когда</th><th>Кто</th><th>Действие</th><th>Объект</th><th>Результат</th></tr></thead>
           <tbody>
             ${a.audit.map((x) => `
-            <tr><td class="time">${A.esc(x.when)}</td><td class="s">${A.esc(x.actor)}</td>
-                <td><code>${A.esc(x.action)}</code></td><td>${A.esc(x.object)}</td>
-                <td>${x.result === 'ok' ? '<span class="pill ok">ok</span>' : '<span class="pill danger">' + A.esc(x.result) + '</span>'}</td></tr>`).join('')}
+            <tr><td data-label="Когда" class="time">${A.esc(x.when)}</td><td data-label="Кто" class="s">${A.esc(x.actor)}</td>
+                <td data-label="Действие"><code>${A.esc(x.action)}</code></td><td data-label="Объект">${A.esc(x.object)}</td>
+                <td data-label="Результат">${x.result === 'ok' ? '<span class="pill ok">ok</span>' : '<span class="pill danger">' + A.esc(x.result) + '</span>'}</td></tr>`).join('')}
           </tbody>
         </table>
       </div>
