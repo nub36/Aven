@@ -997,9 +997,17 @@ body.nav-open .nav-backdrop { opacity: 1; animation: backdrop-in .22s ease both;
     inset: 0 auto 0 0;
     width: min(88vw, 344px);
     max-width: calc(100vw - 24px);
+    /* Keep a usable fallback for Chrome versions without dynamic viewport units.
+       The explicit height is content-box safe because the global box-sizing rule
+       includes the safe-area padding in the viewport-sized drawer. */
+    height: 100vh;
     height: 100dvh;
+    max-height: 100dvh;
     padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
+    /* Extra scroll space is intentional: safe-area alone does not create
+       reachable content after a fixed drawer's last item. */
+    padding-bottom: calc(env(safe-area-inset-bottom) + 24px);
+    scroll-padding-bottom: calc(env(safe-area-inset-bottom) + 24px);
     transform: translate3d(calc(-100% - 24px), 0, 0);
     transition: transform .28s cubic-bezier(.2,.75,.25,1);
     z-index: 120;
