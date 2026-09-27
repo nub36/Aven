@@ -28,13 +28,16 @@ window.Aven = (function () {
     return 'Добрый вечер';
   };
   api.todayFull = function () {
-    return new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+    const iso = window.AvenDemo && window.AvenDemo.todayISO ? window.AvenDemo.todayISO() : null;
+    const d = iso ? new Date(iso + 'T12:00:00') : new Date();
+    return new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(d);
   };
   api.warrantyStatus = function (untilStr) {
     const m = /(\d{2})\.(\d{2})\.(\d{4})/.exec(untilStr || '');
     if (!m) return { cls: '', label: untilStr || '—' };
     const until = new Date(+m[3], +m[2] - 1, +m[1]);
-    const now = new Date();
+    const iso = window.AvenDemo && window.AvenDemo.todayISO ? window.AvenDemo.todayISO() : null;
+    const now = iso ? new Date(iso + 'T12:00:00') : new Date();
     const days = Math.ceil((until - now) / 86400000);
     if (days < 0) return { cls: 'danger', label: 'Гарантия истекла', until: untilStr };
     if (days < 90) return { cls: 'warn', label: 'Гарантия до ' + untilStr, until: untilStr };
@@ -74,7 +77,7 @@ window.Aven = (function () {
     ov.innerHTML =
       '<div class="modal ' + (opts.wide ? 'wide' : '') + '" role="dialog" aria-modal="true">' +
         '<div class="modal-head"><h3>' + api.esc(opts.title || '') + '</h3>' +
-        '<button class="icon-btn" data-x title="Закрыть">✕</button></div>' +
+        '<button class="icon-btn" data-x title="Закрыть" aria-label="Закрыть модальное окно">✕</button></div>' +
         '<div class="modal-body">' + (opts.body || '') + '</div>' +
         '<div class="modal-foot">' +
           '<button class="btn" data-x>' + api.esc(opts.cancelText || 'Отмена') + '</button>' +

@@ -1,8 +1,8 @@
 # ARCHITECTURE — Архитектура Aven
 
-> **Статус:** проектная документация (design). Архитектура в стадии проектирования; реализация не начата; стек — см. [DECISIONS.md](DECISIONS.md) (все технологические кандидаты — `Proposed`; `Under Discussion` на 2026-09-26 нет) и [PROJECT_PLAN.md](PROJECT_PLAN.md), раздел «Статус архитектуры»; материалы для решения по стеку — [STACK_RESEARCH.md](STACK_RESEARCH.md). ADR не является запретом на изменение архитектуры.
+> **Статус:** проектная документация (design). Production-архитектура в стадии проектирования; `/prototype` — UX-прототип, не production-реализация. Стек — см. [DECISIONS.md](DECISIONS.md) (все технологические кандидаты — `Proposed`; `Under Discussion` на 2026-09-26 нет) и [PROJECT_PLAN.md](PROJECT_PLAN.md), раздел «Статус архитектуры»; материалы для решения по стеку — [STACK_RESEARCH.md](STACK_RESEARCH.md). ADR не является запретом на изменение архитектуры.
 > **Текущее направление:** Web-first ([ADR-013](DECISIONS.md), Product Direction) — первая полноценная реализация: самостоятельный полезный веб-сайт.
-> **Последнее обновление:** 2026-09-26
+> **Последнее обновление:** 2026-09-27
 
 ---
 
@@ -95,6 +95,8 @@ SPEAK
 - Каждое действие имеет: параметры (с типами), требуемые permissions, класс опасности (требует ли подтверждения), результат со статусом.
 - Внутренние идентификаторы intents/actions — на английском (`expense.add`, `ADD_EXPENSE`); формулировки для пользователя — на языке пользователя через шаблоны ответов.
 - Через Action Core идут и **команды изменения настроек** (`settings.voice.rate.set`, `settings.quiet_hours.set`, `settings.day_period.set`, `dictionary.alias.create`, `settings.voice.enabled.set`, `settings.confirmation_policy.set` — [ADR-011](DECISIONS.md), [PROJECT_PLAN.md](PROJECT_PLAN.md), раздел 12); они не обходят security requirements — для чувствительных настроек требуются подтверждение и/или повторная аутентификация.
+
+**Прототипное направление (2026-09-27, не production ADR):** в `/prototype/js/actions.js` появился тонкий Common Action Layer для задач и событий. Он подтверждает продуктовый путь `UI / Text Command / Voice→STT → Common Action Layer`: UI уже вызывает `task.*`/`event.*` actions, Assistant demo-flow использует `createEvent(...)`, а будущий Command Engine сможет вызвать те же операции. Это не фиксирует окончательный backend/API/framework; это проверка границы «параметры → изменение state → structured result/history» в UX-прототипе.
 
 Пример преобразования фразы:
 

@@ -1,7 +1,7 @@
 # COMMAND_ENGINE — Движок команд Aven
 
 > **Статус:** проектная документация. Пороги confidence — НЕ утверждены (см. раздел 6 и открытые вопросы в [PROJECT_PLAN.md](PROJECT_PLAN.md)).
-> **Последнее обновление:** 2026-09-25
+> **Последнее обновление:** 2026-09-27
 
 ---
 
@@ -56,6 +56,8 @@ settings.confirmation_policy.set ← «Всегда спрашивай пере�
 - «Что у меня завтра?»
 
 Те же действия доступны через обычный UI соответствующих разделов.
+
+**Прототипная подготовка (2026-09-27, не полноценный NLP):** `/prototype/js/actions.js` уже даёт DOM-free действия для задач/событий (`createTask`, `completeTask`, `createEvent`, `getEventsForDate`, `getOverdueTasks` и др.). Текущий Assistant использует только простые demo-routes/state-machine, но путь для Stage 2 проверен: `text → intent (будет позже) → parameters → Common Action → state/history → UI/response`. Голос в Stage 3 должен идти тем же путём через STT-текст, а не через отдельные `voiceCreateTask()`/`voiceCreateEvent()`.
 
 ### Пример преобразования
 

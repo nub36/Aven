@@ -1,7 +1,7 @@
 # DATA_MODEL — Модель данных и память Aven
 
 > **Статус:** проектная документация. Конкретная схема БД не проектируется до утверждения стека ([DECISIONS.md](DECISIONS.md), ADR-102, статус `Proposed`).
-> **Последнее обновление:** 2026-09-25
+> **Последнее обновление:** 2026-09-27
 
 ---
 
@@ -119,7 +119,13 @@ BMW → Ремонт → Расход 25 000 ₽ → Чек → Автосерв
 - relation;
 - и расширяемые типы.
 
-## 4. События и напоминания (данные)
+## 4. Задачи, события и напоминания (данные)
+
+**Прототипное состояние 2026-09-27 (не финальная схема БД):** `tasks` и `events` в `/prototype` приведены к общей модели для UI/Text/Voice→Action:
+
+- `task`: `title`, `description`, ISO `date`, `time`, `deadline`, `priority`, `tags`, `completed/status`, `archived`, `reminder` metadata; для совместимости прототип пока хранит также старые алиасы `desc`, `dueDate`, `dueTime`, `prio`, `done`.
+- `event`: `title`, ISO `date`, `startTime`, `endTime`, `allDay`, `place`, `description`, `category/color`, `importance`, `repeat`, `reminder` metadata; для совместимости остаются алиасы `time`, `end`, `desc`.
+- Reminder metadata — это данные для будущего уведомителя, а не гарантия доставки в web-прототипе при закрытом браузере. Фоновые уведомления требуют отдельного механизма/platform support.
 
 Типы (полное описание — [FEATURES.md](FEATURES.md), раздел 4):
 

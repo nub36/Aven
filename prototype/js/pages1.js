@@ -4,100 +4,47 @@
   A.pages = A.pages || {};
   const s = () => S.s();
 
-  /* ---------- даты и события (общие для Главной, Дня и Календаря) ---------- */
-  const pad = (n) => String(n).padStart(2, '0');
-  function localISO(d) {
-    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-  }
-  function todayISO(offset) {
-    const d = new Date();
-    d.setHours(12, 0, 0, 0);
-    d.setDate(d.getDate() + (offset || 0));
-    return localISO(d);
-  }
-  function parseISO(iso) {
-    const p = String(iso || '').split('-').map(Number);
-    return new Date(p[0] || 1970, (p[1] || 1) - 1, p[2] || 1, 12, 0, 0, 0);
-  }
-  function diffDays(aISO, bISO) {
-    return Math.round((parseISO(aISO) - parseISO(bISO)) / 86400000);
-  }
-  function humanDate(iso) {
-    if (!iso) return '—';
-    const d = parseISO(iso);
-    return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
-  }
-  function dateLabel(iso) {
-    const d = diffDays(iso, todayISO());
-    if (d === -1) return 'вчера';
-    if (d === 0) return 'сегодня';
-    if (d === 1) return 'завтра';
-    return humanDate(iso);
-  }
-  function eventTime(e) { return e.allDay ? 'весь день' : (e.time || 'без времени'); }
-  function eventOccursOn(e, iso) {
-    if (!e || !e.date || !iso) return false;
-    const delta = diffDays(iso, e.date);
-    if (delta < 0) return false;
-    if (e.repeat === 'daily') return true;
-    if (e.repeat === 'weekly') return delta % 7 === 0;
-    if (e.repeat === 'monthly') return parseISO(iso).getDate() === parseISO(e.date).getDate();
-    if (e.repeat === 'yearly') {
-      const a = parseISO(iso), b = parseISO(e.date);
-      return a.getDate() === b.getDate() && a.getMonth() === b.getMonth();
-    }
-    return e.date === iso;
-  }
-  function eventsForDate(iso) {
-    return (s().events || []).filter((e) => eventOccursOn(e, iso)).sort((a, b) => {
-      const aa = a.allDay ? '00:00' : (a.time || '23:59');
-      const bb = b.allDay ? '00:00' : (b.time || '23:59');
-      return aa.localeCompare(bb) || a.title.localeCompare(b.title);
-    });
-  }
+  /* ---------- даты, задачи и события: UI читает общий Common Action Layer ---------- */
+  const Core = () => window.AvenActions;
+  function todayISO(offset) { return Core().dates.todayISO(offset); }
+  function localISO(d) { return Core().dates.localISO(d); }
+  function parseISO(iso) { return Core().dates.parseISO(iso); }
+  function diffDays(aISO, bISO) { return Core().dates.diffDays(aISO, bISO); }
+  function addDays(iso, offset) { return Core().dates.addDays(iso, offset); }
+  function humanDate(iso) { return Core().dates.humanDate(iso); }
+  function dateLabel(iso) { return Core().dates.dateLabel(iso); }
+  function eventTime(e) { return Core().format.eventTime(e); }
+  function eventStart(e) { return Core().format.eventStart(e); }
+  function eventEnd(e) { return Core().format.eventEnd(e); }
+  function eventsForDate(iso) { return Core().events.getEventsForDate(iso).items; }
   function nextEvents(limit) {
-    const out = [];
-    for (let i = 0; i <= 45 && out.length < (limit || 5); i++) {
-      const iso = todayISO(i);
-      eventsForDate(iso).forEach((e) => out.push({ event: e, date: iso }));
-    }
-    return out.slice(0, limit || 5);
+    return Core().events.getAgenda({ fromDate: todayISO(), days: 45, limit: limit || 5 }).items;
   }
-  function repeatLabel(e) {
-    return ({ daily: 'ежедневно', weekly: 'еженедельно', monthly: 'ежемесячно', yearly: 'ежегодно' }[e.repeat]) || '';
-  }
+  function repeatLabel(e) { return Core().format.repeatLabel(e); }
+  function reminderLabel(r) { return Core().format.reminderLabel(r); }
   function importanceClass(v) {
     if (v === 'критическое') return 'danger';
     if (v === 'важное') return 'warn';
     return '';
   }
-
-  /* ---------- задачи (общие для Главной, Дня и раздела Задачи) ---------- */
-  function taskDueISO(t) {
-    if (t && t.dueDate) return t.dueDate;
-    if (t && t.date === 'today') return todayISO();
-    if (t && t.date === 'soon') return todayISO(1);
-    return '';
-  }
+  function taskDueISO(t) { return Core().tasks.deadline(t) || Core().tasks.date(t); }
+  function taskDateISO(t) { return Core().tasks.date(t) || Core().tasks.deadline(t); }
+  function taskTime(t) { return Core().tasks.time(t); }
+  function taskDone(t) { return Core().tasks.isCompleted(t); }
+  function taskPriority(t) { return Core().tasks.priority(t); }
+  function taskDesc(t) { return Core().tasks.description(t); }
+  function taskTags(t) { return Core().tasks.tags(t); }
   function taskBucket(t) {
-    if (t && t.done) return 'done';
+    if (t && taskDone(t)) return 'done';
     const d = taskDueISO(t);
     if (!d) return 'soon';
     const delta = diffDays(d, todayISO());
-    if (delta <= 0) return 'today';
+    if (delta < 0) return 'overdue';
+    if (delta === 0) return 'today';
     return 'soon';
   }
-  function taskDueLabel(t) {
-    const d = taskDueISO(t);
-    if (!d) return 'без срока';
-    return dateLabel(d) + (t.dueTime ? ' · ' + t.dueTime : '');
-  }
-  function taskSnapshot(t) {
-    return {
-      title: t.title, desc: t.desc, date: t.date, dueDate: t.dueDate || '', dueTime: t.dueTime || '',
-      prio: t.prio, project: t.project, done: !!t.done, archived: !!t.archived
-    };
-  }
+  function taskDueLabel(t) { return Core().format.taskDueLabel(t); }
+  function taskStatusLabel(t) { return taskDone(t) ? 'Выполнена' : 'Открыта'; }
 
   /* ---------- агрегаты Главной и Дня из текущих данных (без хардкода, MVP_SCOPE §10.1) ---------- */
   function daysToISO(iso) { return diffDays(iso, todayISO()); }
@@ -149,12 +96,10 @@
   function attentionItems(st) {
     const items = [];
     const MOD = (st.settings || {}).modules || {};
-    (st.tasks || []).forEach((t) => {
-      const d = t && t.dueDate;
+    Core().tasks.getOverdueTasks(todayISO()).items.forEach((t) => {
+      const d = taskDueISO(t);
       if (MOD.tasks === false) return;
-      if (t && !t.done && !t.archived && d && daysToISO(d) < 0) {
-        items.push({ icon: '☑️', title: t.title, sub: 'задача просрочена · ' + humanDate(d), href: '#/tasks', cls: 'warn' });
-      }
+      items.push({ icon: '☑️', title: t.title, sub: 'задача просрочена · ' + humanDate(d), href: '#/tasks', cls: 'warn' });
     });
     (MOD.auto === false ? [] : (st.car.docs || [])).forEach((doc) => {
       if (!doc.untilISO) return;
@@ -192,15 +137,15 @@
     if (MOD.auto === false) cards.car = false;
     if (MOD.shopping === false) cards.shopping = false;
     if (MOD.notes === false) cards.notes = false;
-    const todayTasks = st.tasks.filter((t) => !t.archived && taskBucket(t) === 'today');
+    const todayTasks = Core().tasks.getTasksForDate(todayISO(), { includeCompleted: false }).items;
     const todayEvents = eventsForDate(todayISO());
     const upcoming = nextEvents(1)[0];
     const latestHistory = (st.history || []).slice(0, 5);
     const fin = homeFinance(st);
     const taskStats = {
-      open: st.tasks.filter((t) => !t.done && !t.archived).length,
-      done: st.tasks.filter((t) => t.done && !t.archived).length,
-      overdue: st.tasks.filter((t) => !t.done && !t.archived && t.dueDate && daysToISO(t.dueDate) < 0).length
+      open: Core().tasks.getTasks({ status: 'active' }).count,
+      done: Core().tasks.getTasks({ status: 'completed' }).count,
+      overdue: Core().tasks.getOverdueTasks(todayISO()).count
     };
     const svcLeft = carServiceLeft(st.car);
     const docsAttn = carDocsAttention(st.car);
@@ -263,8 +208,8 @@
       <div class="card">
         <div class="head"><h3>Задачи</h3><a href="#/tasks" class="btn small">Все →</a></div>
         ${todayTasks.length ? todayTasks.map((t) => `
-          <label class="check-row" data-action="toggle-task" data-id="${t.id}">
-            <input type="checkbox" ${t.done ? 'checked' : ''}>
+          <label class="check-row" data-action="toggle-task" data-id="${A.esc(t.id)}">
+            <input type="checkbox" ${taskDone(t) ? 'checked' : ''}>
             <span class="label">${A.esc(t.title)}</span>
           </label>`).join('') : '<div class="empty">Активных задач на сегодня нет</div>'}
         <div class="btn-row" style="margin-top:10px">
@@ -343,73 +288,101 @@
 
   /* ================= ДЕНЬ ================= */
   let dayTab = 'today';
-  function dayISO(tab) {
-    return tab === 'yesterday' ? todayISO(-1) : tab === 'tomorrow' ? todayISO(1) : todayISO();
+  let daySelected = todayISO();
+  function setDayTab(tab) {
+    dayTab = tab;
+    if (tab === 'yesterday') daySelected = todayISO(-1);
+    else if (tab === 'tomorrow') daySelected = todayISO(1);
+    else if (tab === 'today') daySelected = todayISO();
+    else dayTab = 'custom';
   }
-  function taskForTab(t, tab) {
-    if (t.archived) return false;
-    if (tab === 'today') return taskBucket(t) === 'today';
-    if (tab === 'tomorrow') return !t.done && taskBucket(t) === 'soon';
-    return t.done;
+  function selectedDayISO() { return daySelected || todayISO(); }
+  function taskForDay(t, iso) {
+    if (!t || t.archived) return false;
+    return taskDateISO(t) === iso || taskDueISO(t) === iso;
   }
   A.pages.day = function () {
     const st = s();
-    const iso = dayISO(dayTab);
+    const iso = selectedDayISO();
     const evs = eventsForDate(iso);
-    const dayTasks = st.tasks.filter((t) => taskForTab(t, dayTab));
-    const doneActions = (st.history || []).filter((h) => /\.(create|update|delete)$/.test(h.action || '')).slice(0, 4);
+    const dayTasks = Core().tasks.getTasksForDate(iso, { includeCompleted: true }).items;
+    const activeTasks = dayTasks.filter((t) => !taskDone(t));
+    const completedTasks = dayTasks.filter((t) => taskDone(t));
+    const overdue = Core().tasks.getOverdueTasks(iso).items;
+    const next = Core().events.getNextEvent({ fromDate: iso, days: 45 });
+    const doneActions = (st.history || []).filter((h) => /\.(create|update|delete|complete|reopen)$/.test(h.action || '')).slice(0, 4);
     const dayNotes = (((st.settings || {}).modules || {}).notes === false ? [] : (st.notes || []))
       .filter((n) => !n.archived && n.updatedISO === iso).slice(0, 4);
     const attention = attentionItems(st);
     const timeline = [];
-    evs.forEach((e) => timeline.push({ t: eventTime(e), n: e.title, type: e.importance === 'важное' ? 'important' : 'event', sub: e.place || repeatLabel(e) || 'событие' }));
-    dayTasks.filter((t) => !t.done).forEach((t) => timeline.push({ t: taskDueLabel(t), n: t.title, type: 'task', sub: 'задача · ' + t.project }));
+    evs.forEach((e) => timeline.push({ id: e.id, date: iso, t: eventTime(e), n: e.title, type: e.importance === 'важное' ? 'important' : 'event', sub: (e.place || e.category || repeatLabel(e) || 'событие') + (reminderLabel(e.reminder) !== 'нет' ? ' · напоминание: ' + reminderLabel(e.reminder) : '') }));
+    activeTasks.forEach((t) => timeline.push({ id: t.id, t: taskTime(t) || taskDueLabel(t), n: t.title, type: 'task', sub: 'задача · ' + (t.project || 'без проекта') + (taskTags(t).length ? ' · #' + taskTags(t).join(' #') : '') }));
     timeline.sort((a, b) => {
       const aa = /^\d{2}:\d{2}$/.test(a.t) ? a.t : (a.t === 'весь день' ? '00:00' : '23:59');
       const bb = /^\d{2}:\d{2}$/.test(b.t) ? b.t : (b.t === 'весь день' ? '00:00' : '23:59');
       return aa.localeCompare(bb);
     });
+    const summary = [
+      evs.length + ' событий',
+      activeTasks.length + ' активных задач',
+      completedTasks.length + ' выполнено',
+      overdue.length + ' просрочено к этой дате'
+    ];
     const html = `
     <div class="page-head">
       <div>
         <h1>День</h1>
-        <div class="sub">${A.esc(dateLabel(iso))} · события из Календаря + задачи + заметки дня + «требует внимания» · демо</div>
+        <div class="sub">${A.esc(dateLabel(iso))} · единые задачи/события из Common Actions · демо</div>
       </div>
       <div class="btn-row">
-        <button class="btn" data-action="day-add-event">＋ Добавить событие</button>
-        <button class="btn" data-action="day-add-task">＋ Добавить задачу</button>
+        <button class="btn" data-action="day-add-event">＋ Событие на дату</button>
+        <button class="btn" data-action="day-add-task">＋ Задача на дату</button>
       </div>
     </div>
     <div class="tabs" id="day-tabs">
       <button class="tab ${dayTab === 'yesterday' ? 'active' : ''}" data-tab="yesterday">Вчера</button>
       <button class="tab ${dayTab === 'today' ? 'active' : ''}" data-tab="today">Сегодня</button>
       <button class="tab ${dayTab === 'tomorrow' ? 'active' : ''}" data-tab="tomorrow">Завтра</button>
+      <button class="tab ${dayTab === 'custom' ? 'active' : ''}" data-tab="custom">Выбранная дата</button>
     </div>
-    <div class="grid cols-2">
+    <div class="card day-tools">
+      <div class="field-row">
+        <label class="field"><span>Дата дня</span><input type="date" data-action="day-date" value="${A.esc(iso)}" aria-label="Выбрать дату раздела День"></label>
+        <div class="field"><span>Краткая сводка</span><div class="btn-row">${summary.map((x, i) => `<span class="pill ${i === 3 && overdue.length ? 'warn' : i === 2 ? 'ok' : ''}">${A.esc(x)}</span>`).join('')}</div></div>
+      </div>
+      <div class="s" style="color:var(--muted);font-size:.82rem">Напоминания здесь — только metadata. Web-прототип не обещает фоновые уведомления, если браузер закрыт.</div>
+    </div>
+    <div class="grid cols-2" style="margin-top:16px">
       <div class="card">
-        <h3>Timeline</h3>
+        <div class="head"><h3>Timeline</h3>${next.ok ? `<span class="pill accent">следующее: ${A.esc(next.item.event.title)} · ${A.esc(dateLabel(next.item.date))}</span>` : '<span class="pill">нет ближайших событий</span>'}</div>
         ${timeline.length ? `<div class="timeline">${timeline.map((i) => `
           <div class="tl-item ${i.type}">
-            <div style="display:flex;gap:12px"><span class="time">${A.esc(i.t)}</span><div><b>${A.esc(i.n)}</b>
-            <div class="s" style="color:var(--muted);font-size:.8rem">${A.esc(i.sub)}</div></div></div>
+            <div style="display:flex;gap:12px;align-items:flex-start"><span class="time">${A.esc(i.t)}</span><div class="grow"><b>${A.esc(i.n)}</b>
+            <div class="s" style="color:var(--muted);font-size:.8rem">${A.esc(i.sub)}</div></div>
+            ${i.type === 'task' ? `<button class="btn small" data-action="task-edit" data-id="${A.esc(i.id)}">Открыть</button>` : `<button class="btn small" data-action="cal-event" data-id="${A.esc(i.id)}" data-date="${A.esc(i.date)}">Открыть</button>`}
+            </div>
           </div>`).join('')}</div>` : '<div class="empty">На этот день ничего не запланировано. Создайте событие или задачу.</div>'}
         <h3 style="margin-top:18px">Заметки этого дня</h3>
         ${dayNotes.length ? dayNotes.map((n) => `
           <div class="row-item"><span class="time">📝</span><div class="grow"><div class="t">${n.pinned ? '📌 ' : ''}${A.esc(n.title)}</div><div class="s">${A.esc(n.folder)}</div></div></div>`).join('') : '<div class="empty">В этот день заметок не меняли</div>'}
       </div>
       <div class="card">
-        <h3>Задачи</h3>
+        <h3>Задачи на дату</h3>
         ${dayTasks.length ? dayTasks.map((t) => `
-          <label class="check-row ${t.done ? 'done' : ''}" data-action="toggle-task" data-id="${t.id}">
-            <input type="checkbox" ${t.done ? 'checked' : ''}>
-            <span class="label">${A.esc(t.title)}<div class="s">приоритет: ${A.esc(t.prio)} · ${A.esc(t.project)}</div></span>
-          </label>`).join('') : '<div class="empty">Нет задач для этого дня</div>'}
+          <div class="check-row ${taskDone(t) ? 'done' : ''}" data-action="toggle-task" data-id="${A.esc(t.id)}">
+            <input type="checkbox" ${taskDone(t) ? 'checked' : ''} aria-label="${taskDone(t) ? 'Вернуть задачу' : 'Выполнить задачу'}: ${A.esc(t.title)}">
+            <span class="label"><b>${A.esc(t.title)}</b><div class="s">${A.esc(taskStatusLabel(t))} · приоритет: ${A.esc(taskPriority(t))} · ${A.esc(t.project || 'без проекта')} · ${A.esc(taskDueLabel(t))}${taskTags(t).length ? ' · #' + A.esc(taskTags(t).join(' #')) : ''}</div></span>
+            <span class="task-actions"><button class="btn small" data-action="task-edit" data-id="${A.esc(t.id)}">Редактировать</button></span>
+          </div>`).join('') : '<div class="empty">Нет задач для этого дня</div>'}
+        <h3 style="margin-top:18px">Просроченные к этой дате</h3>
+        ${overdue.length ? overdue.slice(0, 5).map((t) => `
+          <div class="row-item"><span class="time">⚠️</span><div class="grow"><div class="t">${A.esc(t.title)}</div><div class="s">срок: ${A.esc(taskDueLabel(t))}</div></div><button class="btn small" data-action="task-edit" data-id="${A.esc(t.id)}">Открыть</button></div>`).join('') : '<div class="empty">Просроченных задач нет</div>'}
         <h3 style="margin-top:18px">Выполненное и изменения</h3>
-        ${st.tasks.filter((t) => t.done).slice(0, 3).map((t) => `
-          <div class="row-item"><span class="time">✔</span><div class="grow"><div class="t" style="color:var(--muted)">${A.esc(t.title)}</div></div></div>`).join('') || ''}
+        ${completedTasks.slice(0, 4).map((t) => `
+          <div class="row-item"><span class="time">✔</span><div class="grow"><div class="t" style="color:var(--muted)">${A.esc(t.title)}</div></div><button class="btn small" data-action="toggle-task" data-id="${A.esc(t.id)}">Вернуть</button></div>`).join('') || ''}
         ${doneActions.map((h) => `
           <div class="row-item"><span class="time">•</span><div class="grow"><div class="t">${A.esc(h.title)}</div><div class="s">${A.esc(h.object || h.action)} · ${A.esc(h.when)}</div></div></div>`).join('')}
-        ${!st.tasks.some((t) => t.done) && !doneActions.length ? '<div class="empty">Пока ничего</div>' : ''}
+        ${!completedTasks.length && !doneActions.length ? '<div class="empty">Пока ничего</div>' : ''}
       </div>
     </div>
     <div class="card" style="margin-top:16px">
@@ -418,7 +391,7 @@
         <div class="row-item"><span class="time">${A.esc(i.icon)}</span><div class="grow"><div class="t">${A.esc(i.title)}</div><div class="s">${A.esc(i.sub)}</div></div><span class="pill ${i.cls}">${i.href === '#/tasks' ? 'задачи' : i.href === '#/auto' ? 'авто' : 'покупки'}</span></div>`).join('')}</div>` : '<div class="empty">Просроченных задач, истекающих документов и гарантий нет</div>'}
       <div class="s" style="color:var(--muted);font-size:.82rem;margin-top:10px">Напоминания и уведомления — Stage 1.1 (MVP_SCOPE §4.2): здесь только расчёт по текущим данным разделов, без фоновых проверок.</div>
     </div>`;
-    return { html, mount: (root) => { A.bindTabs(root.querySelector('#day-tabs'), (v) => { dayTab = v; A.render(); }); } };
+    return { html, mount: (root) => { A.bindTabs(root.querySelector('#day-tabs'), (v) => { setDayTab(v); A.render(); }); } };
   };
 
   /* ================= КАЛЕНДАРЬ ================= */
@@ -483,9 +456,23 @@
       ${evs.length ? `<div class="timeline">${evs.map((e) => `
         <div class="tl-item ${importanceClass(e.importance) === 'warn' ? 'important' : ''}">
           <div style="display:flex;gap:12px"><span class="time">${A.esc(eventTime(e))}</span><div class="grow"><b>${A.esc(e.title)}</b>
-          <div class="s" style="color:var(--muted);font-size:.8rem">${A.esc(e.place || 'без места')} ${repeatLabel(e) ? '· ' + A.esc(repeatLabel(e)) : ''}</div></div>
+          <div class="s" style="color:var(--muted);font-size:.8rem">${A.esc(e.place || 'без места')} · ${A.esc(e.category || 'Личное')} ${repeatLabel(e) ? '· ' + A.esc(repeatLabel(e)) : ''}${reminderLabel(e.reminder) !== 'нет' ? ' · напоминание: ' + A.esc(reminderLabel(e.reminder)) : ''}</div></div>
           <button class="btn small" data-action="cal-event" data-id="${A.esc(e.id)}" data-date="${A.esc(calSelected)}">Открыть</button></div>
         </div>`).join('')}</div>` : '<div class="empty">В этот день нет событий. Создайте первое событие.</div>'}
+    </div>`;
+  }
+  function agendaView() {
+    const items = Core().events.getAgenda({ fromDate: calSelected || todayISO(), days: 45, limit: 40 }).items;
+    return `<div class="agenda-list">
+      ${items.length ? items.map((it) => {
+        const e = it.event;
+        return `<div class="row-item agenda-item">
+          <span class="time">${A.esc(dateLabel(it.date))}<br>${A.esc(eventTime(e))}</span>
+          <div class="grow"><div class="t">${A.esc(e.title)}</div><div class="s">${A.esc(humanDate(it.date))} · ${A.esc(e.place || 'без места')} · ${A.esc(e.category || 'Личное')}${repeatLabel(e) ? ' · ' + A.esc(repeatLabel(e)) : ''}</div></div>
+          ${e.importance !== 'обычная' ? `<span class="pill ${importanceClass(e.importance)}">${A.esc(e.importance)}</span>` : ''}
+          <button class="btn small" data-action="cal-event" data-id="${A.esc(e.id)}" data-date="${A.esc(it.date)}">Открыть</button>
+        </div>`;
+      }).join('') : '<div class="empty">В ближайшие 45 дней событий нет.</div>'}
     </div>`;
   }
   A.pages.calendar = function () {
@@ -494,11 +481,12 @@
     const monthName = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(titleDate);
     const html = `
     <div class="page-head">
-      <div><h1>Календарь</h1><div class="sub">Месяц / неделя / день · создание, изменение, удаление, повторения · без ассистента</div></div>
+      <div><h1>Календарь</h1><div class="sub">Месяц / Agenda / неделя / день · события через Common Actions · без ассистента</div></div>
       <button class="btn primary" data-action="cal-add">＋ Событие</button>
     </div>
     <div class="tabs" id="cal-tabs">
       <button class="tab ${calView === 'month' ? 'active' : ''}" data-tab="month">Месяц</button>
+      <button class="tab ${calView === 'agenda' ? 'active' : ''}" data-tab="agenda">Agenda</button>
       <button class="tab ${calView === 'week' ? 'active' : ''}" data-tab="week">Неделя</button>
       <button class="tab ${calView === 'day' ? 'active' : ''}" data-tab="day">День</button>
     </div>
@@ -508,8 +496,8 @@
         <div><b style="text-transform:capitalize">${A.esc(monthName)}</b><div class="s" style="color:var(--muted);font-size:.8rem">Выбранный день: ${A.esc(humanDate(calSelected))}</div></div>
         <div class="btn-row"><button class="btn small" data-action="cal-today">Сегодня</button><button class="btn small" data-action="cal-next">→</button></div>
       </div>
-      ${calView === 'month' ? monthView() : calView === 'week' ? weekView() : dayView()}
-      <div style="margin-top:12px;color:var(--muted);font-size:.82rem">События сохраняются в localStorage прототипа, пишутся в историю и отменяются через Undo. Повторы показаны как виртуальные вхождения.</div>
+      ${calView === 'month' ? monthView() : calView === 'agenda' ? agendaView() : calView === 'week' ? weekView() : dayView()}
+      <div style="margin-top:12px;color:var(--muted);font-size:.82rem">События сохраняются в localStorage прототипа через Common Actions, пишутся в историю и отменяются через Undo. Повторы показаны как виртуальные вхождения. Reminder metadata хранится честно, но фоновые уведомления не гарантируются.</div>
     </div>`;
     return { html, mount: (root) => {
       A.bindTabs(root.querySelector('#cal-tabs'), (v) => { calView = v; A.render(); });
@@ -520,63 +508,72 @@
   };
 
   /* ================= ЗАДАЧИ ================= */
-  let taskFilter = 'all', taskQuery = '', taskProject = 'all';
+  let taskFilter = 'active', taskQuery = '', taskProject = 'all', taskPrio = 'all', taskTag = 'all';
   A.pages.tasks = function () {
     const st = s().tasks || [];
-    const active = st.filter((t) => !t.archived);
-    const archived = st.filter((t) => t.archived);
+    const activeAll = Core().tasks.getTasks({ status: 'active' }).items;
     const counts = {
-      all: active.length,
-      today: active.filter((t) => taskBucket(t) === 'today').length,
-      soon: active.filter((t) => !t.done && taskBucket(t) === 'soon').length,
-      done: active.filter((t) => t.done).length,
-      archive: archived.length
+      active: activeAll.length,
+      today: Core().tasks.getTasks({ status: 'today' }).count,
+      upcoming: Core().tasks.getTasks({ status: 'upcoming' }).count,
+      overdue: Core().tasks.getOverdueTasks(todayISO()).count,
+      completed: Core().tasks.getTasks({ status: 'completed' }).count,
+      archive: st.filter((t) => t.archived).length
     };
-    let list = taskFilter === 'archive' ? archived.slice() : active.slice();
-    if (taskFilter === 'today') list = active.filter((t) => taskBucket(t) === 'today');
-    if (taskFilter === 'soon') list = active.filter((t) => !t.done && taskBucket(t) === 'soon');
-    if (taskFilter === 'done') list = active.filter((t) => t.done);
-    if (taskProject !== 'all') list = list.filter((t) => (t.project || '') === taskProject);
-    const q = taskQuery.trim().toLowerCase();
-    if (q) list = list.filter((t) => [t.title, t.desc, t.project, t.prio].join(' ').toLowerCase().includes(q));
-    list.sort((a, b) => {
-      if (!!a.done !== !!b.done) return a.done ? 1 : -1;
-      return (taskDueISO(a) || '9999-99-99').localeCompare(taskDueISO(b) || '9999-99-99');
-    });
-    const projects = Array.from(new Set(st.map((t) => t.project).filter(Boolean))).sort();
+    const baseFilters = { q: taskQuery, project: taskProject, priority: taskPrio, tag: taskTag };
+    let list;
+    if (taskFilter === 'archive') list = Core().tasks.getTasks(Object.assign({}, baseFilters, { includeArchived: true, archived: true })).items;
+    else if (taskFilter === 'today') list = Core().tasks.getTasks(Object.assign({}, baseFilters, { status: 'today' })).items;
+    else if (taskFilter === 'upcoming') list = Core().tasks.getTasks(Object.assign({}, baseFilters, { status: 'upcoming' })).items;
+    else if (taskFilter === 'overdue') list = Core().tasks.getTasks(Object.assign({}, baseFilters, { status: 'overdue' })).items;
+    else if (taskFilter === 'completed') list = Core().tasks.getTasks(Object.assign({}, baseFilters, { status: 'completed' })).items;
+    else list = Core().tasks.getTasks(Object.assign({}, baseFilters, { status: 'active' })).items;
+    const projects = Array.from(new Set(st.map((t) => t.project).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ru'));
+    const tags = Array.from(new Set([].concat.apply([], st.map((t) => taskTags(t))))).filter(Boolean).sort((a, b) => a.localeCompare(b, 'ru'));
+    const priorities = ['высокий', 'средний', 'низкий'];
     const prioPill = { 'высокий': 'danger', 'средний': 'warn', 'низкий': '' };
     const html = `
     <div class="page-head">
-      <div><h1>Задачи</h1><div class="sub">Сроки · проекты · приоритеты · редактирование · архив · демо</div></div>
+      <div><h1>Задачи</h1><div class="sub">Создание · редактирование · выполнение/возврат · дедлайны · теги · Common Actions</div></div>
       <button class="btn primary" data-action="task-add">＋ Новая задача</button>
     </div>
     <div class="tabs" id="task-tabs">
-      <button class="tab ${taskFilter === 'all' ? 'active' : ''}" data-tab="all">Все <span class="cnt">${counts.all}</span></button>
+      <button class="tab ${taskFilter === 'active' ? 'active' : ''}" data-tab="active">Активные <span class="cnt">${counts.active}</span></button>
       <button class="tab ${taskFilter === 'today' ? 'active' : ''}" data-tab="today">Сегодня <span class="cnt">${counts.today}</span></button>
-      <button class="tab ${taskFilter === 'soon' ? 'active' : ''}" data-tab="soon">Предстоящие <span class="cnt">${counts.soon}</span></button>
-      <button class="tab ${taskFilter === 'done' ? 'active' : ''}" data-tab="done">Выполненные <span class="cnt">${counts.done}</span></button>
+      <button class="tab ${taskFilter === 'upcoming' ? 'active' : ''}" data-tab="upcoming">Предстоящие <span class="cnt">${counts.upcoming}</span></button>
+      <button class="tab ${taskFilter === 'overdue' ? 'active' : ''}" data-tab="overdue">Просроченные <span class="cnt">${counts.overdue}</span></button>
+      <button class="tab ${taskFilter === 'completed' ? 'active' : ''}" data-tab="completed">Выполненные <span class="cnt">${counts.completed}</span></button>
       <button class="tab ${taskFilter === 'archive' ? 'active' : ''}" data-tab="archive">Архив <span class="cnt">${counts.archive}</span></button>
     </div>
     <div class="card task-filters">
       <div class="field-row">
-        <label class="field grow"><span>Поиск</span><input type="search" id="task-q" value="${A.esc(taskQuery)}" placeholder="Название, описание, проект…"></label>
+        <label class="field grow"><span>Поиск</span><input type="search" id="task-q" value="${A.esc(taskQuery)}" placeholder="Название, описание, проект, тег…"></label>
         <label class="field"><span>Проект</span><select data-action="task-project-filter">
           <option value="all" ${taskProject === 'all' ? 'selected' : ''}>Все проекты</option>
           ${projects.map((p) => `<option value="${A.esc(p)}" ${taskProject === p ? 'selected' : ''}>${A.esc(p)}</option>`).join('')}
         </select></label>
+        <label class="field"><span>Приоритет</span><select data-action="task-prio-filter">
+          <option value="all" ${taskPrio === 'all' ? 'selected' : ''}>Любой</option>
+          ${priorities.map((p) => `<option value="${A.esc(p)}" ${taskPrio === p ? 'selected' : ''}>${A.esc(p)}</option>`).join('')}
+        </select></label>
+        <label class="field"><span>Тег</span><select data-action="task-tag-filter">
+          <option value="all" ${taskTag === 'all' ? 'selected' : ''}>Все теги</option>
+          ${tags.map((t) => `<option value="${A.esc(t)}" ${taskTag === t ? 'selected' : ''}>#${A.esc(t)}</option>`).join('')}
+        </select></label>
       </div>
-      <div class="s" style="color:var(--muted);font-size:.8rem">Фильтры и поиск работают по текущему demo-state; архив скрыт из обычных списков, но сохраняется и отменяется через историю.</div>
+      <div class="s" style="color:var(--muted);font-size:.8rem">Фильтры и поиск не пишутся в историю. История фиксирует только существенные действия: create/update/complete/reopen/delete.</div>
     </div>
     <div class="card task-card">
       ${list.length ? `<div class="task-list">${list.map((t) => `
-      <div class="check-row task-row ${t.done ? 'done' : ''} ${t.archived ? 'archived' : ''}" data-action="toggle-task" data-id="${A.esc(t.id)}">
-        <input type="checkbox" ${t.done ? 'checked' : ''} ${t.archived ? 'disabled' : ''}>
+      <div class="check-row task-row ${taskDone(t) ? 'done' : ''} ${t.archived ? 'archived' : ''}" data-action="toggle-task" data-id="${A.esc(t.id)}">
+        <input type="checkbox" ${taskDone(t) ? 'checked' : ''} ${t.archived ? 'disabled' : ''} aria-label="${taskDone(t) ? 'Вернуть задачу' : 'Выполнить задачу'}: ${A.esc(t.title)}">
         <span class="label">
           <b>${A.esc(t.title)}</b>
-          <span class="pill ${prioPill[t.prio] || ''}" style="margin-left:8px">${A.esc(t.prio)}</span>
+          <span class="pill ${prioPill[taskPriority(t)] || ''}" style="margin-left:8px">${A.esc(taskPriority(t))}</span>
           ${t.project ? `<span class="pill" style="margin-left:6px">${A.esc(t.project)}</span>` : ''}
+          ${taskTags(t).map((tag) => `<span class="pill" style="margin-left:6px">#${A.esc(tag)}</span>`).join('')}
           ${t.archived ? '<span class="pill">архив</span>' : ''}
-          <div class="s">${A.esc(t.desc || 'без описания')} · срок: ${A.esc(taskDueLabel(t))}</div>
+          <div class="s">${A.esc(taskDesc(t) || 'без описания')} · дата: ${A.esc(dateLabel(taskDateISO(t)))} · срок: ${A.esc(taskDueLabel(t))} · статус: ${A.esc(taskStatusLabel(t))}</div>
         </span>
         <span class="task-actions">
           <button class="btn small" data-action="task-edit" data-id="${A.esc(t.id)}">Редактировать</button>
@@ -802,18 +799,11 @@
     'go-assistant': () => { location.hash = '#/assistant'; },
 
     'toggle-task': (el) => {
-      const t = s().tasks.find((x) => x.id === el.dataset.id);
-      if (!t) return;
+      const t = Core().tasks.getTask(el.dataset.id).entity;
+      if (!t) { A.toast('Задача не найдена'); return; }
       if (t.archived) { A.toast('Задача в архиве — сначала верните её из архива'); return; }
-      const was = t.done;
-      t.done = !t.done;
-      S.save();
-      A.logAction({
-        action: 'task.update', title: t.done ? 'Задача выполнена' : 'Задача снова открыта', object: t.title,
-        objectType: 'task', undoable: true,
-        changes: [{ field: 'Статус', from: was ? 'Выполнена' : 'Открыта', to: t.done ? 'Выполнена' : 'Открыта' }],
-        undo: { type: 'fields', list: 'tasks', id: t.id, fields: { done: was } }
-      });
+      const res = taskDone(t) ? Core().tasks.reopenTask(t.id) : Core().tasks.completeTask(t.id);
+      if (!res.ok) { A.toast(res.message || 'Не удалось изменить задачу'); return; }
       A.render();
     },
 
@@ -826,53 +816,39 @@
 
     'task-add': () => taskForm(),
     'task-edit': (el) => {
-      const t = s().tasks.find((x) => x.id === el.dataset.id);
+      const t = Core().tasks.getTask(el.dataset.id).entity;
       if (t) taskForm(t);
     },
     'task-project-filter': (el) => { taskProject = el.value; A.render(); },
+    'task-prio-filter': (el) => { taskPrio = el.value; A.render(); },
+    'task-tag-filter': (el) => { taskTag = el.value; A.render(); },
     'task-archive': (el) => {
-      const t = s().tasks.find((x) => x.id === el.dataset.id);
-      if (!t) return;
-      const was = !!t.archived;
-      t.archived = !was;
-      S.save();
-      A.logAction({
-        action: 'task.update', title: t.archived ? 'Задача отправлена в архив' : 'Задача возвращена из архива', object: t.title,
-        objectType: 'task', undoable: true,
-        changes: [{ field: 'Архив', from: was ? 'в архиве' : 'активна', to: t.archived ? 'в архиве' : 'активна' }],
-        undo: { type: 'fields', list: 'tasks', id: t.id, fields: { archived: was } }
-      });
-      A.render(); A.toast(t.archived ? 'Задача в архиве · можно отменить' : 'Задача возвращена из архива · можно отменить');
+      const t = Core().tasks.getTask(el.dataset.id).entity;
+      if (!t) { A.toast('Задача не найдена'); return; }
+      const res = Core().tasks.updateTask(t.id, { archived: !t.archived }, { title: !t.archived ? 'Задача отправлена в архив' : 'Задача возвращена из архива' });
+      if (!res.ok) { A.toast(res.message || 'Не удалось изменить задачу'); return; }
+      A.render(); A.toast(res.entity.archived ? 'Задача в архиве · можно отменить' : 'Задача возвращена из архива · можно отменить');
     },
     'task-del': (el, ev) => {
       A.confirmModal(confirmDelete, () => {
-        const list = S.s().tasks;
-        const i = A.indexOfId(list, el.dataset.id);
-        const item = list[i];
-        if (!item) { A.toast('Задача не найдена'); return; }
-        list.splice(i, 1);
-        S.save();
-        A.logAction({
-          action: 'task.delete', title: 'Задача удалена', object: item.title, objectType: 'task',
-          undoable: true, danger: true,
-          changes: [{ field: 'Состояние', from: item.done ? 'Выполнена' : 'Открыта', to: 'Удалена' }],
-          undo: { type: 'restore', list: 'tasks', index: i, item: JSON.parse(JSON.stringify(item)) }
-        });
+        const res = Core().tasks.deleteTask(el.dataset.id);
+        if (!res.ok) { A.toast(res.message || 'Задача не найдена'); return; }
         A.render(); A.toast('Задача удалена — можно отменить в истории');
       });
     },
 
-    'day-add-event': () => eventForm(null, dayISO(dayTab)),
-    'day-add-task': () => taskForm(),
+    'day-add-event': () => eventForm(null, selectedDayISO()),
+    'day-add-task': () => taskForm(null, selectedDayISO()),
+    'day-date': (el) => { if (el.value) { daySelected = el.value; dayTab = 'custom'; A.render(); } },
 
     'cal-prev': () => {
       if (calView === 'month') calOffset--;
-      else calSelected = todayISO(diffDays(calSelected, todayISO()) - (calView === 'week' ? 7 : 1));
+      else calSelected = addDays(calSelected || todayISO(), -(calView === 'week' || calView === 'agenda' ? 7 : 1));
       A.render();
     },
     'cal-next': () => {
       if (calView === 'month') calOffset++;
-      else calSelected = todayISO(diffDays(calSelected, todayISO()) + (calView === 'week' ? 7 : 1));
+      else calSelected = addDays(calSelected || todayISO(), (calView === 'week' || calView === 'agenda' ? 7 : 1));
       A.render();
     },
     'cal-today': () => { calOffset = 0; calSelected = todayISO(); A.render(); },
@@ -881,7 +857,7 @@
     'cal-add-selected': () => eventForm(null, calSelected || todayISO()),
     'cal-event': (el) => openEvent(el.dataset.id, el.dataset.date || calSelected),
     'event-edit': (el) => {
-      const ev = (s().events || []).find((x) => x.id === el.dataset.id);
+      const ev = Core().events.getEvent(el.dataset.id).entity;
       if (ev) eventForm(ev, el.dataset.date || ev.date);
     },
     'event-del': (el) => deleteEvent(el.dataset.id),
@@ -946,91 +922,69 @@
   });
 
   /* ---------- формы (общие) ---------- */
-  function taskForm(existing) {
-    const ex = existing || {};
-    const due = ex.dueDate || (ex.date === 'today' ? todayISO() : '');
+  function taskForm(existing, dateHint) {
+    const ex = existing ? Core().tasks.snapshot(existing) : { title: '', description: '', date: dateHint || todayISO(), time: '', deadline: dateHint || todayISO(), priority: 'средний', project: 'Личное', tags: [], completed: false, archived: false, reminder: null };
     const projects = ['Личное', 'Дом', 'Авто', 'Работа', 'Здоровье', 'Покупки'];
     if (ex.project && projects.indexOf(ex.project) < 0) projects.push(ex.project);
+    const reminderValue = ex.reminder && (ex.reminder.value || (ex.reminder.minutesBefore === 15 ? '15m' : ex.reminder.minutesBefore === 60 ? '1h' : ex.reminder.minutesBefore === 1440 ? '1d' : 'none'));
     A.openModal({
       title: existing ? 'Редактировать задачу' : 'Новая задача',
+      wide: true,
       body: `
         <div class="field"><label>Название</label><input type="text" name="title" value="${A.esc(ex.title || '')}" placeholder="Что нужно сделать?"></div>
-        <div class="field"><label>Описание</label><textarea name="desc" style="min-height:60px">${A.esc(ex.desc || '')}</textarea></div>
+        <div class="field"><label>Описание</label><textarea name="description" style="min-height:60px">${A.esc(ex.description || '')}</textarea></div>
         <div class="field-row">
-          <div class="field"><label>Дата / срок</label><input type="date" name="dueDate" value="${A.esc(due)}"></div>
-          <div class="field"><label>Время</label><input type="time" name="dueTime" value="${A.esc(ex.dueTime || '')}"></div>
-          <div class="field"><label>Приоритет</label>
-            <select name="prio"><option ${ex.prio === 'низкий' ? 'selected' : ''}>низкий</option><option ${!ex.prio || ex.prio === 'средний' ? 'selected' : ''}>средний</option><option ${ex.prio === 'высокий' ? 'selected' : ''}>высокий</option></select></div>
+          <div class="field"><label>Дата</label><input type="date" name="date" value="${A.esc(ex.date || '')}"></div>
+          <div class="field"><label>Время</label><input type="time" name="time" value="${A.esc(ex.time || '')}"></div>
+          <div class="field"><label>Дедлайн</label><input type="date" name="deadline" value="${A.esc(ex.deadline || ex.date || '')}"></div>
         </div>
         <div class="field-row">
+          <div class="field"><label>Приоритет</label>
+            <select name="priority"><option ${ex.priority === 'низкий' ? 'selected' : ''}>низкий</option><option ${!ex.priority || ex.priority === 'средний' ? 'selected' : ''}>средний</option><option ${ex.priority === 'высокий' ? 'selected' : ''}>высокий</option></select></div>
           <div class="field"><label>Проект</label>
             <select name="project">${projects.map((p) => `<option ${ex.project === p ? 'selected' : ''}>${A.esc(p)}</option>`).join('')}</select></div>
           <div class="field"><label>Статус</label>
-            <select name="done"><option value="false" ${!ex.done ? 'selected' : ''}>Открыта</option><option value="true" ${ex.done ? 'selected' : ''}>Выполнена</option></select></div>
+            <select name="completed"><option value="false" ${!ex.completed ? 'selected' : ''}>Открыта</option><option value="true" ${ex.completed ? 'selected' : ''}>Выполнена</option></select></div>
         </div>
-        <label class="check-row" style="margin-bottom:12px"><input type="checkbox" name="archived" ${ex.archived ? 'checked' : ''}><span class="label">Архивировать</span></label>`,
+        <div class="field-row">
+          <div class="field"><label>Теги (через запятую)</label><input type="text" name="tags" value="${A.esc((ex.tags || []).join(', '))}" placeholder="например: дом, срочно"></div>
+          <div class="field"><label>Reminder metadata</label><select name="reminder">
+            <option value="none" ${!reminderValue || reminderValue === 'none' ? 'selected' : ''}>нет</option>
+            <option value="at-time" ${reminderValue === 'at-time' ? 'selected' : ''}>в момент</option>
+            <option value="15m" ${reminderValue === '15m' ? 'selected' : ''}>за 15 минут</option>
+            <option value="1h" ${reminderValue === '1h' ? 'selected' : ''}>за 1 час</option>
+            <option value="1d" ${reminderValue === '1d' ? 'selected' : ''}>за 1 день</option>
+          </select></div>
+        </div>
+        <label class="check-row" style="margin-bottom:12px"><input type="checkbox" name="archived" ${ex.archived ? 'checked' : ''}><span class="label">Архивировать</span></label>
+        <div class="s" style="color:var(--muted);font-size:.8rem">Напоминание сохраняется как metadata. Прототип не обещает доставку уведомлений при закрытом браузере; фоновые уведомления — future.</div>`,
       onSubmit: (v) => {
-        const st = S.s();
-        const title = (v.title || '').trim();
-        if (!title) { A.toast('Введите название задачи'); return; }
-        const fields = {
-          title,
-          desc: v.desc || '',
-          dueDate: v.dueDate || '',
-          dueTime: v.dueTime || '',
-          date: v.dueDate === todayISO() ? 'today' : (v.dueDate ? 'soon' : 'none'),
-          prio: v.prio,
+        const payload = {
+          title: v.title,
+          description: v.description,
+          date: v.date,
+          time: v.time,
+          deadline: v.deadline || v.date,
+          priority: v.priority,
           project: v.project,
-          done: v.done === 'true',
-          archived: !!v.archived
+          tags: v.tags,
+          completed: v.completed === 'true',
+          archived: !!v.archived,
+          reminder: v.reminder === 'none' ? null : v.reminder
         };
-        if (existing) {
-          const prev = taskSnapshot(existing);
-          Object.assign(existing, fields);
-          S.save();
-          const labels = { title: 'Название', desc: 'Описание', dueDate: 'Срок', dueTime: 'Время', prio: 'Приоритет', project: 'Проект', done: 'Статус', archived: 'Архив' };
-          const changes = [];
-          Object.keys(fields).forEach((k) => {
-            if (k === 'date') return;
-            const from = prev[k];
-            const to = fields[k];
-            if (String(from == null ? '' : from) !== String(to == null ? '' : to)) {
-              changes.push({ field: labels[k] || k, from: k === 'dueDate' ? (from ? humanDate(from) : '—') : (k === 'done' ? (from ? 'Выполнена' : 'Открыта') : (k === 'archived' ? (from ? 'в архиве' : 'активна') : String(from || '—'))),
-                to: k === 'dueDate' ? (to ? humanDate(to) : '—') : (k === 'done' ? (to ? 'Выполнена' : 'Открыта') : (k === 'archived' ? (to ? 'в архиве' : 'активна') : String(to || '—'))) });
-            }
-          });
-          A.logAction({
-            action: 'task.update', title: 'Задача изменена', object: existing.title, objectType: 'task',
-            undoable: true, changes: changes.length ? changes : [{ field: 'Изменений нет', from: '—', to: '—' }],
-            undo: { type: 'fields', list: 'tasks', id: existing.id, fields: prev }
-          });
-          A.closeModal(); A.render(); A.toast('Задача сохранена · запись в истории');
-        } else {
-          const t = Object.assign({ id: S.id('t') }, fields);
-          st.tasks.unshift(t);
-          S.save();
-          A.logAction({
-            action: 'task.create', title: 'Задача создана', object: t.title, objectType: 'task', undoable: true,
-            changes: [
-              { field: 'Название', from: '—', to: t.title },
-              { field: 'Приоритет', from: '—', to: t.prio },
-              { field: 'Проект', from: '—', to: t.project },
-              { field: 'Срок', from: '—', to: t.dueDate ? humanDate(t.dueDate) + (t.dueTime ? ' ' + t.dueTime : '') : 'не указан' }
-            ],
-            undo: { type: 'remove', list: 'tasks', id: t.id }
-          });
-          A.closeModal(); A.render(); A.toast('Задача добавлена · запись в истории, можно отменить');
-        }
+        const res = existing ? Core().tasks.updateTask(existing.id, payload) : Core().tasks.createTask(payload);
+        if (!res.ok) { A.toast(res.message || 'Не удалось сохранить задачу'); return; }
+        A.closeModal(); A.render(); A.toast(existing ? 'Задача сохранена · запись в истории' : 'Задача добавлена · запись в истории, можно отменить');
       }
     });
   }
 
   function fmtEventObject(e) {
-    return e.title + ' · ' + humanDate(e.date) + (e.allDay ? ' · весь день' : (e.time ? ' · ' + e.time : ''));
+    return e.title + ' · ' + humanDate(e.date) + (e.allDay ? ' · весь день' : (eventStart(e) ? ' · ' + eventStart(e) : ''));
   }
 
   function openEvent(id, occurrenceDate) {
-    const ev = (s().events || []).find((x) => x.id === id);
+    const ev = Core().events.getEvent(id).entity;
     if (!ev) { A.toast('Событие не найдено'); return; }
     const rep = repeatLabel(ev);
     A.openModal({
@@ -1038,11 +992,12 @@
       submitText: null,
       cancelText: 'Закрыть',
       body: `
-        <div class="set-row"><div class="grow"><div class="t">${A.esc(eventTime(ev))}${ev.end && !ev.allDay ? '–' + A.esc(ev.end) : ''}</div><div class="s">время</div></div></div>
+        <div class="set-row"><div class="grow"><div class="t">${A.esc(eventTime(ev))}${eventEnd(ev) && !ev.allDay ? '–' + A.esc(eventEnd(ev)) : ''}</div><div class="s">время</div></div></div>
         <div class="set-row"><div class="grow"><div class="t">${A.esc(humanDate(occurrenceDate || ev.date))}</div><div class="s">${occurrenceDate && occurrenceDate !== ev.date ? 'вхождение повторяющегося события; редактируется исходное' : 'дата'}</div></div></div>
         <div class="set-row"><div class="grow"><div class="t">${A.esc(ev.place || '—')}</div><div class="s">место</div></div></div>
-        <div class="set-row"><div class="grow"><div class="t"><span class="pill ${importanceClass(ev.importance)}">${A.esc(ev.importance || 'обычная')}</span>${rep ? ` <span class="pill accent">${A.esc(rep)}</span>` : ''}</div><div class="s">важность и повторение</div></div></div>
-        ${ev.desc ? `<div class="set-row"><div class="grow"><div class="t">${A.esc(ev.desc)}</div><div class="s">описание</div></div></div>` : ''}
+        <div class="set-row"><div class="grow"><div class="t"><span class="pill ${importanceClass(ev.importance)}">${A.esc(ev.importance || 'обычная')}</span>${rep ? ` <span class="pill accent">${A.esc(rep)}</span>` : ''} <span class="pill">${A.esc(ev.category || 'Личное')}</span></div><div class="s">важность, повторение и категория</div></div></div>
+        <div class="set-row"><div class="grow"><div class="t">${A.esc(reminderLabel(ev.reminder))}</div><div class="s">reminder metadata (без гарантированной фоновой доставки)</div></div></div>
+        ${Core().events.description(ev) ? `<div class="set-row"><div class="grow"><div class="t">${A.esc(Core().events.description(ev))}</div><div class="s">описание</div></div></div>` : ''}
         <div class="btn-row" style="margin-top:14px">
           <button class="btn" data-action="event-edit" data-id="${A.esc(ev.id)}" data-date="${A.esc(occurrenceDate || ev.date)}">Редактировать</button>
           <button class="btn danger" data-action="event-del" data-id="${A.esc(ev.id)}">Удалить</button>
@@ -1051,39 +1006,29 @@
   }
 
   function deleteEvent(id) {
-    const list = S.s().events || [];
-    const i0 = list.findIndex((x) => x && x.id === id);
-    const item0 = list[i0];
-    if (i0 < 0 || !item0) { A.toast('Событие не найдено'); return; }
-    A.confirmModal('Удалить событие «' + item0.title + '»? Повторяющееся событие удалится целиком. Отмена (Undo) останется доступна в истории действий.', () => {
-      const st = S.s();
-      const i = (st.events || []).findIndex((x) => x && x.id === id);
-      const item = (st.events || [])[i];
-      if (i < 0 || !item) { A.toast('Событие не найдено'); return; }
-      st.events.splice(i, 1);
-      S.save();
-      A.logAction({
-        action: 'event.delete', title: 'Событие удалено', object: fmtEventObject(item), objectType: 'event',
-        undoable: true, danger: true,
-        changes: [{ field: 'Состояние', from: 'в календаре', to: 'Удалено' }],
-        undo: { type: 'restore', list: 'events', index: i, item: JSON.parse(JSON.stringify(item)) }
-      });
+    const ev = Core().events.getEvent(id).entity;
+    if (!ev) { A.toast('Событие не найдено'); return; }
+    A.confirmModal('Удалить событие «' + ev.title + '»? Повторяющееся событие удалится целиком. Отмена (Undo) останется доступна в истории действий.', () => {
+      const res = Core().events.deleteEvent(id);
+      if (!res.ok) { A.toast(res.message || 'Событие не найдено'); return; }
       A.render(); A.toast('Событие удалено — можно отменить в истории');
     });
   }
 
   function eventForm(existing, dateHint) {
-    const ex = existing || {};
+    const ex = existing ? Core().events.snapshot(existing) : { title: '', date: dateHint || todayISO(), startTime: '12:00', endTime: '', allDay: false, place: '', description: '', importance: 'обычная', repeat: 'none', reminder: null, category: 'Личное', color: '' };
     const dfltDate = ex.date || dateHint || todayISO();
     const repeat = ex.repeat || 'none';
+    const reminderValue = ex.reminder && (ex.reminder.value || (ex.reminder.minutesBefore === 15 ? '15m' : ex.reminder.minutesBefore === 60 ? '1h' : ex.reminder.minutesBefore === 1440 ? '1d' : 'none'));
     A.openModal({
       title: existing ? 'Редактировать событие' : 'Новое событие',
+      wide: true,
       body: `
         <div class="field"><label>Название</label><input type="text" name="title" value="${A.esc(ex.title || '')}" placeholder="Например: встреча"></div>
         <div class="field-row">
           <div class="field"><label>Дата</label><input type="date" name="date" value="${A.esc(dfltDate)}"></div>
-          <div class="field"><label>Начало</label><input type="time" name="time" value="${A.esc(ex.time || '12:00')}"></div>
-          <div class="field"><label>Окончание</label><input type="time" name="end" value="${A.esc(ex.end || '')}"></div>
+          <div class="field"><label>Начало</label><input type="time" name="startTime" value="${A.esc(ex.startTime || '12:00')}"></div>
+          <div class="field"><label>Окончание</label><input type="time" name="endTime" value="${A.esc(ex.endTime || '')}"></div>
         </div>
         <label class="check-row" style="margin-bottom:12px"><input type="checkbox" name="allDay" ${ex.allDay ? 'checked' : ''}><span class="label">Весь день</span></label>
         <div class="field-row">
@@ -1100,61 +1045,41 @@
             <option value="yearly" ${repeat === 'yearly' ? 'selected' : ''}>ежегодно</option>
           </select></div>
         </div>
+        <div class="field-row">
+          <div class="field"><label>Категория</label><select name="category">
+            ${['Личное', 'Работа', 'Дом', 'Авто', 'Здоровье', 'Покупки'].map((c) => `<option ${ex.category === c ? 'selected' : ''}>${A.esc(c)}</option>`).join('')}
+          </select></div>
+          <div class="field"><label>Цвет (metadata)</label><input type="text" name="color" value="${A.esc(ex.color || '')}" placeholder="#5a5fd8"></div>
+          <div class="field"><label>Reminder metadata</label><select name="reminder">
+            <option value="none" ${!reminderValue || reminderValue === 'none' ? 'selected' : ''}>нет</option>
+            <option value="at-time" ${reminderValue === 'at-time' ? 'selected' : ''}>в момент</option>
+            <option value="15m" ${reminderValue === '15m' ? 'selected' : ''}>за 15 минут</option>
+            <option value="1h" ${reminderValue === '1h' ? 'selected' : ''}>за 1 час</option>
+            <option value="1d" ${reminderValue === '1d' ? 'selected' : ''}>за 1 день</option>
+          </select></div>
+        </div>
         <div class="field"><label>Место</label><input type="text" name="place" value="${A.esc(ex.place || '')}" placeholder="необязательно"></div>
-        <div class="field"><label>Описание</label><textarea name="desc" style="min-height:70px">${A.esc(ex.desc || '')}</textarea></div>
-        <div class="s" style="color:var(--muted);font-size:.8rem">Событие сохранится в demo-state, появится в «Календаре», «Дне» и на «Главной», а изменение попадёт в историю.</div>`,
+        <div class="field"><label>Описание</label><textarea name="description" style="min-height:70px">${A.esc(ex.description || '')}</textarea></div>
+        <div class="s" style="color:var(--muted);font-size:.8rem">Событие сохраняется через Common Actions и появляется в «Календаре», «Дне» и на «Главной». Reminder metadata не означает гарантированную доставку уведомления при закрытом браузере.</div>`,
       onSubmit: (v) => {
-        const title = (v.title || '').trim();
-        if (!title) { A.toast('Введите название события'); return; }
-        if (!v.date) { A.toast('Выберите дату события'); return; }
-        const fields = {
-          title,
+        const payload = {
+          title: v.title,
           date: v.date,
-          time: v.allDay ? '' : (v.time || ''),
-          end: v.allDay ? '' : (v.end || ''),
+          startTime: v.startTime,
+          endTime: v.endTime,
           allDay: !!v.allDay,
-          place: (v.place || '').trim(),
-          importance: v.importance || 'обычная',
-          repeat: v.repeat || 'none',
-          desc: (v.desc || '').trim()
+          place: v.place,
+          importance: v.importance,
+          repeat: v.repeat,
+          description: v.description,
+          reminder: v.reminder === 'none' ? null : v.reminder,
+          category: v.category,
+          color: v.color
         };
-        const st = S.s();
-        if (!Array.isArray(st.events)) st.events = [];
-        if (existing) {
-          const prev = {
-            title: existing.title, date: existing.date, time: existing.time, end: existing.end,
-            allDay: existing.allDay, place: existing.place, importance: existing.importance,
-            repeat: existing.repeat, desc: existing.desc
-          };
-          Object.assign(existing, fields);
-          S.save();
-          const labels = { title: 'Название', date: 'Дата', time: 'Начало', end: 'Окончание', allDay: 'Весь день', place: 'Место', importance: 'Важность', repeat: 'Повторение', desc: 'Описание' };
-          const changes = Object.keys(fields).filter((k) => String(prev[k] == null ? '' : prev[k]) !== String(fields[k] == null ? '' : fields[k]))
-            .map((k) => ({ field: labels[k] || k, from: k === 'date' ? humanDate(prev[k]) : String(prev[k] || '—'), to: k === 'date' ? humanDate(fields[k]) : String(fields[k] || '—') }));
-          A.logAction({
-            action: 'event.update', title: 'Событие изменено', object: fmtEventObject(existing), objectType: 'event',
-            undoable: true, changes: changes.length ? changes : [{ field: 'Изменений нет', from: '—', to: '—' }],
-            undo: { type: 'fields', list: 'events', id: existing.id, fields: prev }
-          });
-          calSelected = existing.date;
-          A.closeModal(); A.render(); A.toast('Событие сохранено · запись в истории');
-        } else {
-          const ev = Object.assign({ id: S.id('e') }, fields);
-          st.events.unshift(ev);
-          S.save();
-          A.logAction({
-            action: 'event.create', title: 'Событие создано', object: fmtEventObject(ev), objectType: 'event', undoable: true,
-            changes: [
-              { field: 'Название', from: '—', to: ev.title },
-              { field: 'Дата', from: '—', to: humanDate(ev.date) },
-              { field: 'Время', from: '—', to: eventTime(ev) },
-              { field: 'Повторение', from: '—', to: repeatLabel(ev) || 'нет' }
-            ],
-            undo: { type: 'remove', list: 'events', id: ev.id }
-          });
-          calSelected = ev.date;
-          A.closeModal(); A.render(); A.toast('Событие добавлено · видно в Календаре, Дне и на Главной');
-        }
+        const res = existing ? Core().events.updateEvent(existing.id, payload) : Core().events.createEvent(payload);
+        if (!res.ok) { A.toast(res.message || 'Не удалось сохранить событие'); return; }
+        calSelected = res.entity.date;
+        A.closeModal(); A.render(); A.toast(existing ? 'Событие сохранено · запись в истории' : 'Событие добавлено · видно в Календаре, Дне и на Главной');
       }
     });
   }

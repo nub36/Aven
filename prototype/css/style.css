@@ -464,6 +464,11 @@ html.reduce-motion .hero[data-state="listening"] .hc-wave i { height: 60%; }
 .empty.mini { padding: 10px 4px; font-size: .78rem; }
 .cal-day-card { box-shadow: none; }
 html[data-theme="dark"] .cal-ev { color: var(--accent-strong); }
+.agenda-list { display: flex; flex-direction: column; gap: 8px; }
+.agenda-item .time { min-width: 92px; white-space: normal; line-height: 1.35; }
+.day-tools { margin-bottom: 0; }
+.day-tools .field { margin-bottom: 0; }
+.day-tools .field > span { display: block; font-size: .78rem; color: var(--muted); margin-bottom: 4px; }
 
 /* tasks */
 .task-filters { margin-bottom: 14px; }
@@ -704,9 +709,16 @@ body.auth-mode .content { max-width: 480px; padding: 0 16px; margin: 6vh auto; }
   body.auth-mode .content { margin: 3vh auto; }
   .hist-item { flex-wrap: wrap; }
   .hist-actions { flex-direction: row; width: 100%; align-items: center; }
-  .hist-filters .field-row, .task-filters .field-row, .fin-filters .field-row, .shop-filters .field-row { flex-direction: column; gap: 10px; }
+  .hist-filters .field-row, .task-filters .field-row, .fin-filters .field-row, .shop-filters .field-row, .day-tools .field-row { flex-direction: column; gap: 10px; }
   .task-row { flex-wrap: wrap; }
   .task-actions { width: 100%; justify-content: flex-start; }
+  .cal-head { align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+  .cal-grid { grid-template-columns: repeat(7, minmax(42px, 1fr)); gap: 4px; overflow-x: auto; }
+  .cal-cell { min-height: 74px; padding: 5px; }
+  .cal-ev { font-size: .68rem; padding: 2px 4px; }
+  .agenda-item { align-items: flex-start; flex-wrap: wrap; }
+  .agenda-item .time { min-width: 0; width: 100%; }
+  .modal { width: min(96vw, 520px); max-height: 92vh; overflow: auto; }
   .adm-principle .set-row { flex-direction: column; align-items: flex-start; }
   .tbl { display: block; overflow-x: auto; }
 }

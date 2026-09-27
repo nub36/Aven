@@ -6,6 +6,39 @@
 
 ---
 
+## 2026-09-27 — XXXVI. Common Actions + Задачи + Календарь + День
+
+- **Дата:** 2026-09-27 (новая coding-agent сессия; работа от актуального `origin/main` `bf893543ede14d68bb2430782a36c608c44065a0`).
+- **Задача (владелец):** объективно проверить main/PR/статус после паузы 3D; PR #15 не трогать; развивать функциональность сайта Aven: Common Action Layer, связанные задачи/календарь/день/главная/Assistant, подготовка к Text Command и Voice→STT без отдельной voice-business-logic.
+- **Что проверено перед работой:**
+  - `git fetch origin --prune`; локальная ветка `arena/01a0e2f3-aven` была на том же commit, что `origin/main` (`bf893543...`).
+  - Открытые PR: #15 (Female Aven 3D V2 — **не трогать**) и #8 (Natural Voice).
+  - Последний merged функциональный этап: PR #17 / XXXV «Главная и День — честные агрегаторы из реальных данных».
+  - commit `80a6100` не найден в локальном/remote history (`git branch -r --contains 80a6100` пусто), поэтому незавершённую работу XXXVI заново реализовал от текущего состояния main.
+  - Baseline: `stage1-proto-check.js` — 219/219, `aven3d-viewer-check.js` — 43/43.
+- **Что сделано:**
+  - **Common Action Layer:** добавлен `prototype/js/actions.js` — DOM-free слой над `AvenState` для `tasks` и `events`: `createTask`, `updateTask`, `completeTask`, `reopenTask`, `deleteTask`, getters по дате/overdue; `createEvent`, `updateEvent`, `deleteEvent`, getters по дате/agenda/next. Результат действий — `{ ok, action, entity }` или `{ ok:false, code }`; history payload — restore/remove/fields.
+  - **Задачи:** demo-state расширен до совместимой модели (`description/desc`, ISO `date`, `time`, `deadline`, `dueDate`, `dueTime`, `priority/prio`, `tags`, `completed/done/status`, `reminder`); UI вызывает actions для create/update/complete/reopen/delete; добавлены фильтры активные/сегодня/предстоящие/просроченные/выполненные/архив + search/project/priority/tag; выполнение из списка быстрое, удаление с подтверждением.
+  - **Календарь:** события расширены до `startTime/endTime`, `category/color`, `reminder` metadata при сохранении совместимости `time/end/desc`; UI форм создания/редактирования/удаления переведён на `event.*` actions; добавлено Agenda/List представление.
+  - **День:** выбранная дата теперь не только табы вчера/сегодня/завтра, но и datepicker; страница читает общие getters, показывает сводку, ближайшее событие, задачи/события выбранной даты, просроченные и выполненные; из Дня можно создать задачу/событие на выбранную дату, открыть/редактировать карточки, выполнить/вернуть задачу.
+  - **Главная:** task/event блоки продолжают использовать общий state через getters (счётчики задач, задачи на сегодня, ближайшее событие). Hero/Female Aven/голос/TTS не менялись.
+  - **Assistant/flows:** flow «Важное событие» теперь вызывает `AvenActions.events.createEvent`; простые ответы «Что сегодня/завтра?» и «Какие задачи просрочены?» формируются из общего task/event state. Полноценный NLP-parser не реализован.
+  - **Demo-date:** demo-state/actions/UI теперь используют фиксированную дату прототипа `2026-09-27`, чтобы «сегодня/завтра/просрочено» и тесты не зависели от календаря машины.
+  - **Reminders:** task/event хранят metadata (`delivery: prototype-only`), UI честно сообщает, что web-прототип не гарантирует доставку уведомлений при закрытом браузере.
+  - **Responsive/accessibility:** добавлены/сохранены keyboard paths для календаря и форм, labels/aria у основных контролов, адаптивность Agenda/Day/task filters/month grid/mobile modal; основные действия не зависят от hover.
+- **Изменённые файлы:** `prototype/index.html`, `prototype/js/actions.js`, `prototype/js/data.js`, `prototype/js/pages1.js`, `prototype/js/pages2.js`, `prototype/js/flows.js`, `prototype/js/ui.js`, `prototype/css/style.css`, `prototype/tests/actions-core-check.js`, `prototype/tests/stage1-proto-check.js`, `prototype/tests/tts-proto-check.js`, `docs/CHANGELOG.md`, `docs/MVP_SCOPE.md`, `docs/ARCHITECTURE.md`, `docs/COMMAND_ENGINE.md`, `docs/DATA_MODEL.md`, `prototype/README.md`, `docs/WORK_LOG.md`.
+- **Проверено:**
+  - `node --check prototype/js/actions.js && node --check prototype/js/pages1.js && node --check prototype/js/pages2.js && node --check prototype/js/flows.js && node --check prototype/js/data.js && node --check prototype/js/ui.js && node --check prototype/tests/actions-core-check.js && node --check prototype/tests/stage1-proto-check.js && node --check prototype/tests/tts-proto-check.js` — OK.
+  - `node prototype/tests/actions-core-check.js` → **18 проверок, 0 провалов**.
+  - `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js` → **232 проверки, 0 провалов**.
+  - `node prototype/tests/aven3d-viewer-check.js` → **43 проверки, 0 провалов** (регрессия: 3D-файлы не тронуты).
+  - `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` → **42 проверки, 0 провалов** (TTS runtime не менялся; проверка адаптирована к ответу Assistant из общего state).
+- **Не тронуто:** PR #15, 3D/Blender/Meshy/rig/lip-sync/Female Aven visual, TTS runtime/Silero/Aigul/VPS/nginx/HTTPS, production backend/API/БД/mobile/desktop/offline sync.
+- **Известные ограничения:** это UX-прототип без backend и настоящих фоновых уведомлений; Common Action Layer — направление прототипа и подготовка к Stage 2/3, не окончательный production framework; NLP parser и Voice/STT command pipeline не реализованы; повторения задач всё ещё открытый вопрос.
+- **Рекомендуется далее:** владельцу выбрать следующий функциональный этап; логичный вариант — полировка инструментов/ранних reminders или продолжение подготовки Command Engine поверх уже появившихся actions.
+
+---
+
 ## 2026-09-27 — XXXV. Главная и День: честные агрегаторы из реальных данных
 
 - **Дата:** 2026-09-27 (продолжение серии этапов UX-прототипа после PR #16; рекомендация из записи XXXIV —

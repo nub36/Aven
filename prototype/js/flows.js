@@ -23,6 +23,8 @@ window.AvenFlows = (function () {
   function fmtMoney(n) { return A ? A.money(n) : (n + ' ₽'); }
   function pad(n) { return String(n).padStart(2, '0'); }
   function isoOffset(offset) {
+    if (window.AvenActions && window.AvenActions.dates) return window.AvenActions.dates.todayISO(offset || 0);
+    if (window.AvenDemo && window.AvenDemo.todayISO) return window.AvenDemo.todayISO(offset || 0);
     const d = new Date();
     d.setHours(12, 0, 0, 0);
     d.setDate(d.getDate() + (offset || 0));
@@ -33,7 +35,7 @@ window.AvenFlows = (function () {
     let date = /послезавтра/.test(t) ? isoOffset(2) : /завтра/.test(t) ? isoOffset(1) : isoOffset(0);
     const dm = /(\d{1,2})[.\-/](\d{1,2})(?:[.\-/](\d{2,4}))?/.exec(t);
     if (dm) {
-      const y = dm[3] ? (+dm[3] < 100 ? 2000 + +dm[3] : +dm[3]) : new Date().getFullYear();
+      const y = dm[3] ? (+dm[3] < 100 ? 2000 + +dm[3] : +dm[3]) : Number(isoOffset(0).slice(0, 4));
       date = y + '-' + pad(+dm[2]) + '-' + pad(+dm[1]);
     }
     const tm = /(\d{1,2})[:.](\d{2})/.exec(t);
@@ -74,21 +76,20 @@ window.AvenFlows = (function () {
       finish(data) {
         const important = data.important === 'yes';
         const when = parseWhen(data.when);
-        const st = s();
-        if (!Array.isArray(st.events)) st.events = [];
-        const ev = {
-          id: S.id('e'), title: data.title, date: when.date, time: when.time, end: '', allDay: false,
-          place: '', importance: important ? 'важное' : 'обычная', repeat: 'none', desc: 'Создано через демо-сценарий Assistant'
-        };
-        st.events.unshift(ev);
-        S.save();
-        if (A && A.logAction) A.logAction({
-          action: 'event.create', title: 'Событие создано', object: ev.title + ' · ' + ev.date + ' · ' + ev.time,
-          objectType: 'event', undoable: true,
-          changes: [{ field: 'Название', from: '—', to: ev.title }, { field: 'Дата/время', from: '—', to: ev.date + ' ' + ev.time },
-                    { field: 'Важность', from: '—', to: ev.importance }],
-          undo: { type: 'remove', list: 'events', id: ev.id }
-        });
+        const res = window.AvenActions.events.createEvent({
+          title: data.title,
+          date: when.date,
+          startTime: when.time,
+          endTime: '',
+          allDay: false,
+          place: '',
+          category: 'Личное',
+          importance: important ? 'важное' : 'обычная',
+          repeat: 'none',
+          description: 'Создано через демо-сценарий Assistant',
+          reminder: null
+        }, { source: 'assistant-flow' });
+        if (!res.ok) return res.message || 'Не удалось создать событие.';
         return 'Событие «' + data.title + '» (' + data.when + ') ' + (important ? 'помечено как ВАЖНОЕ' : 'создано') + '. Оно видно в «Календаре», «Дне» и на Главной.';
       }
     }
