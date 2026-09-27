@@ -6,6 +6,41 @@
 
 ---
 
+## 2026-09-27 — XXXVII. UX/UI evolution: responsive, Help, guided tutorials
+
+- **Дата:** 2026-09-27 (новая Arena-сессия; стартовая проверка показала `origin/main = bf893543ede14d68bb2430782a36c608c44065a0`, PR #18 открыт и не merged, remote branch `arena/01a0e2f3-aven = 80f467284671925ff3b8fb05b997f9329454872a`).
+- **Задача (владелец):** продолжить Aven UX/UI evolution: исправить mobile responsive regression, обновить visual design system, добавить Help Center, reusable Guided Tutorial system и optional TTS narration, не трогая PR #15/3D и TTS infrastructure.
+- **Важное ограничение workflow:** Arena-сессия технически закреплена за веткой `arena/01a0e2f3-aven`; отдельную branch создать нельзя без потери привязки сессии. Поэтому этап строится поверх ещё открытой #18 branch и должен быть указан как зависимый/следующий при PR-работе.
+- **Baseline перед работой:**
+  - `node prototype/tests/actions-core-check.js` → 18/18.
+  - `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js` → 232/232.
+  - `node prototype/tests/aven3d-viewer-check.js` → 43/43.
+  - `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` → 42/42.
+- **Что сделано:**
+  - **Responsive:** мобильная навигация переведена с широкой desktop-sidebar/горизонтальной прокрутки на compact header + drawer menu; все разделы остаются доступны, active item сохраняется, Escape/backdrop закрывают меню. Исправлены реальные причины overflow: fixed sidebar width на mobile, grid tracks без `minmax(0,1fr)`, flex children без `min-width:0`, calendar month cell sizing, nowrap controls/tabs, modal/forms/table overflow.
+  - **Design system:** обновлены tokens для light/dark, surfaces, radius, shadows, focus-visible, touch targets, button/input/card/dialog states; добавлен мягкий CSS ambient background без canvas/WebGL и с reduced-motion guard.
+  - **Female Aven presentation:** asset/изображение не менялись; улучшен только CSS presentation layer (glow/halo/shadow/state visuals вокруг hero), без lip-sync/morph/face animation.
+  - **Command bar:** визуально усилен главный ввод «Чем помочь?» как центральный command bar; существующая функциональность сохранена.
+  - **Help Center:** новый `#/help` (`prototype/js/help.js`) со статьями по старту, Главной, Задачам, Календарю, Дню, demo-командам, voice, FAQ, accessibility и troubleshooting; локальный client-side search по title/keywords/body.
+  - **Contextual help:** основные разделы (Главная/Задачи/Календарь/День/Help) получили единый блок `? Справка` + `▶ Обучение`.
+  - **Tutorial engine:** новый `prototype/js/tutorial.js` с декларативными definitions, overlay/popover, target highlight через `data-tour`, next/previous/skip/finish/close/restart, route-change cleanup, missing-target safe state и progress/completion в demo-state.
+  - **Tutorials:** добавлены туры для Главной, Задач, Календаря, Дня и Help; они объясняют existing UI/Common Actions и не создают отдельные tutorial copies данных.
+  - **TTS guidance:** optional voice guidance использует только существующий `AvenVoice`/`AvenTTS` frontend interface; есть ON/OFF, repeat, stop. При TTS failure/offline tutorial остаётся полноценным текстовым UI.
+- **Изменённые файлы:** `prototype/index.html`, `prototype/css/style.css`, `prototype/js/app.js`, `prototype/js/pages1.js`, `prototype/js/help.js`, `prototype/js/tutorial.js`, `prototype/tests/help-tutorial-check.js`, `docs/CHANGELOG.md`, `docs/MVP_SCOPE.md`, `docs/WORK_LOG.md`, `docs/FEATURES.md`, `docs/ARCHITECTURE.md`, `prototype/README.md`.
+- **Проверено:**
+  - `node --check` для изменённых и регрессионных JS/test файлов (`actions.js`, `tutorial.js`, `help.js`, `pages1.js`, `pages2.js`, `flows.js`, `data.js`, `ui.js`, `app.js`, `character.js`, `presence.js`, `actions-core-check.js`, `help-tutorial-check.js`, `stage1-proto-check.js`, `tts-proto-check.js`) — OK.
+  - `node prototype/tests/actions-core-check.js` → **18 проверок, 0 провалов**.
+  - `NODE_PATH=/tmp/lab/node_modules node prototype/tests/help-tutorial-check.js` → **33 проверки, 0 провалов** (Help route/search/contextual help, mobile nav, tutorial start/next/prev/skip/finish/restart/persistence, missing target, route cleanup, TTS on/off/error, mobile bottom sheet at 360/390/430).
+  - `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js` → **232 проверки, 0 провалов**.
+  - `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` → **42 проверки, 0 провалов**.
+  - `node prototype/tests/aven3d-viewer-check.js` → **43 проверки, 0 провалов**.
+  - Попытка Playwright browser install для screenshot/manual automation не удалась из-за `ECONNRESET` при скачивании Chromium; поэтому автоматический скриншотный review не зафиксирован, но добавлена static/jsdom responsive regression и live prototype остаётся обычной статикой.
+- **Не тронуто:** PR #15, 3D assets/viewer, Blender/Meshy/rig/morph/lip-sync/Female Aven image; TTS backend/Silero/Aigul/VPS/nginx/HTTPS/providers contract; production backend/DB/sync/NLP.
+- **Известные ограничения:** Help/Tutorial — UX-прототип; narration optional и не заменяет доступный текст; jsdom не измеряет реальный layout как Chrome, поэтому финальный mobile QA желательно подтвердить владельцу в Android/Chrome после PR.
+- **Рекомендуется далее:** после merge #18/#следующего PR — ручной Android/Chrome проход по 360–430px и затем выбирать следующий функциональный этап отдельно; не начинать новые модули без решения владельца.
+
+---
+
 ## 2026-09-27 — XXXVI. Common Actions + Задачи + Календарь + День
 
 - **Дата:** 2026-09-27 (новая coding-agent сессия; работа от актуального `origin/main` `bf893543ede14d68bb2430782a36c608c44065a0`).

@@ -2,7 +2,7 @@
 
 > **Статус:** проектная документация (design). Production-архитектура в стадии проектирования; `/prototype` — UX-прототип, не production-реализация. Стек — см. [DECISIONS.md](DECISIONS.md) (все технологические кандидаты — `Proposed`; `Under Discussion` на 2026-09-26 нет) и [PROJECT_PLAN.md](PROJECT_PLAN.md), раздел «Статус архитектуры»; материалы для решения по стеку — [STACK_RESEARCH.md](STACK_RESEARCH.md). ADR не является запретом на изменение архитектуры.
 > **Текущее направление:** Web-first ([ADR-013](DECISIONS.md), Product Direction) — первая полноценная реализация: самостоятельный полезный веб-сайт.
-> **Последнее обновление:** 2026-09-27
+> **Последнее обновление:** 2026-09-27 (UX/UI Help/Tutorial prototype pass)
 
 ---
 
@@ -61,6 +61,27 @@ Result → UI
 Отдельная бизнес-логика для UI, текста и голоса **не создаётся**: все пути ведут к одному Action/Use Case (пример — [FEATURES.md](FEATURES.md), раздел 2.7).
 
 Подробная декомпозиция Command Engine — [COMMAND_ENGINE.md](COMMAND_ENGINE.md); голосовой путь — [VOICE.md](VOICE.md).
+
+### 3.2. Help и Guided Tutorial (прототипное направление, не ADR)
+
+В `/prototype` добавлен отдельный reusable слой обучения:
+
+```
+Help Center / Contextual Help
+        ↓
+Tutorial Engine → declarative tutorial definitions → overlay/highlight/progress
+        ↓                                      ↓
+обычный UI path / Common Actions          optional existing TTS narration
+```
+
+Правила этого слоя:
+
+- обучение не создаёт отдельные task/event copies и не дублирует business logic;
+- если tutorial взаимодействует с сущностями, он ведёт пользователя через существующий UI и Common Action Layer;
+- голосовое сопровождение — optional adapter к существующему frontend TTS (`AvenVoice`/`AvenTTS`), а не новая voice infrastructure;
+- текст инструкции всегда остаётся основным, narration не заменяет доступный UI/screen-reader text.
+
+Это фиксирует направление UX-подсистемы прототипа, но не утверждает production framework.
 
 ## 4. Action Core
 

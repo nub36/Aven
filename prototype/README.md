@@ -57,6 +57,8 @@ prototype/
     │                     waiting/success/important): текст + классы glow/wave; НЕ state engine
     ├── voice.js        — AvenVoice.speak/stop (через AvenTTS) + экспериментальный STT SpeechRecognition
     ├── actions.js      — Common Action Layer для задач/событий (DOM-free, state → result/history)
+    ├── tutorial.js     — reusable Guided Tutorial engine (overlay, progress, optional existing TTS narration)
+    ├── help.js         — Help Center: статьи, локальный поиск, contextual help
     ├── tts/normalize.js — нормализация текста ТОЛЬКО для речи (числа, время, даты, деньги, единицы)
     ├── tts/providers.js — TTSProvider: System (speechSynthesis, fallback) + Natural (эксперимент)
     ├── flows.js        — демо state machine: многошаговая заправка, важное событие через actions
@@ -71,6 +73,7 @@ prototype/
 
 prototype/tests/
 ├── actions-core-check.js — проверки Common Action Layer без DOM/jsdom (18 проверок)
+├── help-tutorial-check.js — Help, mobile nav, responsive CSS assertions, Tutorial/TTS narration (33 проверки)
 ├── stage1-proto-check.js — проверки прототипа на срез Stage 1.0 (jsdom, 232 проверки; разработческий
 │                           инструмент, в репозитории нет package.json/node_modules — см. шапку файла)
 └── tts-proto-check.js    — голос Natural end-to-end (jsdom, 42 проверки сценариев A–J и нормализации: Главная →
@@ -139,6 +142,17 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 - **Метки этапов** — разделы меню и настроек, не входящие в срез 1.0, помечены бейджем
   («1.1», «Stage 2», «Stage 3», «Stage 4», «перспектива», «опция (ADR-014)») и показывают предупреждение:
   прототип проектирует весь UI, но не делает вид, что всё это войдёт в первый релиз ([ADR-010](../docs/DECISIONS.md)).
+
+**Одиннадцатая итерация (2026-09-27) — responsive + Help + guided tutorials** (MVP_SCOPE §5.10):
+
+- mobile responsive исправлен через реальные layout/shrink-правки: compact header + drawer navigation вместо попытки ужать desktop-sidebar, `min-width:0`, `minmax(0,1fr)`, wrapping controls, компактный Month calendar; `body { overflow-x:hidden }` не используется как основной fix;
+- visual system освежён: light/dark tokens, surfaces, radius/shadows, focus-visible, touch targets, buttons/inputs/cards/dialogs, мягкий CSS ambient background с `prefers-reduced-motion`;
+- Female Aven asset не менялся; улучшен только presentation layer вокруг hero (glow/halo/shadow/state visuals без lip-sync/morph/face animation);
+- добавлен раздел `#/help`: Help Center по существующим возможностям, FAQ, accessibility hints, troubleshooting и локальный search без AI;
+- добавлен reusable `js/tutorial.js`: декларативные tutorials, `data-tour` hooks, overlay/highlight, next/previous/skip/finish/restart, progress/completion в demo-state, missing-target safe state и cleanup при смене route;
+- tutorials покрывают Главную, Задачи, Календарь, День и Help; contextual help из основных разделов открывает нужную категорию Help и запуск обучения;
+- optional voice guidance использует только существующий `AvenVoice`/`AvenTTS`; TTS failure/offline не ломает текстовый tutorial UI;
+- проверка: `NODE_PATH=/tmp/lab/node_modules node prototype/tests/help-tutorial-check.js` — 33/33.
 
 **Десятая итерация (2026-09-27) — Common Actions + Задачи + Календарь + День** (MVP_SCOPE §5.3, §5.4, §5.7–5.9):
 
@@ -265,12 +279,13 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 «письмо отправлено». Настоящая аутентификация появится только после перевода стековых ADR в `Accepted`.
 
 **Проверка:** `node prototype/tests/actions-core-check.js` — **18 проверок Common Actions без DOM**;
+`NODE_PATH=/tmp/lab/node_modules node prototype/tests/help-tutorial-check.js` — **33 проверки Help/Tutorial/responsive/TTS narration**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js`
 (нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**.
 `stage1-proto-check.js` покрывает: меню и метки этапов, история с
 Undo/фильтрами/экспортом, все 8 разделов админки с подтверждениями и аудитом, тема, экраны аккаунта,
 роут-гард, сквозная история и настоящий Undo в задачах/заметках/финансах/авто/покупках/автоматизациях,
-Common Actions для задач/событий, фильтры задач по статусу/priority/tag, редактирование и архив задач, папки/архив/автосохранение заметок, фильтры и редактирование финансов со счётом,
+Common Actions для задач/событий, Help Center и reusable guided tutorials (отдельно в help-tutorial-check), фильтры задач по статусу/priority/tag, редактирование и архив задач, папки/архив/автосохранение заметок, фильтры и редактирование финансов со счётом,
 управление счетами/категориями, авто со связанными заправками/расходами/ТО, пересчётом финансов,
 документами и CSV, покупки/имущество со статусами, сервисом, фильтрами, CSV и связью с финансами,
 точность денег в копейках, экспорт всех данных и CSV, удаление аккаунта с повторной аутентификацией,

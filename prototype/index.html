@@ -13,6 +13,7 @@
     <aside class="sidebar" id="sidebar"></aside>
     <div class="main">
       <header class="topbar">
+        <button class="icon-btn mobile-menu-btn" id="mobile-menu-btn" data-action="menu-toggle" title="Открыть навигацию" aria-label="Открыть навигацию" aria-controls="sidebar" aria-expanded="false">☰</button>
         <div class="title" id="page-title">Aven</div>
         <span class="demo-badge">ДЕМО · ПРОТОТИП</span>
         <button class="icon-btn" id="theme-btn" data-action="theme-toggle" title="Тема: светлая / тёмная / как в системе">🌙</button>
@@ -22,6 +23,8 @@
       <main class="content" id="page"></main>
     </div>
   </div>
+
+  <button class="nav-backdrop" id="nav-backdrop" data-action="menu-close" aria-label="Закрыть навигацию"></button>
 
   <div id="aven-float-root"></div>
   <div id="modal-root"></div>
@@ -38,6 +41,8 @@
   <script src="js/tts/providers.js"></script>
   <script src="js/voice.js"></script>
   <script src="js/actions.js"></script>
+  <script src="js/tutorial.js"></script>
+  <script src="js/help.js"></script>
   <script src="js/flows.js"></script>
   <script src="js/pages1.js"></script>
   <script src="js/pages2.js"></script>

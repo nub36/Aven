@@ -13,6 +13,17 @@
 
 ## [Unreleased]
 
+### 2026-09-27 (XXXVII) — Прототип: responsive + design system + Help + guided tutorials
+
+- **Mobile responsive:** desktop sidebar больше не сжимается в горизонтальную ленту; на узких экранах появился compact header с drawer navigation. Исправления сделаны через реальные shrink-правки (`minmax(0,1fr)`, `min-width:0`, wrapping controls, compact Month calendar), а не через `body { overflow-x:hidden }`.
+- **Design system:** обновлены color tokens, surfaces, radius/shadows, focus-visible, touch targets, buttons/inputs/cards/dialogs, light/dark темы и мягкий CSS ambient background с `prefers-reduced-motion`.
+- **Female Aven presentation:** изображение/asset не менялись; улучшен только presentation layer — glow/halo/shadow и безопасные state visuals для existing presence states.
+- **Help Center:** добавлен раздел `#/help` со структурой по существующим возможностям, FAQ, keyboard/accessibility hints, troubleshooting и честными ограничениями; локальный поиск работает по статьям без AI.
+- **Contextual help:** основные разделы получили единый способ открыть справку по разделу и запустить обучение.
+- **Guided tutorials:** добавлен reusable `prototype/js/tutorial.js` с декларативными definitions, overlay/highlight, next/previous/skip/finish/restart, persistence progress/completion, missing-target safety и cleanup на route change. Tutorials покрывают Главную, Задачи, Календарь, День и Help.
+- **Optional voice guidance:** tutorial narration использует существующий `AvenVoice`/`AvenTTS` frontend interface; voice ON/OFF, repeat, stop. TTS failure/offline не ломает tutorial text UI. TTS infrastructure не менялась.
+- **Проверено:** `help-tutorial-check.js` — **33 проверки, 0 провалов**; существующие `actions-core-check.js`, `stage1-proto-check.js`, `tts-proto-check.js`, `aven3d-viewer-check.js` остаются зелёными.
+
 ### 2026-09-27 (XXXVI) — Прототип: Common Actions + Задачи + Календарь + День
 
 - **Добавлено (архитектурное направление прототипа):** тонкий `prototype/js/actions.js` — Common Action Layer для задач и событий. Он не зависит от DOM, работает над `AvenState`, возвращает структурированные результаты (`ok/action/entity` или `code`) и пишет History/Undo payload для существенных действий.

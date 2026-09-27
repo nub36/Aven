@@ -154,7 +154,7 @@
     const charOn = !!(window.AvenChar && !window.AvenChar.isOff() && window.AvenChar.current().id === 'female');
     const last = A._lastReply ? A.esc(A._lastReply) : 'Напишите команду — или нажмите на Aven справа.';
     const html = `
-    <div class="hero ${charOn ? '' : 'no-char'}" data-state="idle">
+    <div class="hero ${charOn ? '' : 'no-char'}" data-state="idle" data-tour="home-hero">
       <div class="hero-top">
         <h1>${A.esc(A.greeting())}, ${A.esc(st.profile.greeting)}</h1>
         <div class="hero-sign">Aven · ваш помощник · ${A.esc(cap(A.todayFull()))} · демо-данные</div>
@@ -163,7 +163,7 @@
 
       <div class="hero-interact">
         <div class="hero-ask">Чем помочь?</div>
-        <div class="cmdbar">
+        <div class="cmdbar" data-tour="command-bar">
           <input type="text" id="home-cmd" placeholder="Что сделать? Например: «Запиши 850 рублей на продукты» (демо)">
           <button class="icon-btn mic" data-action="home-mic" title="Голосовой ввод (экспериментально)">🎤</button>
           <button class="btn primary go" data-action="home-cmd-send" title="Отправить">→</button>
@@ -180,7 +180,7 @@
           ${upcoming ? `<span>Следующее: <b>${A.esc(upcoming.event.title)}</b> · ${A.esc(eventTime(upcoming.event))}</span>
           <span class="pill accent">${A.esc(dateLabel(upcoming.date))}</span>` : '<span>Ближайших событий нет</span><span class="pill">пусто</span>'}
         </div>
-        <div class="hero-links"><button class="btn small" data-action="go-assistant">Открыть Assistant →</button></div>
+        <div class="hero-links"><button class="btn small" data-action="go-assistant">Открыть Assistant →</button>${A.helpActions ? A.helpActions('home') : ''}</div>
       </div>
 
       ${charOn ? `
@@ -195,7 +195,7 @@
       </div>` : ''}
     </div>
 
-    <div class="home-grid">
+    <div class="home-grid" data-tour="home-summary">
       ${cards.today ? `
       <div class="card">
         <div class="head"><h3>Сегодня</h3><a href="#/day" class="btn small">День →</a></div>
@@ -259,7 +259,7 @@
       </div>` : ''}
 
       ${cards.quick ? `
-      <div class="card ${cards.today ? '' : 'span-2'}">
+      <div class="card ${cards.today ? '' : 'span-2'}" data-tour="quick-actions">
         <div class="head"><h3>Быстрые действия</h3></div>
         <div class="btn-row">
           <button class="btn" data-action="quick-expense">＋ Расход</button>
@@ -334,18 +334,19 @@
         <h1>День</h1>
         <div class="sub">${A.esc(dateLabel(iso))} · единые задачи/события из Common Actions · демо</div>
       </div>
-      <div class="btn-row">
+      <div class="btn-row" data-tour="day-actions">
         <button class="btn" data-action="day-add-event">＋ Событие на дату</button>
         <button class="btn" data-action="day-add-task">＋ Задача на дату</button>
+        ${A.helpActions ? A.helpActions('day') : ''}
       </div>
     </div>
-    <div class="tabs" id="day-tabs">
+    <div class="tabs" id="day-tabs" data-tour="day-date">
       <button class="tab ${dayTab === 'yesterday' ? 'active' : ''}" data-tab="yesterday">Вчера</button>
       <button class="tab ${dayTab === 'today' ? 'active' : ''}" data-tab="today">Сегодня</button>
       <button class="tab ${dayTab === 'tomorrow' ? 'active' : ''}" data-tab="tomorrow">Завтра</button>
       <button class="tab ${dayTab === 'custom' ? 'active' : ''}" data-tab="custom">Выбранная дата</button>
     </div>
-    <div class="card day-tools">
+    <div class="card day-tools" data-tour="day-summary">
       <div class="field-row">
         <label class="field"><span>Дата дня</span><input type="date" data-action="day-date" value="${A.esc(iso)}" aria-label="Выбрать дату раздела День"></label>
         <div class="field"><span>Краткая сводка</span><div class="btn-row">${summary.map((x, i) => `<span class="pill ${i === 3 && overdue.length ? 'warn' : i === 2 ? 'ok' : ''}">${A.esc(x)}</span>`).join('')}</div></div>
@@ -353,7 +354,7 @@
       <div class="s" style="color:var(--muted);font-size:.82rem">Напоминания здесь — только metadata. Web-прототип не обещает фоновые уведомления, если браузер закрыт.</div>
     </div>
     <div class="grid cols-2" style="margin-top:16px">
-      <div class="card">
+      <div class="card" data-tour="day-timeline">
         <div class="head"><h3>Timeline</h3>${next.ok ? `<span class="pill accent">следующее: ${A.esc(next.item.event.title)} · ${A.esc(dateLabel(next.item.date))}</span>` : '<span class="pill">нет ближайших событий</span>'}</div>
         ${timeline.length ? `<div class="timeline">${timeline.map((i) => `
           <div class="tl-item ${i.type}">
@@ -366,7 +367,7 @@
         ${dayNotes.length ? dayNotes.map((n) => `
           <div class="row-item"><span class="time">📝</span><div class="grow"><div class="t">${n.pinned ? '📌 ' : ''}${A.esc(n.title)}</div><div class="s">${A.esc(n.folder)}</div></div></div>`).join('') : '<div class="empty">В этот день заметок не меняли</div>'}
       </div>
-      <div class="card">
+      <div class="card" data-tour="day-tasks">
         <h3>Задачи на дату</h3>
         ${dayTasks.length ? dayTasks.map((t) => `
           <div class="check-row ${taskDone(t) ? 'done' : ''}" data-action="toggle-task" data-id="${A.esc(t.id)}">
@@ -385,7 +386,7 @@
         ${!completedTasks.length && !doneActions.length ? '<div class="empty">Пока ничего</div>' : ''}
       </div>
     </div>
-    <div class="card" style="margin-top:16px">
+    <div class="card" style="margin-top:16px" data-tour="day-attention">
       <div class="head"><h3>Требует внимания</h3><span class="pill">расчёт по текущим данным</span></div>
       ${attention.length ? `<div class="grid cols-3">${attention.map((i) => `
         <div class="row-item"><span class="time">${A.esc(i.icon)}</span><div class="grow"><div class="t">${A.esc(i.title)}</div><div class="s">${A.esc(i.sub)}</div></div><span class="pill ${i.cls}">${i.href === '#/tasks' ? 'задачи' : i.href === '#/auto' ? 'авто' : 'покупки'}</span></div>`).join('')}</div>` : '<div class="empty">Просроченных задач, истекающих документов и гарантий нет</div>'}
@@ -403,7 +404,7 @@
   }
   function eventChip(e, iso) {
     const rep = repeatLabel(e);
-    return `<div class="cal-ev ${importanceClass(e.importance)}" data-action="cal-event" data-id="${A.esc(e.id)}" data-date="${A.esc(iso)}" title="${A.esc(e.title)}">
+    return `<div class="cal-ev ${importanceClass(e.importance)}" data-tour="calendar-event-actions" data-action="cal-event" data-id="${A.esc(e.id)}" data-date="${A.esc(iso)}" title="${A.esc(e.title)}">
       ${A.esc(eventTime(e))} ${rep ? '↻ ' : ''}${A.esc(e.title)}
     </div>`;
   }
@@ -482,15 +483,15 @@
     const html = `
     <div class="page-head">
       <div><h1>Календарь</h1><div class="sub">Месяц / Agenda / неделя / день · события через Common Actions · без ассистента</div></div>
-      <button class="btn primary" data-action="cal-add">＋ Событие</button>
+      <div class="btn-row"><button class="btn primary" data-action="cal-add" data-tour="calendar-create">＋ Событие</button>${A.helpActions ? A.helpActions('calendar') : ''}</div>
     </div>
-    <div class="tabs" id="cal-tabs">
+    <div class="tabs" id="cal-tabs" data-tour="calendar-views">
       <button class="tab ${calView === 'month' ? 'active' : ''}" data-tab="month">Месяц</button>
       <button class="tab ${calView === 'agenda' ? 'active' : ''}" data-tab="agenda">Agenda</button>
       <button class="tab ${calView === 'week' ? 'active' : ''}" data-tab="week">Неделя</button>
       <button class="tab ${calView === 'day' ? 'active' : ''}" data-tab="day">День</button>
     </div>
-    <div class="card">
+    <div class="card" data-tour="calendar-board">
       <div class="cal-head">
         <button class="btn small" data-action="cal-prev">←</button>
         <div><b style="text-transform:capitalize">${A.esc(monthName)}</b><div class="s" style="color:var(--muted);font-size:.8rem">Выбранный день: ${A.esc(humanDate(calSelected))}</div></div>
@@ -535,9 +536,9 @@
     const html = `
     <div class="page-head">
       <div><h1>Задачи</h1><div class="sub">Создание · редактирование · выполнение/возврат · дедлайны · теги · Common Actions</div></div>
-      <button class="btn primary" data-action="task-add">＋ Новая задача</button>
+      <div class="btn-row"><button class="btn primary" data-action="task-add" data-tour="task-create">＋ Новая задача</button>${A.helpActions ? A.helpActions('tasks') : ''}</div>
     </div>
-    <div class="tabs" id="task-tabs">
+    <div class="tabs" id="task-tabs" data-tour="task-tabs">
       <button class="tab ${taskFilter === 'active' ? 'active' : ''}" data-tab="active">Активные <span class="cnt">${counts.active}</span></button>
       <button class="tab ${taskFilter === 'today' ? 'active' : ''}" data-tab="today">Сегодня <span class="cnt">${counts.today}</span></button>
       <button class="tab ${taskFilter === 'upcoming' ? 'active' : ''}" data-tab="upcoming">Предстоящие <span class="cnt">${counts.upcoming}</span></button>
@@ -545,7 +546,7 @@
       <button class="tab ${taskFilter === 'completed' ? 'active' : ''}" data-tab="completed">Выполненные <span class="cnt">${counts.completed}</span></button>
       <button class="tab ${taskFilter === 'archive' ? 'active' : ''}" data-tab="archive">Архив <span class="cnt">${counts.archive}</span></button>
     </div>
-    <div class="card task-filters">
+    <div class="card task-filters" data-tour="task-filters">
       <div class="field-row">
         <label class="field grow"><span>Поиск</span><input type="search" id="task-q" value="${A.esc(taskQuery)}" placeholder="Название, описание, проект, тег…"></label>
         <label class="field"><span>Проект</span><select data-action="task-project-filter">
@@ -563,7 +564,7 @@
       </div>
       <div class="s" style="color:var(--muted);font-size:.8rem">Фильтры и поиск не пишутся в историю. История фиксирует только существенные действия: create/update/complete/reopen/delete.</div>
     </div>
-    <div class="card task-card">
+    <div class="card task-card" data-tour="task-list">
       ${list.length ? `<div class="task-list">${list.map((t) => `
       <div class="check-row task-row ${taskDone(t) ? 'done' : ''} ${t.archived ? 'archived' : ''}" data-action="toggle-task" data-id="${A.esc(t.id)}">
         <input type="checkbox" ${taskDone(t) ? 'checked' : ''} ${t.archived ? 'disabled' : ''} aria-label="${taskDone(t) ? 'Вернуть задачу' : 'Выполнить задачу'}: ${A.esc(t.title)}">

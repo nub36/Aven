@@ -13,7 +13,8 @@
       { id: 'finance', icon: '💰', label: 'Финансы', mod: 'finance' },
       { id: 'auto', icon: '🚗', label: 'Авто', mod: 'auto' },
       { id: 'shopping', icon: '🛍️', label: 'Покупки', mod: 'shopping' },
-      { id: 'tools', icon: '🧰', label: 'Инструменты', mod: 'tools' }
+      { id: 'tools', icon: '🧰', label: 'Инструменты', mod: 'tools' },
+      { id: 'help', icon: '❓', label: 'Помощь' }
     ]},
     { group: 'Ассистент и автоматизации', items: [
       { id: 'assistant', icon: '🤖', label: 'Aven Assistant', stage: 'Stage 2' },
@@ -32,7 +33,7 @@
 
   const TITLES = {
     home: 'Главная', day: 'День', calendar: 'Календарь', tasks: 'Задачи', notes: 'Заметки',
-    finance: 'Финансы', auto: 'Авто', shopping: 'Покупки / Имущество', tools: 'Инструменты',
+    finance: 'Финансы', auto: 'Авто', shopping: 'Покупки / Имущество', tools: 'Инструменты', help: 'Помощь',
     assistant: 'Aven Assistant', automation: 'Автоматизации', settings: 'Настройки', profile: 'Профиль',
     history: 'История действий', admin: 'Админка',
     login: 'Вход', register: 'Регистрация', recovery: 'Восстановление доступа'
@@ -54,7 +55,7 @@
   function buildSidebar(current) {
     const mods = S.s().settings.modules;
     let html = `
-      <div class="side-logo"><div class="logo-mark">A</div><span>Aven <span style="color:var(--muted);font-size:.7rem;font-weight:500">prototype</span></span></div>
+      <div class="side-logo"><div class="logo-mark">A</div><span>Aven <span style="color:var(--muted);font-size:.7rem;font-weight:500">prototype</span></span><button class="icon-btn nav-close" data-action="menu-close" aria-label="Закрыть навигацию">✕</button></div>
       <div class="side-scroll">`;
     NAV.forEach((g) => {
       if (g.bottom) return; // нижняя группа рисуется отдельно, в .side-bottom
@@ -110,6 +111,9 @@
     const authMode = !!AUTH[cur];
     document.body.classList.toggle('auth-mode', authMode);
     document.body.classList.toggle('assistant-mode', !authMode && cur === 'assistant');
+    document.body.classList.remove('nav-open');
+    const menuBtn = document.getElementById('mobile-menu-btn');
+    if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
     main.innerHTML = out.html;
     if (window.AvenPresence) { try { window.AvenPresence.apply(); } catch (e) { /* демо */ } }
     if (!authMode) document.getElementById('sidebar').innerHTML = buildSidebar(cur);
@@ -155,8 +159,20 @@
   });
 
   /* кнопки топбара и навигация */
+  function setMobileMenu(open) {
+    document.body.classList.toggle('nav-open', !!open);
+    const btn = document.getElementById('mobile-menu-btn');
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+      const first = document.querySelector('#sidebar .nav-item.active') || document.querySelector('#sidebar .nav-item');
+      try { first && first.focus(); } catch (e) { /* noop */ }
+    }
+  }
+
   A.register({
-    'nav': (el) => { location.hash = '#/' + el.dataset.id; },
+    'nav': (el) => { setMobileMenu(false); location.hash = '#/' + el.dataset.id; },
+    'menu-toggle': () => setMobileMenu(!document.body.classList.contains('nav-open')),
+    'menu-close': () => setMobileMenu(false),
     'theme-toggle': () => {
       const st = S.s();
       // переключение задаёт явную тему ( light ⇄ dark ), уходя от «как в системе»
@@ -176,6 +192,10 @@
       else if (mq.addListener) mq.addListener(onSys);
     }
   } catch (e) { /* демо: matchMedia может отсутствовать */ }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.body.classList.contains('nav-open')) setMobileMenu(false);
+  });
 
   window.addEventListener('hashchange', () => {
     if (route() !== 'assistant') A._chat = A._chat; // история чата сохраняется в рамках сессии
