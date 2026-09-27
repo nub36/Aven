@@ -664,11 +664,6 @@ html[data-theme="dark"] .cal-ev { color: var(--accent-strong); }
   .shop-grid { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 860px) {
-  .app { flex-direction: column; }
-  .sidebar { position: static; width: 100%; flex: none; height: auto; flex-direction: row; align-items: center; overflow-x: auto; }
-  .side-scroll { display: flex; padding: 6px; }
-  .side-group, .side-bottom { display: none; }
-  .nav-item { white-space: nowrap; width: auto; }
   .notes-layout, .set-layout { grid-template-columns: 1fr; }
   .set-nav { position: static; flex-direction: row; overflow-x: auto; }
   .cols-2, .cols-3, .home-grid, .shop-grid, .tools-grid, .cols-4 { grid-template-columns: 1fr; }
@@ -1008,9 +1003,16 @@ body.nav-open .nav-backdrop { opacity: 1; animation: backdrop-in .22s ease both;
     transform: translate3d(calc(-100% - 24px), 0, 0);
     transition: transform .28s cubic-bezier(.2,.75,.25,1);
     z-index: 120;
+    display: flex;
     flex-direction: column;
     align-items: stretch;
-    overflow: hidden;
+    /* Один понятный вертикальный скролл на весь drawer: сама панель прокручивается,
+       поэтому ни одна группа навигации не обрезается и все пункты достижимы.
+       Внутренних вложенных скролл-контейнеров нет (без nested-scroll trap). */
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
     box-shadow: var(--shadow-lg);
   }
   body.nav-open .sidebar { transform: translateX(0); }
@@ -1021,10 +1023,11 @@ body.nav-open .nav-backdrop { opacity: 1; animation: backdrop-in .22s ease both;
   }
   body.nav-open .nav-backdrop { display: block; }
   .nav-close { display: inline-flex; margin-left: auto; width: 38px; height: 38px; flex: 0 0 38px; }
-  .side-logo { padding: 14px; }
-  .side-scroll { display: block; min-height: 0; padding: 4px 10px 10px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
+  .side-logo { position: sticky; top: 0; z-index: 1; padding: 14px; background: var(--panel); }
+  /* .side-scroll и .side-bottom просто перетекают внутри общего скролла панели */
+  .side-scroll { display: block; flex: 0 0 auto; min-height: 0; padding: 4px 10px 10px; overflow: visible; }
   .side-group { display: block; }
-  .side-bottom { display: block; flex: 0 0 auto; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+  .side-bottom { display: block; flex: 0 0 auto; border-top: 1px solid var(--border); margin-top: 2px; padding-bottom: max(14px, env(safe-area-inset-bottom)); }
   .nav-item { width: 100%; white-space: normal; min-height: 44px; }
   .content { width: 100%; max-width: 100%; padding: 14px; }
   .page-head { gap: 10px; }
