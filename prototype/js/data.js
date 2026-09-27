@@ -1,11 +1,13 @@
 /* Aven — Visual Prototype. Демо-данные (явно тестовые). Не production. */
 window.AvenDemo = (function () {
+  // Фиксированная «сегодняшняя» дата прототипа: тесты и демо-сценарии должны быть воспроизводимыми.
+  const DEMO_TODAY = '2026-09-27';
 
   function demoState() {
     const pad = (n) => String(n).padStart(2, '0');
     const iso = (offset) => {
-      const d = new Date();
-      d.setHours(12, 0, 0, 0);
+      const p = DEMO_TODAY.split('-').map(Number);
+      const d = new Date(p[0], p[1] - 1, p[2], 12, 0, 0, 0);
       d.setDate(d.getDate() + offset);
       return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
     };
@@ -76,11 +78,26 @@ window.AvenDemo = (function () {
       },
 
       tasks: [
-        { id: 't1', title: 'Забрать документы', desc: 'Готовность подтвердили вчера', date: 'today', dueDate: today, dueTime: '18:00', prio: 'высокий', project: 'Личное', done: false, archived: false },
-        { id: 't2', title: 'Купить фильтр', desc: 'Воздушный фильтр для BMW', date: 'soon', dueDate: tomorrow, dueTime: '', prio: 'средний', project: 'Авто', done: false, archived: false },
-        { id: 't3', title: 'Оплатить интернет', desc: '', date: 'today', dueDate: today, dueTime: '20:00', prio: 'низкий', project: 'Дом', done: true, archived: false },
-        { id: 't4', title: 'Записаться к стоматологу на чистку', desc: '', date: 'soon', dueDate: iso(4), dueTime: '', prio: 'средний', project: 'Здоровье', done: false, archived: false },
-        { id: 't5', title: 'Позвонить в сервис по гарантии телефона', desc: '', date: 'soon', dueDate: iso(2), dueTime: '12:00', prio: 'низкий', project: 'Покупки', done: false, archived: false }
+        { id: 't1', title: 'Забрать документы', description: 'Готовность подтвердили вчера', desc: 'Готовность подтвердили вчера',
+          date: today, time: '18:00', deadline: today, dueDate: today, dueTime: '18:00',
+          priority: 'высокий', prio: 'высокий', project: 'Личное', tags: ['документы', 'личное'],
+          completed: false, done: false, status: 'active', archived: false, reminder: { value: '1h', minutesBefore: 60, delivery: 'prototype-only' } },
+        { id: 't2', title: 'Купить фильтр', description: 'Воздушный фильтр для BMW', desc: 'Воздушный фильтр для BMW',
+          date: tomorrow, time: '', deadline: tomorrow, dueDate: tomorrow, dueTime: '',
+          priority: 'средний', prio: 'средний', project: 'Авто', tags: ['авто', 'покупки'],
+          completed: false, done: false, status: 'active', archived: false, reminder: null },
+        { id: 't3', title: 'Оплатить интернет', description: '', desc: '',
+          date: today, time: '20:00', deadline: today, dueDate: today, dueTime: '20:00',
+          priority: 'низкий', prio: 'низкий', project: 'Дом', tags: ['дом', 'платёж'],
+          completed: true, done: true, status: 'completed', archived: false, reminder: null },
+        { id: 't4', title: 'Записаться к стоматологу на чистку', description: '', desc: '',
+          date: iso(4), time: '', deadline: iso(4), dueDate: iso(4), dueTime: '',
+          priority: 'средний', prio: 'средний', project: 'Здоровье', tags: ['здоровье'],
+          completed: false, done: false, status: 'active', archived: false, reminder: null },
+        { id: 't5', title: 'Позвонить в сервис по гарантии телефона', description: '', desc: '',
+          date: iso(2), time: '12:00', deadline: iso(2), dueDate: iso(2), dueTime: '12:00',
+          priority: 'низкий', prio: 'низкий', project: 'Покупки', tags: ['покупки', 'гарантия'],
+          completed: false, done: false, status: 'active', archived: false, reminder: { value: '15m', minutesBefore: 15, delivery: 'prototype-only' } }
       ],
 
       noteFolders: ['Личное', 'Авто', 'Дом', 'Документы', 'Идеи'],
@@ -111,26 +128,26 @@ window.AvenDemo = (function () {
          Это нужно для связанной петли Stage 1.0: создать событие → увидеть в Календаре, Дне,
          Главной и Истории → удалить/отменить через Undo (MVP_SCOPE §5.4, §5.7, §5.8, §5.9). */
       events: [
-        { id: 'e1', title: 'Бассейн', date: yesterday, time: '08:00', end: '09:00', allDay: false,
-          place: 'Фитнес-клуб', importance: 'обычная', repeat: 'none', desc: '' },
-        { id: 'e2', title: 'Обед с Максимом', date: yesterday, time: '13:00', end: '14:00', allDay: false,
-          place: 'Кафе у офиса', importance: 'обычная', repeat: 'none', desc: '' },
-        { id: 'e3', title: 'Стоматолог', date: today, time: '10:00', end: '11:00', allDay: false,
-          place: 'Клиника', importance: 'важное', repeat: 'none', desc: 'Проверка и план лечения' },
-        { id: 'e4', title: 'Забрать посылку', date: today, time: '14:00', end: '14:30', allDay: false,
-          place: 'Пункт выдачи', importance: 'обычная', repeat: 'none', desc: '' },
-        { id: 'e5', title: 'Планёрка', date: tomorrow, time: '10:00', end: '10:45', allDay: false,
-          place: 'Онлайн', importance: 'обычная', repeat: 'weekly', desc: 'Повторяется еженедельно (демо)' },
-        { id: 'e6', title: 'Спортзал', date: tomorrow, time: '18:30', end: '20:00', allDay: false,
-          place: 'Зал', importance: 'обычная', repeat: 'none', desc: '' },
-        { id: 'e7', title: 'День рождения Сергея', date: iso(-24), time: '', end: '', allDay: true,
-          place: '', importance: 'важное', repeat: 'yearly', desc: 'Демо: ежегодное событие' },
-        { id: 'e8', title: 'Замена масла (выполнено)', date: iso(-15), time: '13:00', end: '14:30', allDay: false,
-          place: 'Автосервис', importance: 'обычная', repeat: 'none', desc: 'Связь с авто — в 1.1' },
-        { id: 'e9', title: 'Техосмотр', date: iso(1), time: '11:00', end: '12:00', allDay: false,
-          place: 'Сервис', importance: 'важное', repeat: 'none', desc: 'Документы авто' },
-        { id: 'e10', title: 'Оплата интернета', date: iso(3), time: '09:00', end: '09:10', allDay: false,
-          place: '', importance: 'обычная', repeat: 'monthly', desc: 'Демо: ежемесячное событие' }
+        { id: 'e1', title: 'Бассейн', date: yesterday, startTime: '08:00', endTime: '09:00', time: '08:00', end: '09:00', allDay: false,
+          place: 'Фитнес-клуб', category: 'Здоровье', color: '#17966b', importance: 'обычная', repeat: 'none', reminder: null, description: '', desc: '' },
+        { id: 'e2', title: 'Обед с Максимом', date: yesterday, startTime: '13:00', endTime: '14:00', time: '13:00', end: '14:00', allDay: false,
+          place: 'Кафе у офиса', category: 'Личное', color: '#5a5fd8', importance: 'обычная', repeat: 'none', reminder: null, description: '', desc: '' },
+        { id: 'e3', title: 'Стоматолог', date: today, startTime: '10:00', endTime: '11:00', time: '10:00', end: '11:00', allDay: false,
+          place: 'Клиника', category: 'Здоровье', color: '#b26a00', importance: 'важное', repeat: 'none', reminder: { value: '1h', minutesBefore: 60, delivery: 'prototype-only' }, description: 'Проверка и план лечения', desc: 'Проверка и план лечения' },
+        { id: 'e4', title: 'Забрать посылку', date: today, startTime: '14:00', endTime: '14:30', time: '14:00', end: '14:30', allDay: false,
+          place: 'Пункт выдачи', category: 'Дом', color: '#5a5fd8', importance: 'обычная', repeat: 'none', reminder: { value: '15m', minutesBefore: 15, delivery: 'prototype-only' }, description: '', desc: '' },
+        { id: 'e5', title: 'Планёрка', date: tomorrow, startTime: '10:00', endTime: '10:45', time: '10:00', end: '10:45', allDay: false,
+          place: 'Онлайн', category: 'Работа', color: '#4a7cf0', importance: 'обычная', repeat: 'weekly', reminder: null, description: 'Повторяется еженедельно (демо)', desc: 'Повторяется еженедельно (демо)' },
+        { id: 'e6', title: 'Спортзал', date: tomorrow, startTime: '18:30', endTime: '20:00', time: '18:30', end: '20:00', allDay: false,
+          place: 'Зал', category: 'Здоровье', color: '#17966b', importance: 'обычная', repeat: 'none', reminder: null, description: '', desc: '' },
+        { id: 'e7', title: 'День рождения Сергея', date: iso(-24), startTime: '', endTime: '', time: '', end: '', allDay: true,
+          place: '', category: 'Личное', color: '#e05a7a', importance: 'важное', repeat: 'yearly', reminder: { value: '1d', minutesBefore: 1440, delivery: 'prototype-only' }, description: 'Демо: ежегодное событие', desc: 'Демо: ежегодное событие' },
+        { id: 'e8', title: 'Замена масла (выполнено)', date: iso(-15), startTime: '13:00', endTime: '14:30', time: '13:00', end: '14:30', allDay: false,
+          place: 'Автосервис', category: 'Авто', color: '#b26a00', importance: 'обычная', repeat: 'none', reminder: null, description: 'Связь с авто — в 1.1', desc: 'Связь с авто — в 1.1' },
+        { id: 'e9', title: 'Техосмотр', date: iso(1), startTime: '11:00', endTime: '12:00', time: '11:00', end: '12:00', allDay: false,
+          place: 'Сервис', category: 'Авто', color: '#b26a00', importance: 'важное', repeat: 'none', reminder: { value: '1d', minutesBefore: 1440, delivery: 'prototype-only' }, description: 'Документы авто', desc: 'Документы авто' },
+        { id: 'e10', title: 'Оплата интернета', date: iso(3), startTime: '09:00', endTime: '09:10', time: '09:00', end: '09:10', allDay: false,
+          place: '', category: 'Дом', color: '#5a5fd8', importance: 'обычная', repeat: 'monthly', reminder: null, description: 'Демо: ежемесячное событие', desc: 'Демо: ежемесячное событие' }
       ],
 
       ops: [
@@ -386,5 +403,13 @@ window.AvenDemo = (function () {
     automationTemplates: ['Утренний обзор', 'Вечернее планирование', 'Контроль расходов', 'Автомобиль', 'Страховка', 'Регулярные платежи']
   };
 
-  return { demoState, staticData };
+  function todayISO(offset) {
+    const pad = (n) => String(n).padStart(2, '0');
+    const p = DEMO_TODAY.split('-').map(Number);
+    const d = new Date(p[0], p[1] - 1, p[2], 12, 0, 0, 0);
+    d.setDate(d.getDate() + (offset || 0));
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  return { demoState, staticData, todayISO, demoTodayISO: DEMO_TODAY };
 })();

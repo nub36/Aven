@@ -56,9 +56,12 @@ prototype/
     ├── presence.js     — отображение состояния Aven (idle/listening/thinking/speaking/
     │                     waiting/success/important): текст + классы glow/wave; НЕ state engine
     ├── voice.js        — AvenVoice.speak/stop (через AvenTTS) + экспериментальный STT SpeechRecognition
+    ├── actions.js      — Common Action Layer для задач/событий (DOM-free, state → result/history)
+    ├── tutorial.js     — reusable Guided Tutorial engine (overlay, progress, optional existing TTS narration)
+    ├── help.js         — Help Center: статьи, локальный поиск, contextual help
     ├── tts/normalize.js — нормализация текста ТОЛЬКО для речи (числа, время, даты, деньги, единицы)
     ├── tts/providers.js — TTSProvider: System (speechSynthesis, fallback) + Natural (эксперимент)
-    ├── flows.js        — демо state machine: многошаговая заправка, важное событие
+    ├── flows.js        — демо state machine: многошаговая заправка, важное событие через actions
     ├── pages1.js       — Главная (hero с Female Aven), День, Календарь, Задачи, Заметки
     ├── pages2.js       — Финансы, Авто, Покупки, Автоматизации, Assistant (+персонаж/STT)
     ├── tools.js        — Инструменты (часть функций реально работает)
@@ -69,7 +72,9 @@ prototype/
     └── app.js          — роутер (hash), меню, тема (светлая/тёмная/как в системе), роут-гард аккаунта
 
 prototype/tests/
-├── stage1-proto-check.js — проверки прототипа на срез Stage 1.0 (jsdom, 219 проверок; разработческий
+├── actions-core-check.js — проверки Common Action Layer без DOM/jsdom (18 проверок)
+├── help-tutorial-check.js — Help, mobile nav, responsive CSS assertions, Tutorial/TTS narration (33 проверки)
+├── stage1-proto-check.js — проверки прототипа на срез Stage 1.0 (jsdom, 232 проверки; разработческий
 │                           инструмент, в репозитории нет package.json/node_modules — см. шапку файла)
 └── tts-proto-check.js    — голос Natural end-to-end (jsdom, 42 проверки сценариев A–J и нормализации: Главная →
                             normalize → контракт сервера → воспроизведение → состояния → честный fallback)
@@ -137,6 +142,28 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 - **Метки этапов** — разделы меню и настроек, не входящие в срез 1.0, помечены бейджем
   («1.1», «Stage 2», «Stage 3», «Stage 4», «перспектива», «опция (ADR-014)») и показывают предупреждение:
   прототип проектирует весь UI, но не делает вид, что всё это войдёт в первый релиз ([ADR-010](../docs/DECISIONS.md)).
+
+**Одиннадцатая итерация (2026-09-27) — responsive + Help + guided tutorials** (MVP_SCOPE §5.10):
+
+- mobile responsive исправлен через реальные layout/shrink-правки: compact header + drawer navigation вместо попытки ужать desktop-sidebar, `min-width:0`, `minmax(0,1fr)`, wrapping controls, компактный Month calendar; `body { overflow-x:hidden }` не используется как основной fix;
+- visual system освежён: light/dark tokens, surfaces, radius/shadows, focus-visible, touch targets, buttons/inputs/cards/dialogs, мягкий CSS ambient background с `prefers-reduced-motion`;
+- Female Aven asset не менялся; улучшен только presentation layer вокруг hero (glow/halo/shadow/state visuals без lip-sync/morph/face animation);
+- добавлен раздел `#/help`: Help Center по существующим возможностям, FAQ, accessibility hints, troubleshooting и локальный search без AI;
+- добавлен reusable `js/tutorial.js`: декларативные tutorials, `data-tour` hooks, overlay/highlight, next/previous/skip/finish/restart, progress/completion в demo-state, missing-target safe state и cleanup при смене route;
+- tutorials покрывают Главную, Задачи, Календарь, День и Help; contextual help из основных разделов открывает нужную категорию Help и запуск обучения;
+- optional voice guidance использует только существующий `AvenVoice`/`AvenTTS`; TTS failure/offline не ломает текстовый tutorial UI;
+- проверка: `NODE_PATH=/tmp/lab/node_modules node prototype/tests/help-tutorial-check.js` — 33/33.
+
+**Десятая итерация (2026-09-27) — Common Actions + Задачи + Календарь + День** (MVP_SCOPE §5.3, §5.4, §5.7–5.9):
+
+- добавлен `js/actions.js` — тонкий Common Action Layer для `tasks` и `events`: функции create/update/complete/reopen/delete/get работают над `AvenState`, не используют DOM, возвращают structured result и пишут History/Undo payload;
+- раздел `#/tasks` вызывает эти actions для создания, редактирования, удаления, выполнения и возврата задачи; форма получила ISO `date`, `time`, `deadline`, `priority`, `tags`, `completed/status`, reminder metadata; фильтры: активные / сегодня / предстоящие / просроченные / выполненные / архив + search/priority/tag/project;
+- `#/calendar` вызывает `event.*` actions, хранит `startTime/endTime`, `category/color`, reminder metadata и получил Agenda/List представление помимо месяца/недели/дня;
+- `#/day` использует те же getters/actions: выбранная дата (datepicker), задачи/события дня, просроченные, выполненное, ближайшее событие, сводка, создание задач/событий на выбранную дату, выполнение/возврат задач и открытие карточек;
+- Главная продолжает читать общие task/event getters; Assistant demo-flow «Важное событие» вызывает `createEvent(...)`, а ответы «Что у меня завтра/сегодня?» и «Какие задачи просрочены?» берут данные из общего state;
+- demo-state использует фиксированную дату прототипа `2026-09-27`, чтобы «сегодня/завтра/просрочено» и regression-тесты были воспроизводимыми;
+- reminder metadata хранится честно, но прототип не обещает фоновые уведомления при закрытом браузере;
+- проверка: `node prototype/tests/actions-core-check.js` — 18/18, `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js` — 232/232.
 
 **Девятая итерация (2026-09-27) — Главная и День: честные агрегаторы из реальных данных** (MVP_SCOPE §5.7, §5.8, §10.1):
 
@@ -251,15 +278,18 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 открытый вопрос №16), поэтому экран восстановления честно сообщает об ограничении вместо имитации
 «письмо отправлено». Настоящая аутентификация появится только после перевода стековых ADR в `Accepted`.
 
-**Проверка:** `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js`
-(нужен `npm install jsdom@30` во временном каталоге) — **219 проверок**: меню и метки этапов, история с
+**Проверка:** `node prototype/tests/actions-core-check.js` — **18 проверок Common Actions без DOM**;
+`NODE_PATH=/tmp/lab/node_modules node prototype/tests/help-tutorial-check.js` — **33 проверки Help/Tutorial/responsive/TTS narration**;
+`NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js`
+(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**.
+`stage1-proto-check.js` покрывает: меню и метки этапов, история с
 Undo/фильтрами/экспортом, все 8 разделов админки с подтверждениями и аудитом, тема, экраны аккаунта,
 роут-гард, сквозная история и настоящий Undo в задачах/заметках/финансах/авто/покупках/автоматизациях,
-редактирование и архив задач, папки/архив/автосохранение заметок, фильтры и редактирование финансов со счётом,
+Common Actions для задач/событий, Help Center и reusable guided tutorials (отдельно в help-tutorial-check), фильтры задач по статусу/priority/tag, редактирование и архив задач, папки/архив/автосохранение заметок, фильтры и редактирование финансов со счётом,
 управление счетами/категориями, авто со связанными заправками/расходами/ТО, пересчётом финансов,
 документами и CSV, покупки/имущество со статусами, сервисом, фильтрами, CSV и связью с финансами,
 точность денег в копейках, экспорт всех данных и CSV, удаление аккаунта с повторной аутентификацией,
-события календаря как связанная петля «Календарь → День → Главная → История/Undo», честные агрегаторы
+события календаря как связанная петля «Календарь/Agenda → День → Главная → История/Undo», честные агрегаторы
 Главной и Дня (карточки «Расходы»/«Задачи»/«Автомобиль» из данных, «Гарантии»/«Заметки» с переключателями,
 «Требует внимания» и заметки дня, маскирование карточек и пунктов внимания у выключенных модулей)
 и регрессия прежних страниц.
@@ -291,7 +321,7 @@ Undo/фильтрами/экспортом, все 8 разделов админ
 2. В левом меню выбрать **Pages** (раздел «Code and automation»).
 3. В блоке **Build and deployment → Source** выбрать **GitHub Actions** (не «Deploy from a branch»).
 4. Запустить деплой:
-   - вкладка **Actions** → слева **Prototype Pages** → **Run workflow** → выбрать ветку (`arena/01a0d7ec-aven` или `main`) → **Run workflow**;
+   - вкладка **Actions** → слева **Prototype Pages** → **Run workflow** → выбрать нужную ветку (например, рабочую PR-ветку или `main`) → **Run workflow**;
    - либо просто дождаться/сделать push с изменениями в `prototype/**` в эти ветки — workflow сработает автоматически.
 5. Дождаться зелёной галочки у job `deploy` — ссылка появится в выводе шага «Deploy to GitHub Pages».
 
@@ -305,7 +335,7 @@ https://nub36.github.io/Aven/
 
 ### Обновление preview
 
-- Изменения `prototype/**` в ветках `main` или `arena/01a0d7ec-aven` деплоятся автоматически.
+- Изменения `prototype/**` в ветках, перечисленных в `.github/workflows/prototype-pages.yml`, деплоятся автоматически.
 - Из другой ветки — вручную: **Actions → Prototype Pages → Run workflow → выбрать ветку**.
 - Если основная ветка проекта изменится — поправьте список веток в `on.push.branches` в workflow-файле.
 

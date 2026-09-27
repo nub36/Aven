@@ -13,6 +13,29 @@
 
 ## [Unreleased]
 
+### 2026-09-27 (XXXVII) — Прототип: responsive + design system + Help + guided tutorials
+
+- **Mobile responsive:** desktop sidebar больше не сжимается в горизонтальную ленту; на узких экранах появился compact header с drawer navigation. Исправления сделаны через реальные shrink-правки (`minmax(0,1fr)`, `min-width:0`, wrapping controls, compact Month calendar), а не через `body { overflow-x:hidden }`.
+- **Design system:** обновлены color tokens, surfaces, radius/shadows, focus-visible, touch targets, buttons/inputs/cards/dialogs, light/dark темы и мягкий CSS ambient background с `prefers-reduced-motion`.
+- **Female Aven presentation:** изображение/asset не менялись; улучшен только presentation layer — glow/halo/shadow и безопасные state visuals для existing presence states.
+- **Help Center:** добавлен раздел `#/help` со структурой по существующим возможностям, FAQ, keyboard/accessibility hints, troubleshooting и честными ограничениями; локальный поиск работает по статьям без AI.
+- **Contextual help:** основные разделы получили единый способ открыть справку по разделу и запустить обучение.
+- **Guided tutorials:** добавлен reusable `prototype/js/tutorial.js` с декларативными definitions, overlay/highlight, next/previous/skip/finish/restart, persistence progress/completion, missing-target safety и cleanup на route change. Tutorials покрывают Главную, Задачи, Календарь, День и Help.
+- **Optional voice guidance:** tutorial narration использует существующий `AvenVoice`/`AvenTTS` frontend interface; voice ON/OFF, repeat, stop. TTS failure/offline не ломает tutorial text UI. TTS infrastructure не менялась.
+- **Проверено:** `help-tutorial-check.js` — **33 проверки, 0 провалов**; существующие `actions-core-check.js`, `stage1-proto-check.js`, `tts-proto-check.js`, `aven3d-viewer-check.js` остаются зелёными.
+
+### 2026-09-27 (XXXVI) — Прототип: Common Actions + Задачи + Календарь + День
+
+- **Добавлено (архитектурное направление прототипа):** тонкий `prototype/js/actions.js` — Common Action Layer для задач и событий. Он не зависит от DOM, работает над `AvenState`, возвращает структурированные результаты (`ok/action/entity` или `code`) и пишет History/Undo payload для существенных действий.
+- **Задачи:** раздел переведён на общие `task`-actions: создание, редактирование, удаление с подтверждением, выполнение (`task.complete`), возврат (`task.reopen`), архив; добавлены ISO-поля `date/time/deadline`, `priority`, `tags`, `completed/status`, reminder metadata и фильтры «активные / сегодня / предстоящие / просроченные / выполненные / архив» + priority/tag/search.
+- **Календарь:** события создаются/изменяются/удаляются через `event`-actions; добавлены поля `startTime/endTime`, `category/color`, reminder metadata; к месяцу/неделе/дню добавлено **Agenda/List** представление.
+- **День:** выбранная дата стала полноценной (вчера/сегодня/завтра/datepicker); День использует те же task/event actions, показывает задачи, события, просроченное, выполненное, ближайшее событие и сводку; из Дня можно создать/открыть/изменить событие или задачу и выполнить/вернуть задачу.
+- **Cross-module:** создание задачи в «Задачах»/«Дне» видно в «Дне»/«Задачах»; событие из «Календаря»/«Дня» видно везде; выполнение в «Дне» отражается в «Задачах»; Главная читает те же getters.
+- **Assistant/flows:** demo-flow «Важное событие» теперь вызывает `createEvent(...)`; ответы «Что у меня завтра/сегодня?» и «Какие задачи просрочены?» формируются из общего task/event state без отдельной demo-копии. Это не полноценный NLP-parser, а подготовка пути `text → intent → params → Action`.
+- **Воспроизводимость:** demo-state/actions/UI используют фиксированную дату прототипа `2026-09-27`, чтобы «сегодня/завтра/просрочено» и regression-тесты не зависели от календаря машины.
+- **Честные ограничения reminders:** Task/Event хранят reminder metadata, но UI прямо говорит, что web-прототип не гарантирует фоновые уведомления при закрытом браузере.
+- **Проверено:** `prototype/tests/actions-core-check.js` — **18 проверок, 0 провалов** (Action Layer без DOM); `prototype/tests/stage1-proto-check.js` — **232 проверки jsdom, 0 провалов**; `prototype/tests/aven3d-viewer-check.js` — **43 проверки, 0 провалов**; `prototype/tests/tts-proto-check.js` — **42 проверки, 0 провалов** (Natural Voice runtime не менялся, тест закрепляет новый ответ Assistant из общего state).
+
 ### 2026-09-27 (XXXV) — Прототип: Главная и День — честные агрегаторы из реальных данных
 
 - **Изменено (Главная):** карточка «Расходы» больше не показывает захардкоженные числа — «сегодня» и

@@ -1050,6 +1050,24 @@
     return window.AvenDemo.staticData.assistantDefault;
   }
 
+  function assistantDaySummary(dateISO) {
+    const C = window.AvenActions;
+    const label = C.dates.dateLabel(dateISO);
+    const evs = C.events.getEventsForDate(dateISO).items;
+    const tasks = C.tasks.getTasksForDate(dateISO, { includeCompleted: true }).items;
+    const openTasks = tasks.filter((t) => !C.tasks.isCompleted(t));
+    const doneTasks = tasks.filter((t) => C.tasks.isCompleted(t));
+    const eText = evs.length ? evs.map((e) => (C.format.eventTime(e) + ' — ' + e.title)).join('; ') : 'событий нет';
+    const tText = openTasks.length ? openTasks.map((t) => t.title).join('; ') : 'активных задач нет';
+    return label.charAt(0).toUpperCase() + label.slice(1) + ': ' + eText + '. Задачи: ' + tText + (doneTasks.length ? '. Выполнено: ' + doneTasks.length + '.' : '.') + ' Данные взяты из общего task/event state.';
+  }
+  function assistantOverdueSummary() {
+    const C = window.AvenActions;
+    const tasks = C.tasks.getOverdueTasks(C.dates.todayISO()).items;
+    if (!tasks.length) return 'Просроченных задач нет. Проверено по общему task state.';
+    return 'Просроченные задачи: ' + tasks.map((t) => t.title + ' — срок ' + C.format.taskDueLabel(t)).join('; ') + '.';
+  }
+
   function pushAven(text, speak) {
     A._chat.push({ who: 'aven', text: text });
     A._lastReply = text; // для строки статуса на Главной
@@ -1069,6 +1087,9 @@
       if (window.AvenFlows) window.AvenFlows.cancel();
       return window.AvenChar ? window.AvenChar.phrase('cancel') : 'Отменено.';
     }
+    if (/(просроч| overdue)/.test(tn) && /задач/.test(tn)) return assistantOverdueSummary();
+    if (/(что|план|дела).*(завтра)|завтра.*(что|план|дела)/.test(tn)) return assistantDaySummary(window.AvenActions.dates.todayISO(1));
+    if (/(что|план|дела).*(сегодня)|сегодня.*(что|план|дела)/.test(tn)) return assistantDaySummary(window.AvenActions.dates.todayISO());
     if (/заправ|залил|бензин|топлив/.test(tn)) {
       const r = window.AvenFlows.start('fuel');
       return 'Начинаю демо-сценарий «Заправка» (многошагово). ' + r.question;

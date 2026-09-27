@@ -8,17 +8,18 @@
      NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js
    NODE_PATH нужен, потому что node ищет модули рядом со скриптом, а в репозитории
    намеренно нет ни package.json, ни node_modules.
-   Скрипт сам поднимает статический сервер на 127.0.0.1:8099, прогоняет 219 проверок
+   Скрипт сам поднимает статический сервер на 127.0.0.1:8099, прогоняет 232 проверки
    и завершается с кодом 1 при любом провале.
 
    Проверки покрывают: меню и метки этапов, историю с Undo/фильтрами/экспортом,
    админку (8 разделов, опасные действия с подтверждением, аудит, миграции, бэкапы,
    флаги, аварийные переключатели и их связь с регистрацией), тему «как в системе»,
    экраны входа/2FA/регистрации/восстановления, роут-гард, регрессию прежних страниц,
-   сквозную историю/Undo в разделах, редактирование/архив задач, папки/архив/автосохранение заметок,
-   фильтры/редактирование финансов, справочники счетов/категорий, авто со связью заправок/расходов/ТО
-   с финансами, покупки/имущество со статусами, сервисом и связью с финансами, и события календаря как
-   часть петли «создал → увидел в Календаре/Дне/Главной → изменил/удалил → отменил»;
+   сквозную историю/Undo в разделах, Common Actions для задач/событий, редактирование/архив задач,
+   фильтры задач по статусу/priority/tag, папки/архив/автосохранение заметок, фильтры/редактирование
+   финансов, справочники счетов/категорий, авто со связью заправок/расходов/ТО с финансами,
+   покупки/имущество со статусами, сервисом и связью с финансами, и события календаря как часть петли
+   «создал → увидел в Календаре/Agenda/Дне/Главной → изменил/удалил → отменил»;
    а также честные агрегаторы Главной и Дня: карточки «Расходы»/«Задачи»/«Автомобиль»
    считаются из текущих данных (месяц — из итогов «Финансов»), новые карточки «Гарантии»
    и «Заметки» с переключателями в настройках, «Требует внимания» в «Дне» (просроченные
@@ -376,7 +377,7 @@ async function load(hash) {
     box.checked = true; p.change(box); await sleep(250);
     const e2 = H()[0];
     ok('G4 отметка «выполнено»: старое и новое значение статуса в истории',
-      p.st().tasks.filter((t) => t.id === 't1')[0].done === true && e2.action === 'task.update' &&
+      p.st().tasks.filter((t) => t.id === 't1')[0].done === true && e2.action === 'task.complete' &&
       e2.changes[0].from === 'Открыта' && e2.changes[0].to === 'Выполнена', JSON.stringify(e2.changes));
     p.w.Aven.undoAction(e2.id); await sleep(220);
     ok('G5 Undo возвращает статус задачи', p.st().tasks.filter((t) => t.id === 't1')[0].done === false);
@@ -390,6 +391,7 @@ async function load(hash) {
     ok('G6 один клик по метке чекбокса = ровно одно действие (дубль click отсечён)',
       H().length === histLen + 1 && p.st().tasks.filter((t) => t.id === 't1')[0].done === true,
       '+' + (H().length - histLen) + ' записей, done=' + p.st().tasks.filter((t) => t.id === 't1')[0].done);
+    p.w.Aven.undoAction(H()[0].id); await sleep(220);
 
     const idxBefore = p.st().tasks.findIndex((t) => t.id === 't2');
     p.click(p.q('[data-action="task-del"][data-id="t2"]')); await sleep(150);
@@ -404,7 +406,7 @@ async function load(hash) {
 
     p.click(p.q('[data-action="task-edit"][data-id="t1"]')); await sleep(180);
     p.set(p.q('#modal-root input[name="title"]'), 'Забрать документы (изменено)');
-    p.set(p.q('#modal-root input[name="dueDate"]'), new p.w.Date().toISOString().slice(0, 10));
+    p.set(p.q('#modal-root input[name="deadline"]'), new p.w.Date().toISOString().slice(0, 10));
     p.click(p.modalSubmit()); await sleep(260);
     const eEdit = H()[0];
     ok('G9a редактирование задачи пишет старое/новое значение и payload fields',
@@ -422,6 +424,15 @@ async function load(hash) {
     p.w.Aven.undoAction(eArch.id); await sleep(240);
     ok('G9d Undo архивирования возвращает задачу в активные',
       p.st().tasks.filter((t) => t.id === 't1')[0].archived === false);
+
+    ok('G9e фильтры задач содержат активные/сегодня/предстоящие/просроченные/выполненные',
+      p.qa('#task-tabs .tab').map((x) => x.dataset.tab).join('|') === 'active|today|upcoming|overdue|completed|archive');
+    const prioSel = p.q('[data-action="task-prio-filter"]');
+    prioSel.value = 'высокий'; p.change(prioSel); await sleep(220);
+    ok('G9f фильтр задач по priority работает', /Забрать документы/.test(p.q('#page').textContent) && !/Купить фильтр/.test(p.q('#page').textContent));
+    const tagSel = p.q('[data-action="task-tag-filter"]');
+    tagSel.value = 'документы'; p.change(tagSel); await sleep(220);
+    ok('G9g фильтр задач по tag работает', /#документы/.test(p.q('#page').textContent) && !/Купить фильтр/.test(p.q('#page').textContent));
     p.dom.window.close();
   }
 
@@ -886,13 +897,13 @@ async function load(hash) {
     const p = await load('#/calendar');
     const H = () => p.st().history;
     const iso = new p.w.Date().toISOString().slice(0, 10);
-    ok('I1 календарь имеет три представления: месяц / неделя / день',
-      p.qa('#cal-tabs .tab').map((x) => x.textContent.trim()).join('|') === 'Месяц|Неделя|День');
+    ok('I1 календарь имеет четыре представления: месяц / agenda / неделя / день',
+      p.qa('#cal-tabs .tab').map((x) => x.textContent.trim()).join('|') === 'Месяц|Agenda|Неделя|День');
 
     p.click(p.q('[data-action="cal-add"]')); await sleep(160);
     p.set(p.q('#modal-root input[name="title"]'), 'Проверочная встреча');
     p.set(p.q('#modal-root input[name="date"]'), iso);
-    p.set(p.q('#modal-root input[name="time"]'), '15:30');
+    p.set(p.q('#modal-root input[name="startTime"]'), '15:30');
     p.click(p.modalSubmit()); await sleep(280);
     const evId = p.st().events[0].id;
     ok('I2 создание события сохраняет его в demo-state',
@@ -908,38 +919,41 @@ async function load(hash) {
     ok('I6 созданное событие видно на Главной', /Проверочная встреча/.test(p.q('#page').textContent));
 
     await p.go('#/calendar');
+    p.click(p.q('#cal-tabs .tab[data-tab="agenda"]')); await sleep(180);
+    ok('I7 agenda/list представление отрисовано и показывает событие',
+      !!p.q('.agenda-list') && /Проверочная встреча/.test(p.q('#page').textContent));
     p.click(p.q('#cal-tabs .tab[data-tab="week"]')); await sleep(180);
-    ok('I7 недельное представление отрисовано и показывает событие',
+    ok('I8 недельное представление отрисовано и показывает событие',
       !!p.q('.week-grid') && /Проверочная встреча/.test(p.q('#page').textContent));
     p.click(p.q('#cal-tabs .tab[data-tab="day"]')); await sleep(180);
-    ok('I8 дневное представление отрисовано и показывает событие',
+    ok('I9 дневное представление отрисовано и показывает событие',
       !!p.q('.cal-day-card') && /Проверочная встреча/.test(p.q('#page').textContent));
 
     await p.go('#/calendar');
     p.click(p.q('[data-action="cal-event"][data-id="' + evId + '"]')); await sleep(180);
-    ok('I9 карточка события показывает редактирование и удаление',
+    ok('I10 карточка события показывает редактирование и удаление',
       /Проверочная встреча/.test(p.modalText()) && !!p.q('[data-action="event-edit"]') && !!p.q('[data-action="event-del"]'));
     p.click(p.q('[data-action="event-edit"]')); await sleep(180);
     p.set(p.q('#modal-root input[name="title"]'), 'Проверочная встреча (изменено)');
     p.click(p.modalSubmit()); await sleep(280);
     const upd = H()[0];
-    ok('I10 редактирование события пишет старое/новое значение',
+    ok('I11 редактирование события пишет старое/новое значение',
       p.st().events.some((e) => e.id === evId && /изменено/.test(e.title)) && upd.action === 'event.update' &&
       (upd.changes || []).some((c) => c.field === 'Название' && /Проверочная встреча$/.test(c.from)),
       JSON.stringify(upd.changes));
     p.w.Aven.undoAction(upd.id); await sleep(240);
-    ok('I11 Undo редактирования возвращает прежнее название события',
+    ok('I12 Undo редактирования возвращает прежнее название события',
       p.st().events.some((e) => e.id === evId && e.title === 'Проверочная встреча'));
 
     p.click(p.q('[data-action="cal-event"][data-id="' + evId + '"]')); await sleep(180);
     p.click(p.q('[data-action="event-del"]')); await sleep(180);
-    ok('I12 удаление события требует подтверждения и говорит про Undo', /Undo/.test(p.modalText()), p.modalText().slice(0, 70));
+    ok('I13 удаление события требует подтверждения и говорит про Undo', /Undo/.test(p.modalText()), p.modalText().slice(0, 70));
     p.click(p.modalSubmit()); await sleep(280);
     const del = H()[0];
-    ok('I13 событие удалено, запись опасная и отменяемая',
+    ok('I14 событие удалено, запись опасная и отменяемая',
       !p.st().events.some((e) => e.id === evId) && del.action === 'event.delete' && del.danger === true && del.undoable === true);
     p.w.Aven.undoAction(del.id); await sleep(260);
-    ok('I14 Undo удаления возвращает событие', p.st().events.some((e) => e.id === evId));
+    ok('I15 Undo удаления возвращает событие', p.st().events.some((e) => e.id === evId));
     p.dom.window.close();
   }
 
@@ -975,6 +989,7 @@ async function load(hash) {
     box.checked = true; p.change(box); await sleep(260);
     ok('J5 отметка задачи на Главной меняет счётчик «выполнено: 2»', /выполнено: 2/.test(txt()));
     await p.go('#/tasks');
+    p.click(p.q('#task-tabs .tab[data-tab="completed"]')); await sleep(180);
     const box2 = p.q('.check-row[data-id="t1"] input[type="checkbox"]');
     box2.checked = false; p.change(box2); await sleep(260);
     await p.go('#/home');
@@ -1017,7 +1032,7 @@ async function load(hash) {
     await p.go('#/tasks');
     p.click(p.q('[data-action="task-add"]')); await sleep(160);
     p.set(p.q('#modal-root input[name="title"]'), 'Просроченная задача');
-    p.set(p.q('#modal-root input[name="dueDate"]'), iso(-1));
+    p.set(p.q('#modal-root input[name="deadline"]'), iso(-1));
     p.click(p.modalSubmit()); await sleep(280);
     const overdueEntry = H()[0];
     await p.go('#/day');
@@ -1060,6 +1075,56 @@ async function load(hash) {
     autoMod2.checked = true; p.change(autoMod2); await sleep(240);
     await p.go('#/home');
     ok('J23 обратное включение модуля возвращает карточку «Автомобиль»', /7 780 км/.test(txt()));
+    p.dom.window.close();
+  }
+
+  /* ============ K. День как рабочий центр общих задач/событий + Assistant читает общий state ============ */
+  {
+    const p = await load('#/day');
+    const H = () => p.st().history;
+    const tomorrow = new p.w.Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const dateInp = p.q('[data-action="day-date"]');
+    dateInp.value = tomorrow; p.change(dateInp); await sleep(240);
+    ok('K1 «День»: выбор даты показывает события выбранного дня', /Планёрка/.test(p.q('#page').textContent) && /Завтра|завтра/.test(p.q('#page').textContent));
+
+    p.click(p.q('[data-action="day-add-task"]')); await sleep(180);
+    p.set(p.q('#modal-root input[name="title"]'), 'Задача из Дня');
+    p.click(p.modalSubmit()); await sleep(300);
+    const taskId = p.st().tasks[0].id;
+    ok('K2 создание задачи из «Дня» пишет общий task state и показывает её в Дне',
+      p.st().tasks[0].title === 'Задача из Дня' && p.st().tasks[0].date === tomorrow && /Задача из Дня/.test(p.q('#page').textContent));
+    await p.go('#/tasks');
+    ok('K3 созданная в «Дне» задача видна в «Задачах»', /Задача из Дня/.test(p.q('#page').textContent));
+
+    await p.go('#/day');
+    const dateInp2 = p.q('[data-action="day-date"]');
+    dateInp2.value = tomorrow; p.change(dateInp2); await sleep(220);
+    const dayBox = p.q('.check-row[data-id="' + taskId + '"] input[type="checkbox"]');
+    dayBox.checked = true; p.change(dayBox); await sleep(280);
+    ok('K4 выполнение задачи в «Дне» идёт через task.complete', p.st().tasks[0].done === true && H()[0].action === 'task.complete');
+    await p.go('#/tasks');
+    p.click(p.q('#task-tabs .tab[data-tab="completed"]')); await sleep(180);
+    ok('K5 выполненная в «Дне» задача стала выполненной в «Задачах»', /Задача из Дня/.test(p.q('#page').textContent));
+    p.w.Aven.undoAction(H()[0].id); await sleep(260);
+    ok('K6 Undo выполнения из «Дня» возвращает задачу в активные', p.st().tasks.filter((t) => t.id === taskId)[0].done === false);
+
+    await p.go('#/day');
+    const dateInp3 = p.q('[data-action="day-date"]');
+    dateInp3.value = tomorrow; p.change(dateInp3); await sleep(220);
+    p.click(p.q('[data-action="day-add-event"]')); await sleep(180);
+    p.set(p.q('#modal-root input[name="title"]'), 'Событие из Дня');
+    p.set(p.q('#modal-root input[name="startTime"]'), '16:00');
+    p.click(p.modalSubmit()); await sleep(300);
+    const eventId = p.st().events[0].id;
+    ok('K7 создание события из «Дня» пишет общий event state и показывает его в Дне',
+      p.st().events[0].title === 'Событие из Дня' && p.st().events[0].date === tomorrow && /Событие из Дня/.test(p.q('#page').textContent));
+    await p.go('#/calendar');
+    ok('K8 созданное в «Дне» событие видно в «Календаре»', !!p.q('[data-action="cal-event"][data-id="' + eventId + '"]') || /Событие из Дня/.test(p.q('#page').textContent));
+
+    await p.go('#/assistant');
+    p.w.Aven._assistantSend('Что у меня завтра?'); await sleep(700);
+    ok('K9 Assistant-ответ «Что у меня завтра?» читает общие task/event данные',
+      /Событие из Дня/.test(p.w.Aven._lastReply || '') && /Задача из Дня/.test(p.w.Aven._lastReply || '') && /общего task\/event state/.test(p.w.Aven._lastReply || ''), p.w.Aven._lastReply || '');
     p.dom.window.close();
   }
 

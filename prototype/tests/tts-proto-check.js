@@ -233,7 +233,9 @@ async function load(hash, mode, opts) {
     // ждём именно НАШ ответ: Assistant сидируется двумя демо-репликами, их нельзя принять за него
     await p.waitFor(() => p.w.__synthLog.length === 1, 6000, 'synthesize POST');
     const shown = p.qa('.msg.aven').pop().textContent.replace(/🔊 Озвучить\s*$/, '').trim();
-    ok('A1 demo-ответ показан текстом (экранный не изменён)', shown.indexOf('Сегодня: стоматолог в 10:00') >= 0, shown.slice(0, 60));
+    ok('A1 ответ «Что у меня сегодня?» показан текстом из общего state',
+      shown.indexOf('Стоматолог') >= 0 && shown.indexOf('10:00') >= 0 && shown.indexOf('Забрать посылку') >= 0,
+      shown.slice(0, 90));
     ok('A2 ответ ушёл в POST /api/tts/synthesize голосом vd17-design', p.w.__synthLog[0].voice === 'qwen3/vd17-design');
     ok('A3 в синтез ушёл НОРМАЛИЗОВАННЫЙ текст (= normalize экранного)', p.w.__synthLog[0].text === p.norm(shown),
       (p.w.__synthLog[0].text || '').slice(0, 90));
