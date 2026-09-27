@@ -9,7 +9,7 @@
      Пустая метка = входит в 1.0. Метки честные: раздел показан как прототип, но помечен. */
   const cats = [
     ['profile', 'Профиль', '👤', ''], ['aven', 'Aven', '🤖', '1.1'], ['character', 'Персонаж', '🧍', 'опция (ADR-014)'],
-    ['voice', 'Голос', '🎙️', 'Stage 3'], ['notify', 'Уведомления', '🔔', 'частично 1.0'],
+    ['voice', 'Голос', '🎙️', 'Stage 3'], ['notify', 'Уведомления', '🔔', ''],
     ['commands', 'Команды', '⌨️', 'Stage 2'], ['dict', 'Словарь', '📖', 'Stage 2'],
     ['memory', 'Память', '🧠', '1.1'], ['home', 'Главная', '🏠', ''], ['modules', 'Модули', '🧩', ''],
     ['automations', 'Автоматизации', '⚡', 'Stage 4'], ['integrations', 'Интеграции', '🔌', '1.1'],
@@ -199,8 +199,30 @@
       </div>`;
     }
 
-    if (cat === 'notify') return `
-      <h2 class="set-h">Уведомления</h2><p class="set-sub">Голосовые события · тихие часы · приватность произнесения</p>
+    if (cat === 'notify') {
+      const SRC = Object.assign({ taskDue: true, taskOverdue: true, eventUpcoming: true, eventReminder: true, autoDocs: true, warranty: true, manual: true }, N.sources || {});
+      const srcRows = [
+        ['taskOverdue', 'Просроченные задачи'],
+        ['taskDue', 'Задачи со сроком сегодня'],
+        ['eventUpcoming', 'События сегодня'],
+        ['eventReminder', 'Напоминания к событиям'],
+        ['autoDocs', 'Документы авто с близким сроком'],
+        ['warranty', 'Истекающая гарантия покупок'],
+        ['manual', 'Напоминания, созданные вручную']
+      ];
+      return `
+      <h2 class="set-h">Уведомления</h2><p class="set-sub">Что показывать в разделе «Уведомления» · это уведомления внутри приложения</p>
+      <div class="card">
+        ${setRow('Уведомления в приложении', 'собирать напоминания на одном экране и на «колокольчике»', sw('settings.notify.inapp', N.inapp !== false))}
+      </div>
+      <h3 class="set-h" style="font-size:1rem;margin-top:16px">Что учитывать</h3>
+      <p class="set-sub">Выключите то, о чём напоминать не нужно. Данные разделов при этом не меняются.</p>
+      <div class="card">
+        ${srcRows.map(([id, label]) => setRow(label, '', sw('settings.notify.sources.' + id, SRC[id] !== false))).join('')}
+        <div class="s" style="color:var(--muted);font-size:.82rem;padding-top:8px">Пункты собираются из ваших задач, событий, авто и покупок. Пока вкладка закрыта, оповещений, писем и push нет — для этого нужен сервер и почтовый сервис (позже, открытые вопросы №16, №17).</div>
+      </div>
+      <h3 class="set-h" style="font-size:1rem;margin-top:16px">Голосовое произнесение <span class="stage-badge later">Stage 3</span></h3>
+      <p class="set-sub">Голосовые события · тихие часы · приватность произнесения — относится к голосу (Stage 3, VOICE.md)</p>
       <div class="card">
         ${setRow('Разрешить голосовое произнесение уведомлений', '', sw('settings.notify.voiceAllowed', N.voiceAllowed))}
         ${setRow('Тихие часы', 'не беспокоить голосом ночью', sw('settings.notify.quietHours', N.quietHours))}
@@ -210,6 +232,7 @@
         ${setRow('Приватная информация', 'правила произнесения сумм и имен', `<select><option ${N.privateInfo === 'не произносить суммы' ? 'selected' : ''}>не произносить суммы</option><option>произносить всё</option><option>всегда молча</option></select>`)}
         <div class="s" style="color:var(--muted);font-size:.82rem;padding:10px 4px">Ограничения платформ отображаются честно: закрытая вкладка не получит голос (ADR-010).</div>
       </div>`;
+    }
 
     if (cat === 'commands') {
       return `
@@ -272,7 +295,7 @@
 
     if (cat === 'home') {
       const C = st.settings.homeCards;
-      const rows = [['today', 'Карточка «Сегодня»'], ['tasks', 'Карточка «Задачи»'], ['expenses', 'Карточка «Расходы»'], ['car', 'Карточка «Автомобиль»'], ['shopping', 'Карточка «Гарантии» (покупки)'], ['notes', 'Карточка «Заметки»'], ['actions', 'Карточка «Последние действия»'], ['quick', 'Быстрые действия']];
+      const rows = [['today', 'Карточка «Сегодня»'], ['tasks', 'Карточка «Задачи»'], ['expenses', 'Карточка «Расходы»'], ['car', 'Карточка «Автомобиль»'], ['shopping', 'Карточка «Гарантии» (покупки)'], ['notes', 'Карточка «Заметки»'], ['reminders', 'Карточка «Уведомления»'], ['actions', 'Карточка «Последние действия»'], ['quick', 'Быстрые действия']];
       return `
       <h2 class="set-h">Главная</h2><p class="set-sub">Включение/отключение карточек · порядок — в перспективе (вопрос №25)</p>
       <div class="card">${rows.map(([id, label]) => setRow(label, '', sw('settings.homeCards.' + id, C[id]))).join('')}
@@ -415,9 +438,17 @@
     o[ks[ks.length - 1]] = val;
   }
 
+  /* Открыть настройки на нужной категории из другого раздела (например, из «Уведомлений»). */
+  A.openSettingsCat = function (id) {
+    cat = id || 'profile';
+    if ((location.hash || '').replace(/^#\//, '') !== 'settings') location.hash = '#/settings';
+    else A.render();
+  };
+
   A.register({
     'set-cat': (el) => { cat = el.dataset.id; A.render(); },
     'set-cat-link': (el) => { cat = el.dataset.id; },
+    'set-open-cat': (el) => { A.openSettingsCat(el.dataset.id); },
     'set-toggle': (el) => {
       setByPath(s(), el.dataset.path, el.checked);
       S.save();

@@ -57,6 +57,8 @@ prototype/
     │                     waiting/success/important): текст + классы glow/wave; НЕ state engine
     ├── voice.js        — AvenVoice.speak/stop (через AvenTTS) + экспериментальный STT SpeechRecognition
     ├── actions.js      — Common Action Layer для задач/событий (DOM-free, state → result/history)
+    ├── notify.js       — Напоминания и Центр уведомлений: движок AvenNotify (DOM-free, сборка/счётчики/
+    │                     действия read-snooze-dismiss + CRUD напоминаний, History/Undo) и страница «Уведомления»
     ├── tutorial.js     — reusable Guided Tutorial engine (overlay, progress, optional existing TTS narration)
     ├── help.js         — Help Center: статьи, локальный поиск, contextual help
     ├── tts/normalize.js — нормализация текста ТОЛЬКО для речи (числа, время, даты, деньги, единицы)
@@ -76,8 +78,10 @@ prototype/tests/
 ├── help-tutorial-check.js — Help, mobile nav, responsive CSS assertions, Tutorial/TTS narration (33 проверки)
 ├── stage1-proto-check.js — проверки прототипа на срез Stage 1.0 (jsdom, 232 проверки; разработческий
 │                           инструмент, в репозитории нет package.json/node_modules — см. шапку файла)
-└── tts-proto-check.js    — голос Natural end-to-end (jsdom, 42 проверки сценариев A–J и нормализации: Главная →
-                            normalize → контракт сервера → воспроизведение → состояния → честный fallback)
+├── tts-proto-check.js    — голос Natural end-to-end (jsdom, 42 проверки сценариев A–J и нормализации: Главная →
+│                           normalize → контракт сервера → воспроизведение → состояния → честный fallback)
+└── notifications-check.js — раздел «Уведомления» (jsdom, 49 проверок: движок AvenNotify, действия+Undo,
+                            CRUD напоминаний, настройки источников, страница, интеграция, Help/Tutorial)
 ```
 
 Зависимостей нет. Сборка не нужна.
@@ -142,6 +146,14 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 - **Метки этапов** — разделы меню и настроек, не входящие в срез 1.0, помечены бейджем
   («1.1», «Stage 2», «Stage 3», «Stage 4», «перспектива», «опция (ADR-014)») и показывают предупреждение:
   прототип проектирует весь UI, но не делает вид, что всё это войдёт в первый релиз ([ADR-010](../docs/DECISIONS.md)).
+
+**Двенадцатая итерация (2026-09-27) — Напоминания и Центр уведомлений** (MVP_SCOPE §4.2.1, FEATURES §4):
+- добавлен раздел `#/notifications`: движок `js/notify.js` (`AvenNotify`, без DOM) собирает пункты из общих данных (просроченные/сегодняшние задачи, события дня, напоминания к событиям, документы авто, гарантии, ручные напоминания), считает непрочитанные/активные/срочные и даёт действия read/markAllRead/snooze/dismiss/restore + CRUD напоминаний — всё с History/Undo;
+- реакции пользователя (прочитано/отложено/скрыто) хранятся в `notifState` по стабильному ключу, сами пункты не дублируются;
+- интеграция: колокольчик с бейджем в шапке, карточка на «Главной», единый источник «Требует внимания» на «Главной»/в «Дне», настройка источников (Настройки → Уведомления);
+- Help переписан простым языком (+ разделы Уведомления/Помощник/История-отмена/Настройки/Профиль), добавлен тур `notifications`; существующие туры переформулированы человеческим языком;
+- честно: только in-app, без фоновой доставки/push/email; голос — Stage 3;
+- проверка: `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — 49/49; полный regression — 437/437. Реальная браузерная проверка не выполнялась (Chromium недоступен).
 
 **Одиннадцатая итерация (2026-09-27) — responsive + Help + guided tutorials** (MVP_SCOPE §5.10):
 
@@ -281,7 +293,7 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 **Проверка:** `node prototype/tests/actions-core-check.js` — **18 проверок Common Actions без DOM**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/help-tutorial-check.js` — **33 проверки Help/Tutorial/responsive/TTS narration**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js`
-(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**.
+(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial).
 `stage1-proto-check.js` покрывает: меню и метки этапов, история с
 Undo/фильтрами/экспортом, все 8 разделов админки с подтверждениями и аудитом, тема, экраны аккаунта,
 роут-гард, сквозная история и настоящий Undo в задачах/заметках/финансах/авто/покупках/автоматизациях,

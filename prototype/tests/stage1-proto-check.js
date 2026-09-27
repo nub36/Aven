@@ -983,8 +983,9 @@ async function load(hash) {
     ok('J3 Undo расхода возвращает агрегаты Главной (4 650 ₽ / 47 850 ₽, операция удалена)',
       /4 650 ₽/.test(txt()) && /47 850 ₽/.test(txt()) && p.st().ops.length === 5, 'ops: ' + p.st().ops.length);
 
+    const tasksCard = () => (p.q('[data-card="tasks"]') || {}).textContent || '';
     ok('J4 карточка «Задачи» считает статусы из данных, а не из константы',
-      /открытых: 4/.test(txt()) && /выполнено: 1/.test(txt()) && !/просрочено/.test(txt()), '');
+      /открытых: 4/.test(tasksCard()) && /выполнено: 1/.test(tasksCard()) && !/просрочено/.test(tasksCard()), tasksCard());
     const box = p.q('.check-row[data-id="t1"] input[type="checkbox"]');
     box.checked = true; p.change(box); await sleep(260);
     ok('J5 отметка задачи на Главной меняет счётчик «выполнено: 2»', /выполнено: 2/.test(txt()));
