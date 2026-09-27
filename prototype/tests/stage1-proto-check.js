@@ -8,7 +8,7 @@
      NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js
    NODE_PATH нужен, потому что node ищет модули рядом со скриптом, а в репозитории
    намеренно нет ни package.json, ни node_modules.
-   Скрипт сам поднимает статический сервер на 127.0.0.1:8099, прогоняет 196 проверок
+   Скрипт сам поднимает статический сервер на 127.0.0.1:8099, прогоняет 219 проверок
    и завершается с кодом 1 при любом провале.
 
    Проверки покрывают: меню и метки этапов, историю с Undo/фильтрами/экспортом,
@@ -18,8 +18,12 @@
    сквозную историю/Undo в разделах, редактирование/архив задач, папки/архив/автосохранение заметок,
    фильтры/редактирование финансов, справочники счетов/категорий, авто со связью заправок/расходов/ТО
    с финансами, покупки/имущество со статусами, сервисом и связью с финансами, и события календаря как
-   часть петли «создал → увидел в Календаре/Дне/Главной → изменил/удалил → отменил».
-   Спецификации: docs/MVP_SCOPE.md §4.1, §5.1, §5.4, §5.7–5.9; docs/ADMIN.md; ADR-010, ADR-012. */
+   часть петли «создал → увидел в Календаре/Дне/Главной → изменил/удалил → отменил»;
+   а также честные агрегаторы Главной и Дня: карточки «Расходы»/«Задачи»/«Автомобиль»
+   считаются из текущих данных (месяц — из итогов «Финансов»), новые карточки «Гарантии»
+   и «Заметки» с переключателями в настройках, «Требует внимания» в «Дне» (просроченные
+   задачи, документы авто, гарантии) с честной пометкой Stage 1.1 и заметки этого дня.
+   Спецификации: docs/MVP_SCOPE.md §4.1, §5.1, §5.4, §5.7–5.9, §10.1; docs/ADMIN.md; ADR-010, ADR-012. */
 let JSDOM;
 try {
   JSDOM = require('jsdom').JSDOM;
@@ -936,6 +940,126 @@ async function load(hash) {
       !p.st().events.some((e) => e.id === evId) && del.action === 'event.delete' && del.danger === true && del.undoable === true);
     p.w.Aven.undoAction(del.id); await sleep(260);
     ok('I14 Undo удаления возвращает событие', p.st().events.some((e) => e.id === evId));
+    p.dom.window.close();
+  }
+
+  /* ============ J. Главная и День: честные агрегаторы из реальных данных (§5.7, §5.8, §10.1) ============ */
+  {
+    const p = await load('#/home');
+    const H = () => p.st().history;
+    const txt = () => (p.q('#page').textContent || '').replace(/[\u00a0\u202f]/g, ' ');
+    /* текст конкретной карточки (по заголовку), чтобы история действий не мешала проверкам */
+    const sec = (name) => {
+      const c = p.qa('.card').filter((x) => (x.textContent || '').indexOf(name) >= 0)[0];
+      return ((c || {}).textContent || '').replace(/[\u00a0\u202f]/g, ' ');
+    };
+    const iso = (offset) => new p.w.Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
+
+    ok('J1 «Расходы» на Главной считаются из данных: сегодня 4 650 ₽, месяц 47 850 ₽, крупнейшая — АЗС Лукойл',
+      /4 650 ₽/.test(txt()) && /47 850 ₽/.test(txt()) && /Крупнейшая в месяце: АЗС Лукойл/.test(txt()) && /3 200 ₽/.test(txt()),
+      txt().slice(0, 120));
+
+    p.click(p.q('[data-action="quick-expense"]')); await sleep(180);
+    p.set(p.q('#modal-root input[name="amount"]'), '500');
+    p.set(p.q('#modal-root input[name="title"]'), 'Проверочный расход');
+    p.click(p.modalSubmit()); await sleep(300);
+    ok('J2 новый расход меняет агрегаты Главной: сегодня 5 150 ₽, месяц 48 350 ₽',
+      /5 150 ₽/.test(txt()) && /48 350 ₽/.test(txt()) && /Проверочный расход/.test(txt()), txt().slice(0, 120));
+    p.w.Aven.undoAction(H()[0].id); await sleep(280);
+    ok('J3 Undo расхода возвращает агрегаты Главной (4 650 ₽ / 47 850 ₽, операция удалена)',
+      /4 650 ₽/.test(txt()) && /47 850 ₽/.test(txt()) && p.st().ops.length === 5, 'ops: ' + p.st().ops.length);
+
+    ok('J4 карточка «Задачи» считает статусы из данных, а не из константы',
+      /открытых: 4/.test(txt()) && /выполнено: 1/.test(txt()) && !/просрочено/.test(txt()), '');
+    const box = p.q('.check-row[data-id="t1"] input[type="checkbox"]');
+    box.checked = true; p.change(box); await sleep(260);
+    ok('J5 отметка задачи на Главной меняет счётчик «выполнено: 2»', /выполнено: 2/.test(txt()));
+    await p.go('#/tasks');
+    const box2 = p.q('.check-row[data-id="t1"] input[type="checkbox"]');
+    box2.checked = false; p.change(box2); await sleep(260);
+    await p.go('#/home');
+    ok('J6 снятие отметки возвращает «выполнено: 1»', /выполнено: 1/.test(txt()));
+
+    ok('J7 карточка «Автомобиль» считает остаток до ТО из записей обслуживания (7 780 км), без хардкода',
+      /7 780 км/.test(txt()) && !/2 480/.test(txt()) && /без предупреждений/.test(txt()), '');
+
+    ok('J8 карточка «Гарантии» показывает покупки с истекающей гарантией (Телевизор, до 15.11.2026)',
+      /Гарантии/.test(txt()) && /Телевизор/.test(txt()) && /гарантия до 15\.11\.2026/.test(txt()) && /дн\./.test(txt()), '');
+
+    ok('J9 карточка «Заметки» показывает закреплённые и свежие заметки',
+      /📌/.test(txt()) && /Что купить для машины/.test(txt()) && /Список документов/.test(txt()), '');
+
+    await p.go('#/settings');
+    p.click(p.q('[data-action="set-cat"][data-id="home"]')); await sleep(220);
+    ok('J10 в настройках Главной есть переключатели новых карточек',
+      /Карточка «Гарантии» \(покупки\)/.test(p.q('#page').textContent) && /Карточка «Заметки»/.test(p.q('#page').textContent));
+    const noteSw = p.q('input[data-path="settings.homeCards.notes"]');
+    noteSw.checked = false; p.change(noteSw); await sleep(220);
+    await p.go('#/home');
+    ok('J11 выключение карточки «Заметки» скрывает её на Главной (остальные остаются)',
+      !/Что купить для машины/.test(txt()) && /Телевизор/.test(txt()), '');
+    await p.go('#/settings');
+    p.click(p.q('[data-action="set-cat"][data-id="home"]')); await sleep(200);
+    const noteSw2 = p.q('input[data-path="settings.homeCards.notes"]');
+    noteSw2.checked = true; p.change(noteSw2); await sleep(220);
+    await p.go('#/home');
+    ok('J12 обратное включение возвращает карточку «Заметки»', /Что купить для машины/.test(txt()));
+
+    await p.go('#/day');
+    ok('J13 «День»: блок «Требует внимания» показывает истекающую гарантию и честную пометку Stage 1.1',
+      /Требует внимания/.test(txt()) && /Телевизор/.test(sec('Требует внимания')) && /Stage 1\.1/.test(txt()));
+    ok('J14 «День»: заметки этого дня берутся из данных (сегодня — «Что купить для машины»)',
+      /Что купить для машины/.test(sec('Заметки этого дня')));
+    p.click(p.q('#day-tabs .tab[data-tab="yesterday"]')); await sleep(220);
+    ok('J15 «День» (вчера): заметки дня меняются — «Идеи», а сегодняшней нет',
+      /Идеи/.test(sec('Заметки этого дня')) && !/Что купить для машины/.test(sec('Заметки этого дня')));
+
+    await p.go('#/tasks');
+    p.click(p.q('[data-action="task-add"]')); await sleep(160);
+    p.set(p.q('#modal-root input[name="title"]'), 'Просроченная задача');
+    p.set(p.q('#modal-root input[name="dueDate"]'), iso(-1));
+    p.click(p.modalSubmit()); await sleep(280);
+    const overdueEntry = H()[0];
+    await p.go('#/day');
+    ok('J16 просроченная задача попадает в «Требует внимания»',
+      /Просроченная задача/.test(sec('Требует внимания')) && /просрочена/.test(sec('Требует внимания')), '');
+    await p.go('#/home');
+    ok('J17 на Главной появляется счётчик «просрочено: 1»', /просрочено: 1/.test(txt()));
+    p.w.Aven.undoAction(overdueEntry.id); await sleep(280);
+    const dayClean = !/Просроченная задача/.test(sec('Требует внимания'));
+    await p.go('#/home');
+    ok('J18 Undo задачи убирает её из «Требует внимания» и со счётчика Главной',
+      dayClean && !/просрочено: [0-9]/.test(txt()));
+
+    await p.go('#/auto');
+    p.click(p.q('[data-action="auto-doc"]')); await sleep(180);
+    p.set(p.q('#modal-root input[name="title"]'), 'Полис на внимании');
+    p.set(p.q('#modal-root input[name="until"]'), iso(10));
+    p.click(p.modalSubmit()); await sleep(280);
+    const docEntry = H()[0];
+    await p.go('#/day');
+    ok('J19 документ авто с близким сроком попадает в «Требует внимания»',
+      /Полис на внимании/.test(sec('Требует внимания')) && /срок \d{2}\.\d{2}\.\d{4}/.test(sec('Требует внимания')),
+      sec('Требует внимания').slice(0, 160));
+    p.w.Aven.undoAction(docEntry.id); await sleep(260);
+    ok('J20 Undo документа убирает его из «Требует внимания»', !/Полис на внимании/.test(sec('Требует внимания')));
+
+    await p.go('#/settings');
+    p.click(p.q('[data-action="set-cat"][data-id="modules"]')); await sleep(220);
+    const autoMod = p.q('input[data-path="settings.modules.auto"]');
+    autoMod.checked = false; p.change(autoMod); await sleep(240);
+    await p.go('#/home');
+    ok('J21 выключение модуля «Авто» убирает карточку «Автомобиль» с Главной (остальные остаются)',
+      !/До следующего ТО/.test(txt()) && !/BMW 530d/.test(txt()) && /Телевизор/.test(txt()));
+    await p.go('#/day');
+    ok('J22 «Требует внимания» не берёт пункты из выключенного модуля',
+      /Телевизор/.test(sec('Требует внимания')) && !/авто/.test(sec('Требует внимания')));
+    await p.go('#/settings');
+    p.click(p.q('[data-action="set-cat"][data-id="modules"]')); await sleep(200);
+    const autoMod2 = p.q('input[data-path="settings.modules.auto"]');
+    autoMod2.checked = true; p.change(autoMod2); await sleep(240);
+    await p.go('#/home');
+    ok('J23 обратное включение модуля возвращает карточку «Автомобиль»', /7 780 км/.test(txt()));
     p.dom.window.close();
   }
 
