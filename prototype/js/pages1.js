@@ -91,44 +91,18 @@
     const seen = {};
     return pinned.concat(recent).filter((n) => (seen[n.id] ? false : (seen[n.id] = true))).slice(0, 4);
   }
-  /* «Требует внимания» в разделе «День»: расчёт по текущим данным, без фоновых проверок.
-     Пункты берутся только из включённых модулей (Настройки → Модули). */
-  function attentionItems(st) {
-    const items = [];
-    const MOD = (st.settings || {}).modules || {};
-    Core().tasks.getOverdueTasks(todayISO()).items.forEach((t) => {
-      const d = taskDueISO(t);
-      if (MOD.tasks === false) return;
-      items.push({ icon: '☑️', title: t.title, sub: 'задача просрочена · ' + humanDate(d), href: '#/tasks', cls: 'warn' });
-    });
-    (MOD.auto === false ? [] : (st.car.docs || [])).forEach((doc) => {
-      if (!doc.untilISO) return;
-      const days = daysToISO(doc.untilISO);
-      if (days <= (Number(doc.remindDays) || 0)) {
-        items.push({
-          icon: '📄', title: doc.title,
-          sub: days < 0 ? 'срок истёк ' + humanDate(doc.untilISO) : 'срок ' + humanDate(doc.untilISO),
-          href: '#/auto', cls: days < 0 ? 'danger' : 'warn'
-        });
-      }
-    });
-    (MOD.shopping === false ? [] : (st.purchases || [])).forEach((p) => {
-      const kind = warrantyKind(p);
-      if (kind === 'warn' || kind === 'expired') {
-        items.push({
-          icon: p.emoji || '📦', title: p.name,
-          sub: kind === 'expired' ? 'гарантия истекла ' + humanDate(p.warrantyISO) : 'гарантия до ' + humanDate(p.warrantyISO),
-          href: '#/shopping', cls: kind === 'expired' ? 'danger' : 'warn'
-        });
-      }
-    });
-    return items;
+  /* «Требует внимания» в разделе «День»: единый источник — движок «Уведомления» (AvenNotify).
+     Так карточка Дня, блок Главной и раздел «Уведомления» всегда согласованы, а данные не дублируются.
+     Учитываются включённые модули и выбранные источники (Настройки → Уведомления). */
+  function attentionItems() {
+    if (window.AvenNotify && window.AvenNotify.attentionItems) return window.AvenNotify.attentionItems();
+    return [];
   }
 
   /* ================= ГЛАВНАЯ ================= */
   A.pages.home = function () {
     const st = s();
-    const cards = Object.assign({ today: true, tasks: true, expenses: true, car: true, shopping: true, notes: true, quick: true, actions: true }, st.settings.homeCards || {});
+    const cards = Object.assign({ today: true, tasks: true, expenses: true, car: true, shopping: true, notes: true, reminders: true, quick: true, actions: true }, st.settings.homeCards || {});
     /* карточка видна только если включён источник: раздел-модуль (Настройки → Модули) */
     const MOD = st.settings.modules || {};
     if (MOD.calendar === false) cards.today = false;
@@ -151,6 +125,8 @@
     const docsAttn = carDocsAttention(st.car);
     const warr = homeWarranties(st);
     const topNotes = homeNotes(st);
+    const notifTop = window.AvenNotify ? window.AvenNotify.build() : [];
+    const notifUnread = window.AvenNotify ? window.AvenNotify.unreadCount() : 0;
     const charOn = !!(window.AvenChar && !window.AvenChar.isOff() && window.AvenChar.current().id === 'female');
     const last = A._lastReply ? A.esc(A._lastReply) : 'Напишите команду — или нажмите на Aven справа.';
     const html = `
@@ -205,7 +181,7 @@
       </div>` : ''}
 
       ${cards.tasks ? `
-      <div class="card">
+      <div class="card" data-card="tasks">
         <div class="head"><h3>Задачи</h3><a href="#/tasks" class="btn small">Все →</a></div>
         ${todayTasks.length ? todayTasks.map((t) => `
           <label class="check-row" data-action="toggle-task" data-id="${A.esc(t.id)}">
@@ -249,6 +225,17 @@
         <div class="head"><h3>Заметки</h3><a href="#/notes" class="btn small">Все →</a></div>
         ${topNotes.length ? topNotes.map((n) => `
           <div class="row-item"><div class="grow"><div class="t">${n.pinned ? '📌 ' : ''}${A.esc(n.title)}</div><div class="s">${A.esc(n.folder)}${(n.tags || []).length ? ' · ' + A.esc(n.tags.join(', ')) : ''}</div></div><span class="s" style="color:var(--muted)">${A.esc(dateLabel(n.updatedISO))}</span></div>`).join('') : '<div class="empty">Заметок пока нет</div>'}
+      </div>` : ''}
+
+      ${cards.reminders ? `
+      <div class="card">
+        <div class="head"><h3>Уведомления</h3><a href="#/notifications" class="btn small">Все →</a></div>
+        ${notifTop.length ? notifTop.slice(0, 4).map((n) => `
+          <a class="row-item" href="${A.esc(n.href)}"><span class="time" aria-hidden="true">${A.esc(n.icon)}</span><div class="grow"><div class="t">${A.esc(n.title)}</div><div class="s">${A.esc(n.sub)}</div></div>${n.read ? '' : '<span class="pill accent">новое</span>'}</a>`).join('') : '<div class="empty">Ничего не требует внимания</div>'}
+        <div class="btn-row" style="margin-top:10px">
+          ${notifUnread ? `<span class="pill warn">непрочитанных: ${notifUnread}</span>` : '<span class="pill ok">всё прочитано</span>'}
+          <button class="btn small" data-action="rem-add">＋ Напоминание</button>
+        </div>
       </div>` : ''}
 
       ${cards.actions ? `
@@ -313,7 +300,7 @@
     const doneActions = (st.history || []).filter((h) => /\.(create|update|delete|complete|reopen)$/.test(h.action || '')).slice(0, 4);
     const dayNotes = (((st.settings || {}).modules || {}).notes === false ? [] : (st.notes || []))
       .filter((n) => !n.archived && n.updatedISO === iso).slice(0, 4);
-    const attention = attentionItems(st);
+    const attention = attentionItems();
     const timeline = [];
     evs.forEach((e) => timeline.push({ id: e.id, date: iso, t: eventTime(e), n: e.title, type: e.importance === 'важное' ? 'important' : 'event', sub: (e.place || e.category || repeatLabel(e) || 'событие') + (reminderLabel(e.reminder) !== 'нет' ? ' · напоминание: ' + reminderLabel(e.reminder) : '') }));
     activeTasks.forEach((t) => timeline.push({ id: t.id, t: taskTime(t) || taskDueLabel(t), n: t.title, type: 'task', sub: 'задача · ' + (t.project || 'без проекта') + (taskTags(t).length ? ' · #' + taskTags(t).join(' #') : '') }));
@@ -351,7 +338,7 @@
         <label class="field"><span>Дата дня</span><input type="date" data-action="day-date" value="${A.esc(iso)}" aria-label="Выбрать дату раздела День"></label>
         <div class="field"><span>Краткая сводка</span><div class="btn-row">${summary.map((x, i) => `<span class="pill ${i === 3 && overdue.length ? 'warn' : i === 2 ? 'ok' : ''}">${A.esc(x)}</span>`).join('')}</div></div>
       </div>
-      <div class="s" style="color:var(--muted);font-size:.82rem">Напоминания здесь — только metadata. Web-прототип не обещает фоновые уведомления, если браузер закрыт.</div>
+      <div class="s" style="color:var(--muted);font-size:.82rem">Напоминание появится в разделе «Уведомления». Пока вкладка закрыта, писем и push‑сообщений нет.</div>
     </div>
     <div class="grid cols-2" style="margin-top:16px">
       <div class="card" data-tour="day-timeline">
@@ -389,8 +376,8 @@
     <div class="card" style="margin-top:16px" data-tour="day-attention">
       <div class="head"><h3>Требует внимания</h3><span class="pill">расчёт по текущим данным</span></div>
       ${attention.length ? `<div class="grid cols-3">${attention.map((i) => `
-        <div class="row-item"><span class="time">${A.esc(i.icon)}</span><div class="grow"><div class="t">${A.esc(i.title)}</div><div class="s">${A.esc(i.sub)}</div></div><span class="pill ${i.cls}">${i.href === '#/tasks' ? 'задачи' : i.href === '#/auto' ? 'авто' : 'покупки'}</span></div>`).join('')}</div>` : '<div class="empty">Просроченных задач, истекающих документов и гарантий нет</div>'}
-      <div class="s" style="color:var(--muted);font-size:.82rem;margin-top:10px">Напоминания и уведомления — Stage 1.1 (MVP_SCOPE §4.2): здесь только расчёт по текущим данным разделов, без фоновых проверок.</div>
+        <a class="row-item" href="${A.esc(i.href)}"><span class="time">${A.esc(i.icon)}</span><div class="grow"><div class="t">${A.esc(i.title)}</div><div class="s">${A.esc(i.sub)}</div></div><span class="pill ${i.cls}">${A.esc(i.label || '')}</span></a>`).join('')}</div>` : '<div class="empty">Просроченных задач, истекающих документов и гарантий нет</div>'}
+      <div class="s" style="color:var(--muted);font-size:.82rem;margin-top:10px">Единый список и настройка источников — в разделе <a href="#/notifications">«Уведомления»</a>. Здесь показано только срочное по текущим данным; фоновых оповещений и доставки при закрытой вкладке в прототипе нет (Stage 1.1, MVP_SCOPE §4.2).</div>
     </div>`;
     return { html, mount: (root) => { A.bindTabs(root.querySelector('#day-tabs'), (v) => { setDayTab(v); A.render(); }); } };
   };
@@ -498,7 +485,7 @@
         <div class="btn-row"><button class="btn small" data-action="cal-today">Сегодня</button><button class="btn small" data-action="cal-next">→</button></div>
       </div>
       ${calView === 'month' ? monthView() : calView === 'agenda' ? agendaView() : calView === 'week' ? weekView() : dayView()}
-      <div style="margin-top:12px;color:var(--muted);font-size:.82rem">События сохраняются в localStorage прототипа через Common Actions, пишутся в историю и отменяются через Undo. Повторы показаны как виртуальные вхождения. Reminder metadata хранится честно, но фоновые уведомления не гарантируются.</div>
+      <div style="margin-top:12px;color:var(--muted);font-size:.82rem">События сохраняются в этом браузере, попадают в «Историю» и их можно отменить. Повторяющиеся события показаны как отдельные вхождения. Напоминание появится в разделе «Уведомления»; при закрытой вкладке писем и push нет.</div>
     </div>`;
     return { html, mount: (root) => {
       A.bindTabs(root.querySelector('#cal-tabs'), (v) => { calView = v; A.render(); });
@@ -949,7 +936,7 @@
         </div>
         <div class="field-row">
           <div class="field"><label>Теги (через запятую)</label><input type="text" name="tags" value="${A.esc((ex.tags || []).join(', '))}" placeholder="например: дом, срочно"></div>
-          <div class="field"><label>Reminder metadata</label><select name="reminder">
+          <div class="field"><label>Напоминание</label><select name="reminder">
             <option value="none" ${!reminderValue || reminderValue === 'none' ? 'selected' : ''}>нет</option>
             <option value="at-time" ${reminderValue === 'at-time' ? 'selected' : ''}>в момент</option>
             <option value="15m" ${reminderValue === '15m' ? 'selected' : ''}>за 15 минут</option>
@@ -958,7 +945,7 @@
           </select></div>
         </div>
         <label class="check-row" style="margin-bottom:12px"><input type="checkbox" name="archived" ${ex.archived ? 'checked' : ''}><span class="label">Архивировать</span></label>
-        <div class="s" style="color:var(--muted);font-size:.8rem">Напоминание сохраняется как metadata. Прототип не обещает доставку уведомлений при закрытом браузере; фоновые уведомления — future.</div>`,
+        <div class="s" style="color:var(--muted);font-size:.8rem">Напоминание появится в разделе «Уведомления». При закрытой вкладке писем и push пока нет — это появится позже.</div>`,
       onSubmit: (v) => {
         const payload = {
           title: v.title,
@@ -997,7 +984,7 @@
         <div class="set-row"><div class="grow"><div class="t">${A.esc(humanDate(occurrenceDate || ev.date))}</div><div class="s">${occurrenceDate && occurrenceDate !== ev.date ? 'вхождение повторяющегося события; редактируется исходное' : 'дата'}</div></div></div>
         <div class="set-row"><div class="grow"><div class="t">${A.esc(ev.place || '—')}</div><div class="s">место</div></div></div>
         <div class="set-row"><div class="grow"><div class="t"><span class="pill ${importanceClass(ev.importance)}">${A.esc(ev.importance || 'обычная')}</span>${rep ? ` <span class="pill accent">${A.esc(rep)}</span>` : ''} <span class="pill">${A.esc(ev.category || 'Личное')}</span></div><div class="s">важность, повторение и категория</div></div></div>
-        <div class="set-row"><div class="grow"><div class="t">${A.esc(reminderLabel(ev.reminder))}</div><div class="s">reminder metadata (без гарантированной фоновой доставки)</div></div></div>
+        <div class="set-row"><div class="grow"><div class="t">${A.esc(reminderLabel(ev.reminder))}</div><div class="s">напоминание · появится в разделе «Уведомления»</div></div></div>
         ${Core().events.description(ev) ? `<div class="set-row"><div class="grow"><div class="t">${A.esc(Core().events.description(ev))}</div><div class="s">описание</div></div></div>` : ''}
         <div class="btn-row" style="margin-top:14px">
           <button class="btn" data-action="event-edit" data-id="${A.esc(ev.id)}" data-date="${A.esc(occurrenceDate || ev.date)}">Редактировать</button>
@@ -1050,8 +1037,8 @@
           <div class="field"><label>Категория</label><select name="category">
             ${['Личное', 'Работа', 'Дом', 'Авто', 'Здоровье', 'Покупки'].map((c) => `<option ${ex.category === c ? 'selected' : ''}>${A.esc(c)}</option>`).join('')}
           </select></div>
-          <div class="field"><label>Цвет (metadata)</label><input type="text" name="color" value="${A.esc(ex.color || '')}" placeholder="#5a5fd8"></div>
-          <div class="field"><label>Reminder metadata</label><select name="reminder">
+          <div class="field"><label>Цвет</label><input type="text" name="color" value="${A.esc(ex.color || '')}" placeholder="#5a5fd8"></div>
+          <div class="field"><label>Напоминание</label><select name="reminder">
             <option value="none" ${!reminderValue || reminderValue === 'none' ? 'selected' : ''}>нет</option>
             <option value="at-time" ${reminderValue === 'at-time' ? 'selected' : ''}>в момент</option>
             <option value="15m" ${reminderValue === '15m' ? 'selected' : ''}>за 15 минут</option>
@@ -1061,7 +1048,7 @@
         </div>
         <div class="field"><label>Место</label><input type="text" name="place" value="${A.esc(ex.place || '')}" placeholder="необязательно"></div>
         <div class="field"><label>Описание</label><textarea name="description" style="min-height:70px">${A.esc(ex.description || '')}</textarea></div>
-        <div class="s" style="color:var(--muted);font-size:.8rem">Событие сохраняется через Common Actions и появляется в «Календаре», «Дне» и на «Главной». Reminder metadata не означает гарантированную доставку уведомления при закрытом браузере.</div>`,
+        <div class="s" style="color:var(--muted);font-size:.8rem">Событие появится в «Календаре», «Дне» и на «Главной». Напоминание попадёт в раздел «Уведомления»; при закрытой вкладке писем и push пока нет.</div>`,
       onSubmit: (v) => {
         const payload = {
           title: v.title,

@@ -75,8 +75,8 @@ async function load(hash, opts) {
     ok('H1 Help route opens', /Помощь/.test(p.text('h1')) && !/Ошибка отрисовки/.test(p.text('#page')));
     ok('H2 Help categories render', p.qa('.help-cat').length >= 8, p.qa('.help-cat').length);
     ok('H3 Help search field exists and is labelled', !!p.q('#help-q') && /Поиск/.test(p.text('[data-tour="help-search"]')));
-    p.input(p.q('#help-q'), 'reminder'); await sleep(100);
-    ok('H4 Help local search filters articles', /Reminder metadata/.test(p.text('.help-main')) && !/Что такое Aven/.test(p.text('.help-main')), p.text('.help-main').slice(0, 120));
+    p.input(p.q('#help-q'), 'напоминан'); await sleep(100);
+    ok('H4 Help local search filters articles', /Напоминания в событиях/.test(p.text('.help-main')) && !/Что такое Aven/.test(p.text('.help-main')), p.text('.help-main').slice(0, 120));
     ok('H5 Help page has tutorial launcher', !!p.q('[data-action="tutorial-start"][data-tour-id="help"]'));
     p.dom.window.close();
   }

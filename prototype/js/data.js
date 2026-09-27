@@ -55,6 +55,21 @@ window.AvenDemo = (function () {
           voiceProfile: true
         },
         notify: {
+          /* Уведомления в приложении (Центр уведомлений, раздел «Уведомления»).
+             Это то, что реально работает в срезе 1.0/1.1: собирает напоминания из разных
+             разделов на одном экране. Фоновые/почтовые/push-уведомления при закрытой вкладке
+             НЕ входят сюда — им нужен сервер (открытые вопросы №16, №17). */
+          inapp: true,
+          sources: {
+            taskDue: true,      // задачи со сроком сегодня
+            taskOverdue: true,  // просроченные задачи
+            eventUpcoming: true,// события сегодня
+            eventReminder: true,// события с включённым напоминанием
+            autoDocs: true,     // документы авто с близким сроком
+            warranty: true,     // истекающая/истёкшая гарантия покупок
+            manual: true        // напоминания, созданные вручную
+          },
+          horizonDays: 7,       // насколько вперёд собирать напоминания
           voiceAllowed: true,
           quietHours: true,
           quietFrom: '23:00',
@@ -72,7 +87,7 @@ window.AvenDemo = (function () {
           night: '23:00',
           afterWork: '19:00'
         },
-        homeCards: { today: true, tasks: true, expenses: true, car: true, quick: true, actions: true },
+        homeCards: { today: true, tasks: true, expenses: true, car: true, reminders: true, quick: true, actions: true },
         modules: { calendar: true, tasks: true, notes: true, finance: true, auto: true, shopping: true, tools: true },
         experiments: { canvas: false, aiRouter: false, geoReminders: false }
       },
@@ -224,6 +239,23 @@ window.AvenDemo = (function () {
         { id: 'a2', name: 'Контроль страховки', icon: '🛡️', trigger: 'Ежедневная проверка даты', enabled: true, last: 'вчера, 09:00', next: 'сегодня, 09:00' },
         { id: 'a3', name: 'Обслуживание BMW', icon: '🚗', trigger: 'По пробегу / дате', enabled: true, last: '3 дня назад', next: 'по данным авто' }
       ],
+
+      /* Напоминания, созданные вручную (раздел «Уведомления»). Это самостоятельные записи
+         пользователя: их можно создать, изменить и удалить. Остальные пункты Центра уведомлений
+         вычисляются из задач, событий, документов авто и гарантий и отдельно не хранятся. */
+      reminders: [
+        { id: 'r1', title: 'Передать показания счётчиков', note: 'Вода и электричество за месяц', dateISO: yesterday, time: '20:00', link: '', createdISO: iso(-2), updatedISO: iso(-2) },
+        { id: 'r2', title: 'Продлить абонемент в бассейн', note: 'Заканчивается на этой неделе', dateISO: today, time: '19:00', link: '', createdISO: iso(-1), updatedISO: iso(-1) },
+        { id: 'r3', title: 'Поздравить маму с годовщиной', note: '', dateISO: tomorrow, time: '10:00', link: '', createdISO: iso(-1), updatedISO: iso(-1) }
+      ],
+
+      /* Состояние Центра уведомлений по каждому пункту (прочитано / отложено / скрыто).
+         Ключ — стабильный идентификатор пункта (тип:источник), значение — что с ним сделал
+         пользователь. Пункты сами по себе живут в задачах/событиях/гарантиях, а здесь хранится
+         только реакция на них, чтобы «прочитано» и «отложено» не терялись между открытиями. */
+      notifState: {
+        'event-upcoming:e3': { read: true, readAt: 'сегодня, 08:10' }
+      },
 
       commands: [
         { id: 'c1', phrase: 'запиши {сумма} на {категория}', action: 'expense.add', enabled: true },

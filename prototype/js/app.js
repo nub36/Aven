@@ -7,6 +7,7 @@
     { group: null, items: [
       { id: 'home', icon: '🏠', label: 'Главная' },
       { id: 'day', icon: '🌤️', label: 'День' },
+      { id: 'notifications', icon: '🔔', label: 'Уведомления' },
       { id: 'calendar', icon: '📅', label: 'Календарь', mod: 'calendar' },
       { id: 'tasks', icon: '✅', label: 'Задачи', mod: 'tasks' },
       { id: 'notes', icon: '📝', label: 'Заметки', mod: 'notes' },
@@ -32,7 +33,7 @@
   ];
 
   const TITLES = {
-    home: 'Главная', day: 'День', calendar: 'Календарь', tasks: 'Задачи', notes: 'Заметки',
+    home: 'Главная', day: 'День', notifications: 'Уведомления', calendar: 'Календарь', tasks: 'Задачи', notes: 'Заметки',
     finance: 'Финансы', auto: 'Авто', shopping: 'Покупки / Имущество', tools: 'Инструменты', help: 'Помощь',
     assistant: 'Aven Assistant', automation: 'Автоматизации', settings: 'Настройки', profile: 'Профиль',
     history: 'История действий', admin: 'Админка',
@@ -121,7 +122,27 @@
     document.getElementById('theme-btn').textContent = A.resolvedTheme() === 'dark' ? '☀️' : '🌙';
     if (out.mount) { try { out.mount(main); } catch (e) { console.error(e); } }
     if (window.AvenChar && !authMode) { try { window.AvenChar.mountFloat(); } catch (e) { console.error(e); } }
+    A.updateNotifBadge(authMode);
     window.scrollTo(0, 0);
+  };
+
+  /* Счётчик непрочитанных уведомлений на «колокольчике» в топбаре. */
+  A.updateNotifBadge = function (authMode) {
+    const btn = document.getElementById('notif-btn');
+    const badge = document.getElementById('notif-badge');
+    if (!btn || !badge) return;
+    if (authMode) { btn.hidden = true; return; }
+    btn.hidden = false;
+    let n = 0;
+    try { n = window.AvenNotify ? window.AvenNotify.unreadCount() : 0; } catch (e) { n = 0; }
+    if (n > 0) {
+      badge.hidden = false;
+      badge.textContent = n > 99 ? '99+' : String(n);
+      btn.setAttribute('aria-label', 'Уведомления: ' + n + ' непрочитанных');
+    } else {
+      badge.hidden = true;
+      btn.setAttribute('aria-label', 'Уведомления: непрочитанных нет');
+    }
   };
 
   /* делегирование кликов по data-action */
