@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 research/tts/out/
 research/3d/v2/out/
+*.blend1

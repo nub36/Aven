@@ -1,0 +1,111 @@
+{
+ "name": "female-aven-sculpt-base",
+ "status": "SCULPT BASE (НЕ Female Aven; автоматический face fit REJECTED)",
+ "source": "MPFB2 hm08 CC0, макросы fit_02 (age 0.5 = взрослый), БЕЗ warp",
+ "basehuman_npz_sha256": "5b122403d97db97322ec5b4b9b6ba80674f21c644024174a7cd29905b44f65fd",
+ "base": {
+  "verts": 5533,
+  "tris": 11062,
+  "z_cut": 1.15,
+  "cut_loops": [
+   32,
+   86,
+   32
+  ]
+ },
+ "anchors": {
+  "eye_mid": [
+   -0.0,
+   -0.1201,
+   1.4979
+  ],
+  "eye_L": [
+   0.0288,
+   -0.1201,
+   1.4979
+  ],
+  "eye_R": [
+   -0.0288,
+   -0.1201,
+   1.4979
+  ],
+  "chin": [
+   0.0,
+   -0.0816,
+   1.3927
+  ],
+  "nose_tip": [
+   0.0,
+   -0.1592,
+   1.4696
+  ],
+  "crown_z": 1.6053
+ },
+ "proxies": {
+  "eyes_L": 532,
+  "eyes_R": 532,
+  "teeth": 3868,
+  "tongue": 226,
+  "eyelashes": 250
+ },
+ "rig": {
+  "bones": [
+   "root",
+   "spine",
+   "neck",
+   "head",
+   "jaw",
+   "eye.L",
+   "eye.R"
+  ],
+  "weights": "NONE (sculpt first; ARKit-морфы НЕ переносились)"
+ },
+ "collections": [
+  "FEMALE_AVEN_BASE",
+  "EYES",
+  "FACE_PROXIES",
+  "RIG",
+  "REFERENCES",
+  "GUIDES"
+ ],
+ "reference_planes": {
+  "front": {
+   "image": "front-reference.jpg",
+   "px_per_m": 1960.1,
+   "anchor": "eyes"
+  },
+  "left34": {
+   "image": "candidate-left-34.jpg",
+   "px_per_m": 2060.1,
+   "anchor": "eyes"
+  },
+  "right34": {
+   "image": "candidate-right-34.jpg",
+   "px_per_m": 2074.3,
+   "anchor": "eyes"
+  },
+  "left_profile": {
+   "image": "candidate-left-profile.jpg",
+   "px_per_m": 1911.6,
+   "anchor": "nose"
+  },
+  "right_profile": {
+   "image": "candidate-right-profile.jpg",
+   "px_per_m": 1949.1,
+   "anchor": "nose"
+  },
+  "back": {
+   "image": "candidate-back-hair.jpg",
+   "px_per_m": 1991.0,
+   "anchor": "head"
+  }
+ },
+ "guide_levels_z": {
+  "brow": 1.5196,
+  "eyes": 1.4979,
+  "nose_tip": 1.457,
+  "mouth": 1.4339,
+  "chin": 1.3927
+ },
+ "blend_bytes": 1270331
+}

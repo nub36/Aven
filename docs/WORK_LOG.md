@@ -6,6 +6,75 @@
 
 ---
 
+## 2026-09-27 — XXXI. Вариант C: face fit REJECTED; sculpt-base проект Blender для ручного скульпта
+
+- **Дата:** 2026-09-27
+- **Задача (владелец):** по clay-обзору geometry отклонена (вариант C) — НЕ чинить
+  mesh warp'ами/материалами; подготовить следующий этап: чистая base head + настоящий
+  .blend проект (collections/references/guides) + sculpt guide + clay-рендеры чистой
+  базы; техническую основу сохранить; PR #15 дополнить; ADR не переводить в Accepted.
+
+### Что конкретно сделано
+
+- **Статусы обновлены:** AVATAR_3D_V2_PLAN §11 — REJECTED BY OWNER + новый §12;
+  ADR-114 → Rejected (experimental result); ADR-115 (sculpt-base этап) Proposed;
+  README review — контекст; тело PR #15 переписано (не описывает V2 как успешного
+  кандидата).
+- **Чистая база:** `prototype/assets/3d/sculpt/female-aven-sculpt-base.blend` —
+  MPFB hm08 CC0 (макросы fit_02: женщина/взрослый/muscle 0.30/weight 0.35),
+  БЕЗ TPS-деформаций: бюст 5533v/11062t (Z_CUT 1.15, крышки), глазные яблоки
+  отдельные (532+532), зубы/язык/ресницы CC0 скрыты, риг 7 костей БЕЗ весов
+  (eye.L/R в центрах яблок), clay-материалы, studio-свет, sculpt symmetry X ON.
+- **Reference-стенд:** 6 плейнов (front canonical / L34 / R34 / L-profile /
+  R-profile / back) + 6 камер; калибровка по анатомии базы и ландмаркам fit_01
+  (глаза↔ирисы, подбородок↔152, кончик носа↔1): 1912–2074 px/м, разброс < 8%;
+  изображения упакованы в .blend (самодостаточен).
+- **Гайды в сцене:** ось симметрии X=0, уровни brow/eyes/nose/mouth/chin (высоты
+  canonical reference в метрах), текстовый чек-лист 18 этапов.
+- **Документация:** docs/AVATAR_3D_V2_SCULPT_GUIDE.md — 18 этапов скульпта,
+  правила (symmetry до деталей; landmarks — только визуальные подсказки;
+  микродетали после утверждения), критерии готовности neutral face, граница
+  автоматизации.
+- **Clay-рендеры чистой базы** (НЕ Female Aven): 5 ракурсов + вид стенда →
+  `review/3d-v2-model/base-clay-views.jpg`, `base-reference-setup.jpg`.
+
+### Какие файлы изменены
+
+- Новые: `prototype/assets/3d/sculpt/female-aven-sculpt-base.{blend,meta.json}`,
+  `research/3d/v2/{build_sculpt_base,sculpt_base_renders,compose_base_sheet}.py`,
+  `prototype/tests/aven3d-sculpt-base-check.js`, `docs/AVATAR_3D_V2_SCULPT_GUIDE.md`,
+  `review/3d-v2-model/{base-clay-views,base-reference-setup}.jpg`.
+- Обновлены: `docs/AVATAR_3D_V2_PLAN.md` (§11 REJECTED, §12), `docs/DECISIONS.md`
+  (ADR-114 Rejected, ADR-115), `review/3d-v2-model/README.md`, этот журнал.
+
+### Что проверено/протестировано
+
+- `node prototype/tests/aven3d-sculpt-base-check.js` — см. прогон (sha256
+  отклонённого GLB неизменен, .blend/meta/стенд/доки/гигиена).
+- Регресс: `aven3d-v2-model-check.js` 69 ✓ / 0 ✗ (GLB не менялся).
+- Попиксельный QC 6 рендеров: база в кадре, профили зеркальны (80044/79944 px —
+  база симметрична), пересветов нет; стенд: все 6 плейнов в кадре.
+
+### Известные проблемы
+
+- Identity-sculpt лицо — НЕ автоматизируется вслепую (нет vision; правка «по
+  числам» = повтор провала landmark-fit). Подготовлено всё кроме самой
+  художественной работы.
+- Back-reference без ландмарок (face_found=False) — плейн откалиброван по
+  средней шкале aux-видов и высоте головы (ориентир, не точность).
+
+### Что рекомендуется делать следующим
+
+1. **Владельцу (одно действие):** открыть
+   `prototype/assets/3d/sculpt/female-aven-sculpt-base.blend` (Blender ≥ 4.x),
+   вид Material Preview, скульптировать neutral face по гайду (18 этапов,
+   symmetry X уже включена; гайд — в сцене и в
+   docs/AVATAR_3D_V2_SCULPT_GUIDE.md). Альтернатива — передать .blend художнику.
+2. После neutral face — clay-рендер (`research/3d/v2/sculpt_base_renders.py`)
+   и сравнение с references; утверждение → перенос рига/морфов (автоматически).
+
+---
+
 ## 2026-09-27 — XXX. V2 clay geometry review: честная диагностика геометрии (без изменений модели)
 
 - **Дата:** 2026-09-27

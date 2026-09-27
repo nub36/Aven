@@ -393,6 +393,14 @@ visemes. Что нужно до полноценного lip-sync: (1) утве�
 
 ## 11. РЕЗУЛЬТАТ (2026-09-27): V2-кандидат собран автоматически — Stage 1–7 выполнены
 
+> ⛔ **REJECTED BY OWNER (2026-09-27, clay review):** автоматический face fit
+> ОТКЛОНЁН — «landmark/TPS fit сохранил контрольные точки, но разрушил корректную
+> 3D-форму между ними» (деформировано лицо/нос/глаза/губы/подбородок/jawline).
+> GLB и viewer остаются в репозитории только как техническая основа
+> (pipeline/rig/морфы/тесты/clay-tooling); модель НЕ является Female Aven и
+> нигде не включена. Следующий этап — раздел 12 и
+> [AVATAR_3D_V2_SCULPT_GUIDE.md](AVATAR_3D_V2_SCULPT_GUIDE.md).
+
 Раздел 10 выше описывал статус «вариант B» на момент планирования. После этого pipeline
 **маршрута B (MPFB CC0)** был реализован полностью автоматически (без ручного Blender-этапа
 владельца) и дал реального кандидата — результат **A+B одновременно**: GLB есть, но
@@ -454,3 +462,33 @@ visemes. Что нужно до полноценного lip-sync: (1) утве�
 - Если владелец утвердит модель — следующий шаг: lip-sync Aigul→visemes (раздел 8).
   Если НЕ утвердит — материалы этой сессии (references, base, скрипты, спецификации)
   полностью готовы к ручному Blender/MetaHuman-этапу по разделу 7.
+
+
+---
+
+## 12. Этап после REJECTED (2026-09-27): sculpt-base проект Blender
+
+Решение владельца по clay-обзору — **вариант C** (геометрия не похожа).
+Принят порядок: `neutral face → визуальное утверждение → rig → blendshapes →
+materials/hair → lip-sync` (ADR-115).
+
+**Создано:**
+
+- `prototype/assets/3d/sculpt/female-aven-sculpt-base.blend` (+ `.meta.json`) —
+  ЧИСТАЯ база MPFB hm08 (CC0, макросы женщины-взрослого) БЕЗ TPS-деформаций:
+  бюст 5533v/11062t, отдельные глазные яблоки, риг 7 костей БЕЗ весов,
+  6 калиброванных reference-плейнов (front canonical / L34 / R34 / L-/R-profile /
+  back) + 6 камер, гайды (ось симметрии, уровни brow..chin), studio-свет,
+  sculpt symmetry X ON. Изображения упакованы в .blend.
+- `research/3d/v2/build_sculpt_base.py` (воспроизводимая сборка),
+  `sculpt_base_renders.py` (clay-рендеры), `compose_base_sheet.py` (листы).
+- Review: `review/3d-v2-model/base-clay-views.jpg` (5 ракурсов чистой базы,
+  подписано «НЕ Female Aven»), `base-reference-setup.jpg` (стенд).
+- Тест `prototype/tests/aven3d-sculpt-base-check.js`: отклонённый GLB не
+  изменён (sha256), структура .blend/meta, доки, гигиена репозитория.
+- Гайд: [AVATAR_3D_V2_SCULPT_GUIDE.md](AVATAR_3D_V2_SCULPT_GUIDE.md) — 18
+  этапов скульпта, правила symmetry/landmarks, критерии готовности.
+
+**Граница автоматизации:** agent готовит стенд/рендеры/сравнения и после
+утверждения перенесёт риг/морфы/GLB; identity-sculpt лица — только ручная
+работа владельца/художника (вслепую по числам — повтор провала landmark-fit).

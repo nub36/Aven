@@ -65,7 +65,8 @@
 | [ADR-111](#adr-111) | Proposed | Контракт API и валидация: REST + OpenAPI, общие Zod-схемы клиента и сервера |
 | [ADR-112](#adr-112) | Proposed | Тестирование и качество: Vitest + Testing Library + Playwright + интеграционные на реальном PostgreSQL |
 | [ADR-113](#adr-113) | Proposed | Репозиторий и деплой: монорепо pnpm workspaces, Docker Compose на VPS, GitHub Actions, бэкап с проверенным восстановлением |
-| [ADR-114](#adr-114) | Proposed | Female Aven 3D V2: пайплайн MPFB2 (CC0 base) + landmarks-fit + bpy-сборка; GLB-кандидат создан, identity утверждает владелец |
+| [ADR-114](#adr-114) | Rejected (experimental result) | Female Aven 3D V2 через АВТОМАТИЧЕСКИЙ landmarks/TPS face fit: кандидат создан, но отклонён владельцем — разрушена форма между контрольными точками. Техническая основа (rig/морфы/GLB/тесты) сохранена |
+| [ADR-115](#adr-115) | Proposed | Следующий этап V2: controlled sculpt в Blender на чистой CC0-базе; порядок neutral face → утверждение → rig → blendshapes → materials |
 
 ---
 
@@ -449,7 +450,11 @@
 
 - **ID:** ADR-114
 - **Дата:** 2026-09-27
-- **Статус:** Proposed
+- **Статус:** Rejected (experimental result) — clay-обзор владельцем 2026-09-27:
+  геометрия лица НЕ является Female Aven (нос/глаза/губы/подбородок/jawline
+  деформированы; низкий landmark residual НЕ доказывает сохранение identity).
+  Техническая основа (MPFB CC0 топология, риг, ARKit/viseme-геренация, GLB
+  экспорт, тесты, viewer, clay-tooling) сохранена для следующего этапа.
 - **Решение:** Female Aven 3D V2 собирается воспроизводимым Python-pipeline:
   **MPFB2 hm08 (CC0 base mesh) → landmarks-fit по 6 reference-ракурсам (478 точек,
   TPS+warp с выравниванием профильной глубины) → бюст → ARKit-51 + 7 visemes →
@@ -472,6 +477,32 @@
   morphTargetInfluences (движок уже в viewer'е).
 
 ---
+
+### ADR-115
+
+- **ID:** ADR-115
+- **Дата:** 2026-09-27
+- **Статус:** Proposed
+- **Решение:** Female Aven V2 строится как **controlled sculpt в Blender** на
+  чистой CC0-базе (MPFB hm08, без TPS-деформаций): проект
+  `prototype/assets/3d/sculpt/female-aven-sculpt-base.blend` с reference-стендом
+  (6 калиброванных плейнов + камеры), гайдами и sculpt symmetry X. Порядок
+  этапов: **neutral face → визуальное утверждение владельцем → rig → facial
+  blendshapes → materials/hair → lip-sync**. Риг/ARKit-морфы НЕ переносятся на
+  новую голову до утверждения neutral face.
+- **Причина:** автоматический landmark/TPS fit отклонён (ADR-114): сохранение
+  контрольных точек разрушило форму между ними. Identity — художественная
+  задача, решается скульптом по утверждённым reference views, не числовой
+  оптимизацией вслепую.
+- **Альтернативы:** повторный автоматический fit с другими весами (риск того же
+  результата); MetaHuman (лучше, но требует Windows+UE5+GPU у владельца);
+  сторонний художник (владелец решает сам — стенд готов к передаче).
+- **Что проверить перед `Accepted`:** neutral face в clay-рендерах 5 ракурсов
+  утверждается владельцем; только после этого — перенос рига/морфов.
+- **Последствия:** coding-agent автоматизирует стенд/рендеры/сравнения и
+  пост-утверждение (риг, морфы, GLB, viewer), но не выполняет identity-sculpt
+  вслепую; бюджет веб-модели и лицензии CC0 — без изменений (ADR-114 техника
+  переиспользуется).
 
 ## Ранее `Under Discussion` — переведены в `Proposed` (2026-09-26)
 

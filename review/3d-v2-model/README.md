@@ -42,6 +42,19 @@
 mesh, дальше materials/skin/eyes/hair; B) частично → правим конкретные области;
 C) не похожа → landmarks/TPS fit недостаточен, нужен ручной sculpt/другой face-fit.
 
+## Sculpt base (2026-09-27, после REJECTED автоматического fit)
+
+Владелец отклонил автоматически fitted face (вариант C: деформированы нос/глаза/
+губы/подбородок/jawline). Подготовлен следующий этап — controlled sculpt:
+
+- `base-clay-views.jpg` — ЧИСТАЯ sculpt-base (MPFB CC0, без TPS-деформаций),
+  5 ракурсов clay. **Это НЕ Female Aven** — отправная точка скульпта.
+- `base-reference-setup.jpg` — reference-стенд в .blend (6 калиброванных
+  плейнов + камеры + гайды).
+- Проект: `prototype/assets/3d/sculpt/female-aven-sculpt-base.blend`;
+  гайд: `docs/AVATAR_3D_V2_SCULPT_GUIDE.md` (18 этапов, порядок
+  neutral face → утверждение → rig → blendshapes → materials).
+
 ## Контекст
 
 - Пайплайн: MPFB2 CC0 base + landmarks-fit по 6 ракурсам → бюст → ARKit-51 + visemes →
