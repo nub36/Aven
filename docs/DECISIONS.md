@@ -65,6 +65,7 @@
 | [ADR-111](#adr-111) | Proposed | Контракт API и валидация: REST + OpenAPI, общие Zod-схемы клиента и сервера |
 | [ADR-112](#adr-112) | Proposed | Тестирование и качество: Vitest + Testing Library + Playwright + интеграционные на реальном PostgreSQL |
 | [ADR-113](#adr-113) | Proposed | Репозиторий и деплой: монорепо pnpm workspaces, Docker Compose на VPS, GitHub Actions, бэкап с проверенным восстановлением |
+| [ADR-114](#adr-114) | Proposed | Female Aven 3D V2: пайплайн MPFB2 (CC0 base) + landmarks-fit + bpy-сборка; GLB-кандидат создан, identity утверждает владелец |
 
 ---
 
@@ -443,6 +444,32 @@
 - **Последствия:** Регион хостинга и провайдер — решение владельца (данные личные); инфраструктура как код;
   обновления и патчи безопасности — регулярная обязанность (раздел 10 [STACK_RESEARCH.md](STACK_RESEARCH.md));
   health endpoint и логи — ADMIN §15–16, без логирования секретов (SECURITY §7).
+
+### ADR-114
+
+- **ID:** ADR-114
+- **Дата:** 2026-09-27
+- **Статус:** Proposed
+- **Решение:** Female Aven 3D V2 собирается воспроизводимым Python-pipeline:
+  **MPFB2 hm08 (CC0 base mesh) → landmarks-fit по 6 reference-ракурсам (478 точек,
+  TPS+warp с выравниванием профильной глубины) → бюст → ARKit-51 + 7 visemes →
+  bpy-сборка (риг 7 костей, bone-parenting прокси, PBR, vertex colors) → GLB**.
+  Кандидат: `prototype/assets/3d/female-aven-v2.glb` (25 430 tris, 5.41 МБ) +
+  viewer `prototype/aven-3d-v2-model.html`. Главная страница не меняется, пока
+  владелец не утвердит модель визуально.
+- **Причина:** единственный маршрут из исследованных, который даёт легальную
+  (CC0), ригованную, морфуемую модель бюста ПОЛНОСТЬЮ автоматически в этой
+  инфраструктуре (Linux headless, без GPU-PC владельца). MetaHuman требует
+  Windows+UE5+GPU; TripoSR (V1) — технический PoC без рига/топологии.
+- **Альтернативы:** MetaHuman (лучше identity-скулпт, но ручной этап на ПК
+  владельца); KeenTools/Reallusion/Avaturn (платные); FLAME/MICA/DECA
+  (non-commercial); TRELLIS/Hunyuan3D (GPU 10–24 GB, нет в инфраструктуре).
+- **Что проверить перед `Accepted`:** визуальное утверждение identity владельцем
+  в `prototype/aven-3d-v2-model.html` (сравнение с каноническим reference);
+  при отказе — ADR закрывается, материалы сессии готовы к ручному этапу.
+- **Последствия:** hair/волокна — mesh-карты (не strand); лимит 30–100k
+  треугольников на веб-модель; будущий lip-sync = Aigul audio → visemes →
+  morphTargetInfluences (движок уже в viewer'е).
 
 ---
 

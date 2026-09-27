@@ -388,3 +388,69 @@ visemes. Что нужно до полноценного lip-sync: (1) утве�
 > Ссылки-цитаты в этом документе относятся к внешним источникам, проверенным веб-поиском при
 > подготовке плана (сравнения image-to-3D, лицензии FLAME/MICA/MetaHuman/MPFB, пайплайны
 > MetaHuman→GLB). Внутренние факты о V1/инфраструктуре — из репозитория и этой сессии.
+
+---
+
+## 11. РЕЗУЛЬТАТ (2026-09-27): V2-кандидат собран автоматически — Stage 1–7 выполнены
+
+Раздел 10 выше описывал статус «вариант B» на момент планирования. После этого pipeline
+**маршрута B (MPFB CC0)** был реализован полностью автоматически (без ручного Blender-этапа
+владельца) и дал реального кандидата — результат **A+B одновременно**: GLB есть, но
+утверждение identity — за владельцем.
+
+### Что сделано (воспроизводимый Python-pipeline, `research/3d/v2/`)
+
+| Stage | Скрипт | Результат |
+|---|---|---|
+| 1. Landmarks | `fit_01_landmarks.py` | 478 точек на 6 reference-ракурсах (MediaPipe 0.10.14) |
+| 2. Base human | `fit_02_basehuman.py` | MPFB2 hm08 (CC0), макросы gender 0 / age 0.5 / muscle 0.3 / weight 0.35 / height 0.5, caucasian |
+| 3. Correspondence | `fit_03_corresp.py` | preshape (chin-height-decr 0.568, nose-nostrils-width-decr 3.0), структурные камеры front/left/right, 463/478 соответствий |
+| 4. Identity warp | `fit_04_warp.py` | TPS+pins+clamp + выравнивание профильной глубины (IRLS/Huber); post-warp resid median 2.62px / p95 11.21px; перенос 34 expression-юнитов с нормировкой амплитуды (RMS к оригиналу, кап [0.5, 3.0]) |
+| 5. Bust | `fit_05_bust.py` | 5533v/11062t, срез Z_CUT 1.15, крышки срезов |
+| 6. ARKit+visemes | `fit_06_arkit.py` | 51 ARKit-морф + 7 visemes (+REST); side-маски, зеркальные mouth L/R |
+| 7. Assembly | `fit_07_assemble.py` | 8 мешей, риг, материалы, vertex colors, GLB + 11 превью + stats |
+
+### Ключевые решения, найденные отладкой
+
+- **Профильная камера ≠ система тела:** ось my из MediaPipe относится к кадру, не к глубине
+  тела → выравнивание `y = 0.403·my − 0.009` (spread 0.231→0.093) ДО warp. Без этого лицо
+  выпирало вперёд на 10–20см.
+- **Blender 5.0 создаёт shape keys с value=1.0** → обязательный `sk.value = 0.0`, иначе все
+  58 морфов активны одновременно и GLB выходит с weights=1.
+- **Bone-parenting объектов:** Blender парентит к хвосту кости; компенсация
+  `matrix_parent_inverse = (arm.matrix_world @ bone.matrix_local @ T(0, bone.length, 0))⁻¹`.
+- **Pivot глазной кости = центр глазного яблока** (измеряется из fitted-прокси, Δ=0.0мм в
+  финальном GLB); влияния eye.L/eye.R убраны с кожи (gaze не тянет веки).
+- **Демпфирование юнитов warp'ом:** амплитуды перенесённых юнитов нормируются к RMS
+  оригинала (blink 5.3→9.8мм, brow 1.2→3.3мм).
+
+### Числа финального GLB (`prototype/assets/3d/female-aven-v2.glb`)
+
+- 8 мешей, 25 430 треугольников / 14 304 вершин в GLB (исходник 14 154v) — веб-бюджет 30–100k ✓
+- 5.41 МБ; морфы: Body 58 (51 ARKit + 7 visemes) + Eyelashes 10; weights все 0
+- Риг: root/spine/neck/head/jaw/eye.L/eye.R (7 костей); глаза/зубы/ресницы/волосы/язык —
+  bone-parented, Body/Clothes — skin
+- Vertex colors (губы 889 / брови 278 / скальп 58 вершин) + 4 CC0-текстуры (глаза/зубы/язык/ресницы)
+- Амплитуды: jawOpen 44мм, blink 9.8мм, smile 17.4мм, browInnerUp 3.3мм, viseme_O 13.9мм
+- QC pixel-diff (thr15, нейтральная база): smile 115px, jawOpen 547px, blink 301px,
+  viseme_O 193px; модель в кадре во всех 6 ракурсах
+
+### Где смотреть
+
+- **Viewer кандидата:** `prototype/aven-3d-v2-model.html` — канонический reference рядом,
+  кнопки Спереди/Слева/Справа/Сзади, вращение/zoom, тест выражений + visemes + gaze-кости,
+  техблок. После merge: https://nub36.github.io/Aven/aven-3d-v2-model.html
+- **Превью-лист для оценки:** `review/3d-v2-model/female-aven-v2-preview.jpg` (reference +
+  6 ракурсов + 4 выражения)
+- **Тест:** `node prototype/tests/aven3d-v2-model-check.js` — 69 проверок структуры GLB,
+  амплитуд морфов, рига и viewer'а
+
+### Честная граница
+
+- Геометрия подогнана по 478×6 landmarks (скуллы/профиль/нос/губы/подбородок), но это
+  **landmarks-fit, не художественный sculpt**: тонкая форма (носовые крылья, скуловые
+  впадины, форма волос) — приближение. Сходство оценивает ТОЛЬКО владелец.
+- Главная страница и PNG-персонаж не изменены; V2 нигде не включена без утверждения.
+- Если владелец утвердит модель — следующий шаг: lip-sync Aigul→visemes (раздел 8).
+  Если НЕ утвердит — материалы этой сессии (references, base, скрипты, спецификации)
+  полностью готовы к ручному Blender/MetaHuman-этапу по разделу 7.
