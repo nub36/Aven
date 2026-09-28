@@ -244,6 +244,28 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
     const confirmed = e.session.submit('подтвердить!');
     ok('S77 пунктуация не ломает текстовое confirmation', confirmed.ok && isDone(e, t.id) && e.state.history.length === 1);
   }
+  /* Stage 2, итерация 3: новая распознанная команда о заметке должна сбрасывать
+     старый pending flow (уточнение/подтверждение) точно так же, как любая другая
+     независимая команда (S30) — второго pending context для заметок нет. */
+  {
+    const e = sandbox(); const a = task(e, 'Отчёт за август'), b = task(e, 'Отчёт для Сергея'); clearHistory(e);
+    e.session.submit('Отметь отчёт выполненным'); // AMBIGUOUS clarification pending
+    const r = e.session.submit('Создай заметку купить фильтр для машины');
+    ok('S90 новая команда о заметке сбрасывает pending уточнение задачи',
+      r.ok && r.result.action === 'note.create' && e.session.pending() === null);
+    ok('S91 старые задачи не мутировали, заметка создана ровно одна запись истории',
+      !isDone(e, a.id) && !isDone(e, b.id) && e.state.notes.length === 1 && e.state.history.length === 1 &&
+      e.state.history[0].action === 'note.create');
+  }
+  {
+    const e = sandbox(); const t = task(e, 'Подготовить квартальный отчёт'); clearHistory(e);
+    e.session.submit('Отметь отчёт выполненным'); // INFERRED confirmation pending
+    const r = e.session.submit('Покажи заметки');
+    ok('S92 новая read-only команда о заметках сбрасывает pending подтверждение',
+      r.ok && r.result.action === 'note.search' && e.session.pending() === null);
+    ok('S93 pending mutation не выполнилась, поиск ничего не изменил',
+      !isDone(e, t.id) && e.state.history.length === 0);
+  }
   ['первую', 'вторая', 'вторую', 'отмена', 'нет', 'подтвердить'].forEach((word, i) => {
     const e = sandbox(); const a = task(e, 'Тест один'), b = task(e, 'Тест два'); clearHistory(e);
     e.session.submit('Отметь тест выполненным');

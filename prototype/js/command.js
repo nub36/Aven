@@ -191,7 +191,9 @@ window.AvenCommand = (function () {
     'Создай задачу купить масло на завтра',
     'Добавь завтра в 10 встречу с Сергеем',
     'Отметь купить масло выполненной',
-    'Перенеси задачу купить масло на пятницу'
+    'Перенеси задачу купить масло на пятницу',
+    'Создай заметку купить фильтр для машины',
+    'Покажи заметки про отпуск'
   ];
   const PARSE_MESSAGES = {
     EMPTY: 'Напишите команду — например: «Что у меня сегодня?»',
@@ -207,7 +209,9 @@ window.AvenCommand = (function () {
     UNSUPPORTED_FINANCE: 'Записывать расходы и доходы текстом я пока не умею. Добавьте операцию в разделе «Финансы».',
     UNSUPPORTED_REMINDER: 'Создавать напоминания текстом я пока не умею. Добавьте напоминание в разделе «Уведомления» — или создайте задачу с датой.',
     UNSUPPORTED_AUTO: 'Записывать заправки и обслуживание текстом я пока не умею. Это делается в разделе «Авто».',
-    UNSUPPORTED_NOTE: 'Создавать заметки текстом я пока не умею. Это делается в разделе «Заметки».'
+    NOTE_CONTENT_REQUIRED: 'Не поняла, что записать в заметку. Напишите так: «Создай заметку купить фильтр для машины».',
+    UNSUPPORTED_NOTE_UPDATE: 'Изменять текст уже существующей заметки текстовой командой я пока не умею. Откройте заметку в разделе «Заметки» — там можно отредактировать текст.',
+    UNSUPPORTED_NOTE_ARCHIVE: 'Отправлять заметку в архив или возвращать её текстом я пока не умею. Это делается в разделе «Заметки».'
   };
   function intent(action, kind, params, rule, extra) {
     return Object.assign({
@@ -237,6 +241,10 @@ window.AvenCommand = (function () {
 
   /* ======================= 5. Шаблоны (parse) ======================= */
   const TASK_WORD = '(?:задач[уаи]|дело|дела|таск)';
+  /* Любое кириллическое окончание принимается сознательно (как у дней недели выше):
+     «заметку», «заметки», «заметке», «заметок» — без отдельного морфологического анализатора. */
+  const NOTE_WORD = '(?:заметк[а-яе]*)';
+  const SHOW_VERB = '(?:покажи|показать|найди|найти|поищи|поискать|искать)';
   const CREATE_VERB = '(?:созда[йть]?(?:ть|й)?|добав(?:ь|ить)|запиши|записать|запланируй|запланировать|поставь|поставить)';
   const DONE_VERB = '(?:отметь|отметить|заверши|завершить|выполни|выполнить|закрой|закрыть)';
   const MOVE_VERB = '(?:перенеси|перенести|передвинь|передвинуть|сдвинь|сдвинуть)';
@@ -261,6 +269,41 @@ window.AvenCommand = (function () {
     if (!title) return fail('TASK_TITLE_REQUIRED', 'task.create');
     return intent('task.create', 'mutation',
       { title, dateISO: when.dateISO || '', time: when.time || '' }, 'task.create');
+  }
+
+  /* Заголовок заметки для общего действия (у него title обязателен и ограничен 120
+     символами — docs/MVP_SCOPE.md §5.5). Второй схемы заметок здесь нет: это просто
+     подготовка поля перед вызовом единственного существующего Common Action. */
+  function noteTitleFromContent(content) {
+    const clean = tidy(content);
+    const short = clean.length > 60 ? clean.slice(0, 60).trim() + '…' : clean;
+    return capitalize(short);
+  }
+
+  /* «Создай/добавь/запиши заметку …» — весь текст после слова «заметк*» становится
+     содержимым заметки целиком, без разбора даты/времени и без повторного поиска
+     доменных слов внутри него: команда уже однозначно определена конструкцией
+     «глагол + заметку», поэтому «встреча», «билет», «расход» и т.п. внутри текста
+     не должны переклассифицировать её в событие/задачу/финансы (см. секцию ниже —
+     ровно эта регрессия уже случалась в PR #27 review). */
+  function parseNoteCreate(n, raw) {
+    const rx = new RegExp('^' + CREATE_VERB + '\\s+(?:нов(?:ую|ое|ый)\\s+)?' + NOTE_WORD + NOT_AFTER + '\\s*(.*)$', 'i');
+    if (!rx.test(n)) return null;
+    const m = rx.exec(raw) || rx.exec(n);
+    const content = tidy(m[1] || '');
+    if (!content) return fail('NOTE_CONTENT_REQUIRED', 'note.create');
+    return intent('note.create', 'mutation', { content, title: noteTitleFromContent(content) }, 'note.create');
+  }
+
+  /* «Покажи/найди заметки [про …]» — read-only поиск через существующий Common Query.
+     Пустой запрос («покажи заметки») означает «покажи все активные», а не ошибку. */
+  function parseNoteSearch(n, raw) {
+    const rx = new RegExp('^' + SHOW_VERB + '\\s+(?:мои\\s+)?' + NOTE_WORD + NOT_AFTER +
+      '\\s*(?:про|о|об|на тему)?\\s*(.*)$', 'i');
+    if (!rx.test(n)) return null;
+    const m = rx.exec(raw) || rx.exec(n);
+    const q = tidy(String(m[1] || '').replace(/^(?:про|о|об|на тему)\s+/i, ''));
+    return intent('note.search', 'query', { q }, 'note.search');
   }
 
   function parseEventCreate(n, raw, context) {
@@ -352,15 +395,21 @@ window.AvenCommand = (function () {
     if (new RegExp(NOT_BEFORE + 'напомн').test(n)) return fail('UNSUPPORTED_REMINDER', 'guard.reminder');
     if (/(заправ|залил|бензин|топлив)/.test(n)) return fail('UNSUPPORTED_AUTO', 'guard.auto');
     if (/(запиши|добавь|созда|внеси|потратил|заплатил|оплатил)/.test(n) && (/(рубл|₽|расход|доход|трат)/.test(n) || hasWord(n, 'р'))) return fail('UNSUPPORTED_FINANCE', 'guard.finance');
-    /* Здесь тоже нельзя опираться на \w: он не знает кириллицы, поэтому «создай заметку»
-       проходил бы мимо честного отказа и попадал в «не поняла». */
-    if (/(?:созда|добав|запиши|запис)[а-яе]*\s+заметк/.test(n)) return fail('UNSUPPORTED_NOTE', 'guard.note');
+    /* Создание заметки уже разобрано отдельным правилом выше (см. parseNoteCreate) —
+       если разбор дошёл сюда со словом «заметк*», это изменение/архив уже существующей
+       заметки, а не создание. Явные честные отказы вместо общего «не поняла»
+       (тот же урок про \w и кириллицу, что и у остальных guard-ов). */
+    if (/заметк/.test(n)) {
+      if (/архив/.test(n)) return fail('UNSUPPORTED_NOTE_ARCHIVE', 'guard.note.archive');
+      if (hasWord(n, 'измени|изменить|переименуй|переименовать|отредактируй|отредактировать|обнови|обновить|допиши|дополни|дополнить'))
+        return fail('UNSUPPORTED_NOTE_UPDATE', 'guard.note.update');
+    }
     if (new RegExp('^(?:' + MOVE_VERB + ')').test(n) && EVENT_WORD.test(n)) return fail('UNSUPPORTED_EVENT_UPDATE', 'guard.event.update');
     return null;
   }
 
   const RULES = [
-    parseTaskCreate, parseEventCreate, parseTaskComplete, parseTaskReschedule,
+    parseTaskCreate, parseNoteCreate, parseNoteSearch, parseEventCreate, parseTaskComplete, parseTaskReschedule,
     parseCapabilities, parseFinanceQuery, parseAutoQuery, parseOverdueQuery,
     parseSuggestionsQuery, parseDayQuery, parseUnsupported
   ];
@@ -473,6 +522,21 @@ window.AvenCommand = (function () {
           intent: intentObj, entity: res.entity, historyId: res.entry && res.entry.id,
           data: { title: res.entity.title, dateISO: res.entity.date, time: C.events.start(res.entity) || '' }
         });
+      }
+      case 'note.create': {
+        /* Никакой второй схемы заметок: единственные поля, которые движок готовит, —
+           title (обязателен у общего действия) и body (весь текст команды целиком). */
+        const res = C.notes.createNote({ title: p.title, body: p.content }, opts);
+        if (!res.ok) return actionFailed('note.create', res, intentObj);
+        return result(true, 'done', 'note.create', {
+          intent: intentObj, entity: res.entity, historyId: res.entry && res.entry.id,
+          data: { title: res.entity.title, body: res.entity.body || '' }
+        });
+      }
+      case 'note.search': {
+        const q = tidy(p.q || '');
+        const items = C.notes.getNotes({ status: 'active', q }).items || [];
+        return result(true, 'info', 'note.search', { intent: intentObj, data: { q, items } });
       }
       case 'task.complete':
       case 'task.reschedule': {
@@ -619,10 +683,29 @@ window.AvenCommand = (function () {
   }
   function capabilitiesText() {
     const list = supported();
-    return 'Сейчас я понимаю короткие команды о задачах, событиях и обзоре дня. Вопросы: ' +
+    return 'Сейчас я понимаю короткие команды о задачах, событиях, заметках и обзоре дня. Вопросы: ' +
       list.queries.map((x) => quote(x.example)).join(', ') + '. Действия: ' +
       list.mutations.map((x) => quote(x.example)).join(', ') +
       '. Пока не умею: ' + list.notYet.join('; ') + '. Все разделы по-прежнему работают обычными кнопками и формами.';
+  }
+  /* Ответ на поиск/показ заметок: только заголовок и короткий превью текста —
+     ни id, ни служебных полей. */
+  function noteSearchText(data) {
+    const C = Core();
+    const items = data.items || [];
+    if (!items.length) {
+      return data.q
+        ? 'Не нашла заметок про ' + quote(data.q) + '. Проверьте название в разделе «Заметки» — я ничего не меняла.'
+        : 'Заметок пока нет. Добавьте заметку в разделе «Заметки» или командой «Создай заметку …».';
+    }
+    if (items.length === 1) {
+      const n0 = items[0];
+      const preview = C.notes.preview(n0.body || '');
+      return 'Нашла заметку ' + quote(n0.title) + (preview ? ': ' + preview : '') +
+        ' (папка «' + C.notes.folderOf(n0) + '»). Открыть можно в «Заметках».';
+    }
+    return 'Нашла ' + plural(items.length, 'заметка', 'заметки', 'заметок') + ': ' +
+      listTitles(items, 5) + '. Откройте «Заметки», чтобы посмотреть их целиком.';
   }
 
   /* respond(result) → обычный текст. Ни JSON, ни имён действий, ни внутренних номеров записей. */
@@ -639,6 +722,9 @@ window.AvenCommand = (function () {
         case 'event.create':
           return 'Событие ' + quote(res.data.title) + ' создано на ' + whenPhrase(res.data.dateISO, res.data.time) +
             (res.data.time ? '' : ' (на весь день)') + '. Оно уже видно в «Календаре»; отменить можно в «Истории».';
+        case 'note.create':
+          return 'Заметка ' + quote(res.data.title) + ' создана. Она уже видна в «Заметках»; отменить можно в «Истории».';
+        case 'note.search': return noteSearchText(res.data);
         case 'task.complete':
           return 'Задача ' + quote(res.data.title) + ' отмечена выполненной. Вернуть её можно в «Задачах» или отменить в «Истории».';
         case 'task.reschedule':
@@ -707,17 +793,20 @@ window.AvenCommand = (function () {
         { action: 'suggestions.list', example: 'Какие есть предложения?', about: 'подсказки по вашим записям' },
         { action: 'finance.summary', example: 'Сколько я потратил?', about: 'расходы за сегодня и за месяц' },
         { action: 'auto.status', example: 'Какой пробег?', about: 'автомобиль, пробег и ближайшее ТО' },
+        { action: 'note.search', example: 'Покажи заметки про отпуск', about: 'ищет заметки по тексту' },
         { action: 'help.capabilities', example: 'Что ты умеешь?', about: 'список понятных команд' }
       ],
       mutations: [
         { action: 'task.create', example: 'Создай задачу купить масло на завтра', about: 'создаёт задачу' },
         { action: 'event.create', example: 'Добавь завтра в 10 встречу с Сергеем', about: 'создаёт событие' },
         { action: 'task.complete', example: 'Отметь купить масло выполненной', about: 'отмечает задачу выполненной' },
-        { action: 'task.reschedule', example: 'Перенеси задачу купить масло на пятницу', about: 'меняет дату задачи' }
+        { action: 'task.reschedule', example: 'Перенеси задачу купить масло на пятницу', about: 'меняет дату задачи' },
+        { action: 'note.create', example: 'Создай заметку купить фильтр для машины', about: 'создаёт заметку с этим текстом' }
       ],
       notYet: [
         'удаление записей текстом',
-        'расходы, заметки, заправки и напоминания текстом',
+        'расходы, заправки и напоминания текстом',
+        'изменение, архивирование и удаление уже существующих заметок текстом',
         'перенос событий текстом',
         'свободный разговор за пределами перечисленных уточнений'
       ]

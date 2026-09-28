@@ -206,23 +206,25 @@ function partA() {
     const ev = env3.K.run('перенеси встречу на 12', { source: 'test' });
     ok('A77 перенос события текстом отклоняется и не трогает календарь',
       ev.ok === false && /Календар/.test(ev.response) && env3.state.events.length === 0);
-    /* Кириллица и \w: «создай заметку» должно давать честный отказ про раздел «Заметки»,
-       а не общее «не поняла» — регрессия ревью PR #27. */
-    ['создай заметку список покупок', 'добавь заметку про встречу', 'запиши заметку идея'].forEach((phrase, i) => {
-      const note = env3.K.run(phrase, { source: 'test' });
-      ok('A77' + String.fromCharCode(97 + i) + ' «' + phrase + '» отклоняется с подсказкой про «Заметки»',
-        note.ok === false && note.intent.error.code === 'UNSUPPORTED_NOTE' &&
-        /Заметк/.test(note.response) && env3.state.notes.length === 0, note.response);
+    /* Кириллица и \w: «создай заметку» должно создавать настоящую заметку через общее
+       действие, а не общее «не поняла» — Stage 2, итерация 3 (заметки текстом). */
+    const notesBefore77 = env3.state.notes.length;
+    [['создай заметку список покупок', 'Список покупок'], ['добавь заметку про встречу', 'Про встречу'],
+     ['запиши заметку идея', 'Идея']].forEach((pair, i) => {
+      const note = env3.K.run(pair[0], { source: 'test' });
+      ok('A77' + String.fromCharCode(97 + i) + ' «' + pair[0] + '» создаёт заметку с этим текстом',
+        note.ok === true && note.result.action === 'note.create' && note.result.entity.title === pair[1] &&
+        /Заметк/.test(note.response), note.response);
     });
+    ok('A77g все три заметки действительно попали в общее состояние', env3.state.notes.length === notesBefore77 + 3);
     /* Слово «встреча» в середине чужой фразы не должно создавать событие:
        регрессия ревью PR #27 («добавь заметку про встречу» создавало событие
-       «Событие заметку про встречу»). Не поняли — не угадываем. */
+       «Событие заметку про встречу»). Не поняли — не угадываем. Теперь «добавь заметку
+       про встречу» — это настоящая заметка (см. A77b), а не молчаливый отказ. */
     const evBefore = env3.state.events.length;
-    ['добавь заметку про встречу', 'добавь важную встречу'].forEach((phrase, i) => {
-      const r = env3.K.run(phrase, { source: 'test' });
-      ok('A77e' + i + ' «' + phrase + '» не создаёт случайное событие',
-        r.ok === false && env3.state.events.length === evBefore, r.response);
-    });
+    const r77e1 = env3.K.run('добавь важную встречу', { source: 'test' });
+    ok('A77e1 «добавь важную встречу» не создаёт случайное событие (слово не в начале фразы)',
+      r77e1.ok === false && env3.state.events.length === evBefore, r77e1.response);
     /* Нормальные формулировки события при этом продолжают работать. */
     [['создай событие день рождения мамы', 'День рождения мамы'],
      ['добавь встречу с врачом на пятницу', 'Встреча с врачом'],
@@ -236,9 +238,10 @@ function partA() {
     const wd = env3.K.parse('перенеси задачу тест на среду');
     ok('A77d день недели разбирается и даёт будущую дату',
       wd.ok === true && wd.params.dateISO > FIXED, wd.ok ? wd.params : wd.error);
+    const historyBeforeEmpty = env3.state.history.length;
     const empty = env3.K.run('   ', { source: 'test' });
     ok('A78 пустой ввод не выполняется и объясняется',
-      empty.ok === false && empty.intent.error.code === 'EMPTY' && env3.state.history.length === 0);
+      empty.ok === false && empty.intent.error.code === 'EMPTY' && env3.state.history.length === historyBeforeEmpty);
   }
 
   /* ---- A6. Неверные дата и время ---- */
@@ -383,8 +386,130 @@ function partA() {
     ok('A143 список возможностей честно перечисляет и то, чего движок не умеет',
       /Пока не умею/.test(cap.response) && /удаление записей текстом/.test(cap.response));
     ok('A144 перечень возможностей доступен как данные для интерфейса и справки',
-      K9.supported().queries.length >= 5 && K9.supported().mutations.length === 4 &&
+      K9.supported().queries.length >= 5 && K9.supported().mutations.length === 5 &&
       K9.supported().notYet.length >= 4 && K9.examples().length >= 6);
+  }
+
+  /* ---- A13. Заметки текстом (Stage 2, итерация 3) ----
+     COMMAND_ENGINE.md §9.3 относил заметки к явно неподдержанному первой итерацией;
+     здесь — реальное поведение новой команды note.create/note.search поверх тех же
+     Common Actions/Queries, что использует раздел «Заметки». */
+  {
+    const env10 = coreSandbox();
+    const K10 = env10.K, C10 = env10.C;
+
+    /* A160 — точное создание, содержимое сохранено дословно (включая регистр). */
+    const r160 = K10.run('Создай заметку Купить фильтр для машины срочно', { source: 'assistant' });
+    const n160 = env10.state.notes[0];
+    ok('A160 «создай заметку …» создаёт настоящую заметку через общее действие',
+      r160.ok && n160 && n160.body === 'Купить фильтр для машины срочно' && n160.title === 'Купить фильтр для машины срочно',
+      JSON.stringify(n160));
+    ok('A161 заметка находится обычным запросом раздела «Заметки»',
+      C10.notes.getNotes({ status: 'active' }).items.some((x) => x.id === n160.id));
+    ok('A162 запись истории создана один раз, помечена отменяемой',
+      env10.state.history.length === 1 && env10.state.history[0].action === 'note.create' &&
+      env10.state.history[0].undoable === true && env10.state.history[0].undo.type === 'remove' &&
+      env10.state.history[0].source === 'assistant');
+    ok('A163 ответ пользователю упоминает «Заметки» и «Историю», без служебных терминов',
+      /Заметк/.test(r160.response) && /Истори/.test(r160.response) &&
+      !/(note\.create|intent|payload|JSON)/i.test(r160.response), r160.response);
+
+    /* A164 — очень длинный текст обрезается только в заголовке (ограничение 120 символов
+       общего действия), тело заметки остаётся полным — второй схемы полей здесь нет. */
+    const longText = 'слово '.repeat(30).trim();
+    const r164 = K10.run('добавь заметку ' + longText, { source: 'test' });
+    ok('A164 длинное содержимое заметки не обрезается в теле, заголовок укладывается в лимит',
+      r164.ok && r164.result.entity.body === longText && r164.result.entity.title.length <= 120,
+      r164.ok ? r164.result.entity.title.length : r164.response);
+
+    /* A165 — пустая заметка не создаётся и не подставляет выдуманный текст. */
+    const notesBefore165 = env10.state.notes.length;
+    const historyBefore165 = env10.state.history.length;
+    ['создай заметку', 'добавь заметку', 'запиши заметку'].forEach((phrase, i) => {
+      const r = K10.run(phrase, { source: 'test' });
+      ok('A165' + i + ' «' + phrase + '» без текста не создаёт пустую заметку',
+        r.ok === false && r.intent.error.code === 'NOTE_CONTENT_REQUIRED' &&
+        env10.state.notes.length === notesBefore165 && env10.state.history.length === historyBefore165,
+        r.response);
+    });
+
+    /* A166 — обязательные регрессии: слова внутри содержимого заметки не должны
+       переклассифицировать команду в другой домен (Event/Task/Finance/Auto). */
+    const domainCases = [
+      ['добавь заметку про встречу', 'Про встречу'],
+      ['создай заметку купить билет', 'Купить билет'],
+      ['запиши заметку расход 500 рублей', 'Расход 500 рублей'],
+      ['добавь заметку заправить машину', 'Заправить машину']
+    ];
+    domainCases.forEach((pair, i) => {
+      const before = { tasks: env10.state.tasks.length, events: env10.state.events.length, ops: env10.state.ops.length };
+      const r = K10.run(pair[0], { source: 'test' });
+      ok('A166' + i + ' «' + pair[0] + '» создаёт заметку, а не другой домен',
+        r.ok === true && r.result.action === 'note.create' && r.result.entity.title === pair[1] &&
+        env10.state.tasks.length === before.tasks && env10.state.events.length === before.events &&
+        env10.state.ops.length === before.ops, r.response);
+    });
+
+    /* A167 — настоящие Task/Event команды по-прежнему работают рядом с заметками. */
+    const r167a = K10.run('создай задачу проверить шины', { source: 'test' });
+    ok('A167a обычная команда задачи продолжает работать', r167a.ok && r167a.result.action === 'task.create');
+    const r167b = K10.run('добавь завтра в 9 встречу с механиком', { source: 'test' });
+    ok('A167b обычная команда события продолжает работать',
+      r167b.ok && r167b.result.action === 'event.create' && r167b.result.entity.title === 'Встреча с механиком');
+
+    /* A168 — поиск/показ заметок: read-only, ничего не меняет и не пишет историю. */
+    const K11env = coreSandbox();
+    const K11 = K11env.K, C11 = K11env.C;
+    C11.notes.createNote({ title: 'Идеи для отпуска', body: 'Куда поехать летом' }, { source: 'ui' });
+    C11.notes.createNote({ title: 'Купить билет', body: 'Билет на поезд до отпуска' }, { source: 'ui' });
+    C11.notes.createNote({ title: 'Список покупок', body: 'Молоко, хлеб' }, { source: 'ui' });
+    const histBeforeSearch = K11env.state.history.length;
+    const one = K11.run('Найди заметку про отпуск', { source: 'test' });
+    ok('A168 поиск с одним результатом называет заметку и не меняет данные',
+      one.ok && one.result.action === 'note.search' && /Идеи для отпуска/.test(one.response) &&
+      K11env.state.history.length === histBeforeSearch && K11env.state.notes.length === 3, one.response);
+    const many = K11.run('покажи заметки', { source: 'test' });
+    ok('A169 поиск без слов после «заметки» показывает все активные заметки списком',
+      many.ok && many.result.data.items.length === 3 &&
+      /Идеи для отпуска/.test(many.response) && /Купить билет/.test(many.response), many.response);
+    const none = K11.run('покажи заметки про динозавров', { source: 'test' });
+    ok('A170 поиск без результатов честно об этом сообщает и не создаёт заметку',
+      none.ok && none.result.data.items.length === 0 && /Не нашла/i.test(none.response) &&
+      K11env.state.notes.length === 3, none.response);
+    ok('A171 ответ поиска не показывает внутренние id/JSON/имя действия',
+      !/(note\.search|intent|payload|"id"|\{)/i.test(one.response + many.response + none.response));
+    /* Кириллица: регистр не должен ломать поиск (используется общий Notes-поиск).
+       «Купить билет» тоже совпадает: его текст — «Билет на поезд до отпуска». */
+    const caseInsensitive = K11.run('Покажи Заметки Про ОТПУСК', { source: 'test' });
+    ok('A172 поиск заметок нечувствителен к регистру',
+      caseInsensitive.ok && caseInsensitive.result.data.items.length === 2 &&
+      caseInsensitive.result.data.items.some((x) => x.title === 'Идеи для отпуска'),
+      caseInsensitive.result.data.items.map((x) => x.title));
+
+    /* A173 — изменение/архив уже существующей заметки текстом остаются честно
+       неподдержанными: ни мутации, ни истории, понятное объяснение. */
+    const before173 = { notes: K11env.state.notes.length, history: K11env.state.history.length };
+    const upd = K11.run('измени заметку купить билет', { source: 'test' });
+    ok('A173a «измени заметку …» безопасно отклоняется',
+      upd.ok === false && upd.intent.error.code === 'UNSUPPORTED_NOTE_UPDATE' &&
+      /не умею/i.test(upd.response) && K11env.state.notes.length === before173.notes &&
+      K11env.state.history.length === before173.history, upd.response);
+    const arch = K11.run('заархивируй заметку купить билет', { source: 'test' });
+    ok('A173b «заархивируй заметку …» безопасно отклоняется',
+      arch.ok === false && arch.intent.error.code === 'UNSUPPORTED_NOTE_ARCHIVE' &&
+      K11env.state.notes.length === before173.notes && K11env.state.history.length === before173.history, arch.response);
+    const delNote = K11.run('удали заметку купить билет', { source: 'test' });
+    ok('A173c «удали заметку …» остаётся неподдержанным удалением, как и раньше',
+      delNote.ok === false && delNote.intent.error.code === 'UNSUPPORTED_DELETE' &&
+      K11env.state.notes.length === before173.notes && K11env.state.history.length === before173.history, delNote.response);
+
+    /* A174 — parse() для заметок остаётся чистым: разбор без исполнения не мутирует. */
+    const env12 = coreSandbox();
+    const beforeParse = JSON.stringify(env12.state);
+    ['создай заметку купить фильтр', 'покажи заметки', 'найди заметку про отпуск',
+      'измени заметку тест', 'архивируй заметку тест', 'создай заметку'].forEach((t) => env12.K.parse(t));
+    ok('A175 разбор note-команд не меняет данные и не пишет историю',
+      JSON.stringify(env12.state) === beforeParse && env12.state.history.length === 0);
   }
 
   /* ---- A12. Второго слоя действий и своей истории не появилось ---- */
@@ -394,7 +519,8 @@ function partA() {
     !/logAction|history\./.test(src.replace(/\/\*[\s\S]*?\*\//g, '')));
   ok('A152 изменения идут только через существующие общие действия',
     /\bC\.tasks\.createTask\(/.test(src) && /\bC\.tasks\.completeTask\(/.test(src) &&
-    /\bC\.tasks\.updateTask\(/.test(src) && /\bC\.events\.createEvent\(/.test(src));
+    /\bC\.tasks\.updateTask\(/.test(src) && /\bC\.events\.createEvent\(/.test(src) &&
+    /\bC\.notes\.createNote\(/.test(src) && !/\bC\.notes\.(updateNote|deleteNote|setNoteArchived)\(/.test(src));
 }
 
 /* ======================= ЧАСТЬ B. Поведение экранов ======================= */
@@ -530,6 +656,80 @@ async function partB() {
     p.dom.window.close();
   }
 
+  /* ---- B3b. Заметка командой: сквозная согласованность и безопасность (Stage 2, итерация 3) ---- */
+  {
+    const p = await load('#/assistant');
+    const reply = await p.say('Создай заметку купить фильтр для машины');
+    const note = p.st().notes[0];
+    ok('B35 команда создала настоящую заметку через общий слой',
+      note && note.title === 'Купить фильтр для машины' && note.body === 'купить фильтр для машины' &&
+      p.H()[0].action === 'note.create', reply);
+    ok('B36 ответ пользователю — человеческий текст без служебных терминов',
+      /Заметк/.test(reply) && /Истори/.test(reply) && !/(note\.create|intent|JSON)/i.test(reply));
+    await p.go('#/notes');
+    ok('B37 заметка из команды видна в обычном разделе «Заметки», без второй копии',
+      p.text().indexOf('Купить фильтр для машины') >= 0 && !p.broken());
+    await p.go('#/home');
+    ok('B38 «Главная» видит ту же заметку (карточка «Заметки») или данные совпадают',
+      p.text().indexOf('Купить фильтр для машины') >= 0 ||
+      p.C().notes.getNotes({ status: 'active' }).items.some((n) => n.id === note.id));
+    await p.go('#/history');
+    ok('B39 действие команды попало в общую «Историю» с кнопкой отмены',
+      p.text().indexOf('Купить фильтр для машины') >= 0 && !!p.q('[data-action="hist-undo"]'));
+    p.w.Aven.undoAction(p.H().filter((e) => e.action === 'note.create')[0].id);
+    await sleep(280);
+    ok('B39a отмена командной заметки работает как обычная отмена: заметки больше нет',
+      !p.st().notes.some((n) => n.id === note.id) && !p.broken());
+    await p.go('#/notes');
+    ok('B39b после отмены раздел «Заметки» тоже не показывает запись',
+      p.text().indexOf('Купить фильтр для машины') < 0);
+
+    await p.go('#/assistant');
+    /* Обязательные регрессии: слова внутри заметки не переклассифицируют команду. */
+    const beforeCounts = () => ({ tasks: p.st().tasks.length, events: p.st().events.length, notes: p.st().notes.length, ops: p.st().ops.length });
+    const c1 = beforeCounts();
+    const rEvent = await p.say('добавь заметку про встречу');
+    ok('B40a «добавь заметку про встречу» создаёт заметку, а не событие',
+      p.st().notes.length === c1.notes + 1 && p.st().events.length === c1.events &&
+      p.st().notes[0].title === 'Про встречу', rEvent);
+    const c2 = beforeCounts();
+    const rTask = await p.say('создай заметку купить билет');
+    ok('B40b «создай заметку купить билет» создаёт заметку, а не задачу',
+      p.st().notes.length === c2.notes + 1 && p.st().tasks.length === c2.tasks &&
+      p.st().notes[0].title === 'Купить билет', rTask);
+    const c3 = beforeCounts();
+    const rFin = await p.say('запиши заметку расход 500 рублей');
+    ok('B40c «запиши заметку расход 500 рублей» создаёт заметку, а не расход',
+      p.st().notes.length === c3.notes + 1 && p.st().ops.length === c3.ops &&
+      p.st().notes[0].title === 'Расход 500 рублей', rFin);
+    const c4 = beforeCounts();
+    const rAuto = await p.say('добавь заметку заправить машину');
+    ok('B40d «добавь заметку заправить машину» создаёт заметку, а не запись авто',
+      p.st().notes.length === c4.notes + 1 && p.st().notes[0].title === 'Заправить машину', rAuto);
+
+    /* Пустая заметка честно отклоняется, без записи в «Историю». */
+    const histBeforeEmpty = p.H().length;
+    const notesBeforeEmpty = p.st().notes.length;
+    const empty = await p.say('создай заметку');
+    ok('B41 «создай заметку» без текста ничего не создаёт и объясняет причину',
+      /Не поняла|записать в заметку/i.test(empty) && p.st().notes.length === notesBeforeEmpty &&
+      p.H().length === histBeforeEmpty);
+
+    /* Поиск заметок: несколько результатов показаны списком, без мутации. */
+    await p.say('добавь заметку идеи для отпуска');
+    const histBeforeSearch = p.H().length;
+    const searchReply = await p.say('покажи заметки про отпуск');
+    ok('B42 поиск заметок находит и не пишет «Историю»',
+      /Идеи для отпуска/.test(searchReply) && p.H().length === histBeforeSearch, searchReply);
+
+    /* Изменение/архив существующей заметки текстом — честно неподдержано. */
+    const notesBeforeGuard = p.st().notes.length;
+    const updReply = await p.say('измени заметку купить билет');
+    ok('B43 «измени заметку …» не редактирует данные',
+      /не умею/i.test(updReply) && p.st().notes.length === notesBeforeGuard);
+    p.dom.window.close();
+  }
+
   /* ---- B4. Безопасность в интерфейсе: неизвестное, неоднозначное, запрещённое ---- */
   {
     const p = await load('#/assistant');
@@ -636,6 +836,20 @@ async function partB() {
     ok('B67 обучение по командам зарегистрировано в существующем движке обучения',
       !!p.w.AvenTutorial.definitions.commands && p.w.AvenTutorial.definitions.commands.route === 'assistant' &&
       p.w.AvenTutorial.definitions.commands.steps.length >= 5);
+    /* Stage 2, итерация 3: заметки текстом — справка объясняет создание, поиск,
+       где посмотреть результат и почему слова внутри заметки не путают команду. */
+    ok('B67a справка объясняет создание заметки текстом с примером',
+      /Создай заметку купить фильтр/.test(bodies));
+    ok('B67b справка объясняет, что текст внутри заметки не переключает домен',
+      /Про встречу/.test(bodies) && /не превращается|не превращает/i.test(bodies + ' ' +
+        (p.w.AvenHelp.articles.find((a) => a.id === 'cmd-notes') || {}).body));
+    ok('B67c справка объясняет поиск заметок текстом', /Покажи заметки/.test(bodies) && /Найди заметку/.test(bodies));
+    ok('B67d справка честно говорит, что изменение/архив/удаление заметки текстом не поддерживаются',
+      /(?:Изменить текст|изменить текст уже существующей заметки)[^.]*архив[^.]*пока нельзя/i.test(bodies) ||
+      (/изменить текст уже существующей заметки/i.test(bodies) && /архив/i.test(bodies) && /пока нет/i.test(bodies)),
+      bodies.match(/.{0,60}архив.{0,80}/gi));
+    ok('B67e раздел «Заметки» тоже упоминает создание текстом',
+      /Быструю заметку можно создать/.test((p.w.AvenHelp.articles.find((a) => a.id === 'notes-basics') || {}).body || ''));
     p.dom.window.close();
   }
 

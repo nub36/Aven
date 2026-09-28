@@ -96,8 +96,9 @@ prototype/tests/
 │                           восстановление после перезагрузки, отсутствие второго пути записи,
 │                           согласованность #/profile ↔ Настройки, честность данных, Help/Tutorial,
 │                           доступность, ширины 320–1280)
-├── command-engine-check.js — Текстовые команды и Assistant UI (ядро без DOM + jsdom: multi-step controls,
-│                           Escape, confirmation, History/Undo, разделы, Home, Help/Tutorial, 320–430)
+├── command-engine-check.js — Текстовые команды, заметки и Assistant UI (ядро без DOM + jsdom: multi-step
+│                           controls, Escape, confirmation, заметки (создание/поиск/отказы/регрессии
+│                           доменов), History/Undo, разделы, Home, Help/Tutorial, 320–430)
 ├── command-session-check.js — transient flow без DOM: ambiguity/choice, inferred confirmation/cancel,
 │                           stale/double-submit, reset, owner policy, кириллица и отсутствие hidden memory
 └── stage13-entities-check.js — Заметки/Финансы/Авто/Покупки/Напоминания (115 проверок: часть A — контракт
@@ -109,7 +110,7 @@ prototype/tests/
 
 Зависимостей нет. Сборка не нужна.
 
-## Текстовые команды (Stage 2, первая итерация, 2026-09-28)
+## Текстовые команды (Stage 2, итерации 1–3, 2026-09-28)
 
 `js/command.js` (`window.AvenCommand`) — ядро текстовых команд **без DOM, без AI/LLM, без сети и без
 голоса**: `normalize → parse → structured intent → execute → structured result → respond`. Разбор
@@ -126,8 +127,8 @@ prototype/tests/
 
 Если под фразу подходит несколько задач — Aven перечисляет их и просит уточнить, **не меняя данные**;
 если ничего не найдено, дата/время неверны или команда непонятна — объясняет причину и тоже ничего не
-меняет. Удаление, расходы, заметки, заправки, покупки и напоминания текстом, перенос событий и
-многошаговые уточнения в первую итерацию **не входят**.
+меняет. Удаление, расходы, заправки, покупки и напоминания текстом, перенос событий и многошаговые
+уточнения в первую итерацию **не входят**.
 
 **Вторая итерация** добавляет настоящий transient flow поверх этого же ядра. Полное совпадение Task —
 `EXACT`; единственное совпадение по части названия — `INFERRED`; несколько — `AMBIGUOUS`; неподдержанное —
@@ -140,8 +141,20 @@ Event остаются неподдержанными командами.
 
 Прежний демонстрационный `flows.js` (имитация многошаговой заправки и «важного события») **удалён**:
 держать имитацию рядом с настоящим разбором нечестно. Заправка создаётся в разделе «Авто» обычной
-формой. Контракт и границы — [docs/COMMAND_ENGINE.md §9](../docs/COMMAND_ENGINE.md),
+формой. Контракт и границы первой и второй итераций — [docs/COMMAND_ENGINE.md §9–10](../docs/COMMAND_ENGINE.md),
 слой — [docs/ARCHITECTURE.md §3.5](../docs/ARCHITECTURE.md).
+
+**Третья итерация** добавляет один новый домен — **заметки**. «Создай/добавь/запиши заметку <текст>»
+создаёт заметку через существующий `AvenActions.notes.createNote`: весь текст после слова «заметку»
+становится содержимым заметки целиком (заголовок Aven подбирает по нему же), без повторного разбора
+внутри него слов других доменов — «встреча», «билет», «расход», «заправить машину» внутри текста не
+переключают команду на событие/задачу/финансы/авто (это прямое закрытие production-дефекта из review
+PR #27). Пустой текст после «заметку» — честная ошибка, а не пустая или выдуманная заметка. «Покажи/
+найди заметки [про …]» ищет через существующий `AvenActions.notes.getNotes` — read-only, ничего не
+мутирует и не пишет «Историю»; один результат — короткое превью, несколько — список заголовков, ноль —
+честное «не нашла». Изменение текста, архивирование и удаление уже существующей заметки текстом **не
+входят** в эту итерацию — это делается в разделе «Заметки»; расходы, заправки, покупки и напоминания
+текстом остаются следующими блоками. Контракт — [docs/COMMAND_ENGINE.md §11](../docs/COMMAND_ENGINE.md).
 
 ## Заметки, Финансы, Авто, Покупки, Напоминания (Stage 1.3, 2026-09-28)
 
@@ -455,7 +468,7 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 **Проверка:** `node prototype/tests/actions-core-check.js` — **18 проверок Common Actions без DOM**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/help-tutorial-check.js` — **33 проверки Help/Tutorial/responsive/TTS narration**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js`
-(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage13-entities-check.js` — **115 проверок заметок, финансов, авто, покупок и напоминаний** (контракт слоя без DOM на часах приложения, производные итоги «Финансов», сценарии через интерфейс, история и Undo, согласованность Главной/Истории/помощника/уведомлений, справка и обучение, темы и ширины, запрет записи в обход слоя). `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` — **161 проверка текстовых команд и Assistant UI**; `node prototype/tests/command-session-check.js` — **73 проверки transient clarification/confirmation flow**. Полный набор из четырнадцати suite — **1155 проверок, 0 провалов**.
+(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage13-entities-check.js` — **115 проверок заметок, финансов, авто, покупок и напоминаний** (контракт слоя без DOM на часах приложения, производные итоги «Финансов», сценарии через интерфейс, история и Undo, согласованность Главной/Истории/помощника/уведомлений, справка и обучение, темы и ширины, запрет записи в обход слоя). `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` — **203 проверки текстовых команд, заметок и Assistant UI**; `node prototype/tests/command-session-check.js` — **77 проверок transient clarification/confirmation flow**. Полный набор из четырнадцати suite — **1201 проверка, 0 провалов**.
 `stage1-proto-check.js` покрывает: меню и метки этапов, история с
 Undo/фильтрами/экспортом, все 8 разделов админки с подтверждениями и аудитом, тема, экраны аккаунта,
 роут-гард, сквозная история и настоящий Undo в задачах/заметках/финансах/авто/покупках/автоматизациях,
@@ -483,7 +496,7 @@ Common Actions для задач/событий, Help Center и reusable guided 
 - **Персонаж** (вымышленные «Ава»/«Авен») — только оформление: аватар в Assistant, плавающая кнопка, приветствия. Включается/выключается в «Настройки → Персонаж»; при выключении — нейтральный логотип «A», функции не меняются ([docs/CHARACTER.md](../docs/CHARACTER.md), ADR-014).
 - **Голос:** озвучка ответов через браузерный `speechSynthesis`; голосовой ввод — экспериментальный `SpeechRecognition` (🎤). Честный статус поддержки — в «Настройки → Голос»; при недоступности — всегда текст.
 - **Демо-команды убраны (2026-09-28).** Ряд «⚡ Заправился» / «⚡ Важное событие» был имитацией выполнения; вместо него под полем показаны примеры настоящих команд, которые разбирает `command.js`. Заправка заводится обычной формой в разделе «Авто».
-- Это UX-прототип: первая итерация Command Engine есть (раздел «Текстовые команды»), но это не production, без AI и платных API.
+- Это UX-прототип: три итерации Command Engine есть (раздел «Текстовые команды», включая заметки), но это не production, без AI и платных API.
 
 ## GitHub Pages preview
 
