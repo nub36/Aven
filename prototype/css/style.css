@@ -620,6 +620,24 @@ html[data-theme="dark"] .cal-ev { color: var(--accent-strong); }
 .a-input input { flex: 1; height: 50px; font-size: 1.02rem; border-radius: 14px; }
 .a-input button { width: 50px; height: 50px; border-radius: 14px; font-size: 1.2rem; flex: 0 0 50px; }
 .sugg { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; padding: 12px 0 2px; }
+.command-flow { width: min(100%, 620px); max-width: 94%; }
+.command-choices { display: grid; gap: 8px; margin-top: 12px; }
+.command-choice {
+  width: 100%; min-height: 48px; padding: 10px 12px; text-align: left;
+  border: 1px solid var(--border); border-radius: 12px; cursor: pointer;
+  color: var(--text); background: var(--panel-2); overflow-wrap: anywhere;
+}
+.command-choice:hover { border-color: var(--accent); }
+.command-choice b, .command-choice span { display: block; }
+.command-choice span { margin-top: 3px; color: var(--muted); font-size: .82rem; }
+.command-confirm { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.command-confirm .btn { min-height: 44px; }
+@media (max-width: 430px) {
+  .assistant { padding: 16px 10px; }
+  .assistant .a-logo { margin-bottom: 8px; }
+  .command-flow { max-width: 100%; }
+  .command-confirm .btn { flex: 1 1 120px; }
+}
 
 /* automation */
 .auto-li { display: flex; align-items: center; gap: 14px; padding: 14px 4px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }

@@ -146,6 +146,26 @@ text → normalize → parse → structured intent
 Фактический охват первой итерации — [COMMAND_ENGINE.md](COMMAND_ENGINE.md) §9. Это прототипное
 направление, а не утверждённая production-архитектура.
 
+### 3.6. Transient Command Session (Stage 2, итерация 2)
+
+`AvenCommandSession` — DOM-free слой оркестрации между Assistant и `AvenCommand`:
+
+```
+Assistant → CommandSession (pending clarification/confirmation only)
+          → AvenCommand resolve/execute → Common Actions → state/history
+```
+
+Он хранит только минимальный сериализуемый pending intent, фиксированный контекст общих часов и
+references кандидатов/цели. Это interaction state, не business state: слой не импортирует `AvenState`,
+не пишет History, не содержит Task/Event/Finance logic и не сохраняется в localStorage. Assistant —
+единственный UI; Home передаёт текст в него. Сброс происходит после success/cancel/refusal/stale,
+при новой распознанной команде и уходе с route. Перед конечной мутацией цель перечитывается через
+Common Query; pending очищается до execute для защиты от двойного подтверждения.
+
+`parse()` остаётся чистым; Entity Resolver возвращает дискретные `EXACT / INFERRED / AMBIGUOUS /
+UNSUPPORTED`, без числовых confidence. Подробный contract и policy — [COMMAND_ENGINE.md](COMMAND_ENGINE.md)
+§6, §10. Это развитие прототипного слоя, а не перевод ADR-004 или stack ADR в `Accepted`.
+
 ## 4. Action Core
 
 Независимо от источника команда превращается в **стандартное действие**.

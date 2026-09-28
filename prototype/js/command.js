@@ -59,7 +59,12 @@ window.AvenCommand = (function () {
       todayISO,
       nowHM: /^\d{2}:\d{2}$/.test(String(ctx.nowHM || '')) ? String(ctx.nowHM) : D.nowHM(),
       source: ctx.source || 'command',
-      surface: ctx.surface || 'assistant'
+      surface: ctx.surface || 'assistant',
+      /* Только transient orchestration flags; business state сюда не попадает. */
+      targetId: ctx.targetId || '',
+      expectedTitle: ctx.expectedTitle || '',
+      selected: ctx.selected === true,
+      confirmed: ctx.confirmed === true
     };
   }
 
@@ -211,8 +216,11 @@ window.AvenCommand = (function () {
       domain: String(action).split('.')[0],
       action,                     /* task.create, day.plan, ... */
       params: params || {},
-      match: { rule, confidence: 'high' },
-      requiresConfirmation: false /* разрушительных команд в первой итерации нет */
+      /* Дискретный уровень вместо выдуманной числовой «уверенности».
+         Для полного совпадения синтаксического правила исходный уровень — EXACT;
+         Entity Resolver ниже может понизить его до INFERRED или AMBIGUOUS. */
+      match: { rule, resolution: 'EXACT' },
+      requiresConfirmation: false
     }, extra || {});
   }
   function fail(code, rule, extra) {
@@ -331,7 +339,11 @@ window.AvenCommand = (function () {
       if (!hasWord(n, 'что|какие')) return null;
       return intent('day.plan', 'query', { dateISO: context.todayISO }, 'day.plan.today');
     }
-    return intent('day.plan', 'query', { dateISO: d.dateISO }, 'day.plan');
+    const out = intent('day.plan', 'query', { dateISO: d.dateISO }, 'day.plan');
+    /* Детерминированное сокращение без слов «у меня/план/дела» — честный INFERRED
+       query: результат однозначен и read-only, поэтому подтверждение не нужно. */
+    if (/^(?:что|какие)\s+(?:сегодня|завтра|послезавтра)$/i.test(n)) out.match.resolution = 'INFERRED';
+    return out;
   }
 
   /* Честные отказы: команда понята, но возможности пока нет. Состояние не меняется. */
@@ -383,25 +395,47 @@ window.AvenCommand = (function () {
       intent: intentObj
     });
   }
-  /* Связывание фразы с реальной задачей. Fuzzy-подбора нет: если подходит
-     несколько задач — возвращается неоднозначность, а не «первая попавшаяся». */
+  /* Минимальный универсальный контракт разрешения сущности. Fuzzy/NLP здесь нет:
+     полное название = EXACT, единственное детерминированное вхождение = INFERRED,
+     несколько кандидатов = AMBIGUOUS, отсутствие = UNSUPPORTED/not-found. */
+  function taskCandidate(t) {
+    return {
+      id: t.id, title: t.title,
+      dateISO: Core().tasks.date(t) || '',
+      time: Core().tasks.time(t) || '',
+      due: Core().tasks.deadline(t) || Core().tasks.date(t) || '',
+      status: Core().tasks.isCompleted(t) ? 'completed' : 'active'
+    };
+  }
   function resolveTask(query, context) {
     const list = Core().tasks.getTasks({ status: 'active', today: context.todayISO }).items || [];
     const q = normalize(query);
-    if (!q) return { ok: false, code: 'NOT_FOUND', candidates: [] };
+    if (!q) return { ok: false, status: 'not_found', resolution: 'UNSUPPORTED', code: 'NOT_FOUND', candidates: [] };
     const exact = list.filter((t) => normalize(t.title) === q);
-    const pool = exact.length ? exact : list.filter((t) => normalize(t.title).indexOf(q) >= 0);
-    if (pool.length === 1) return { ok: true, task: pool[0] };
-    if (pool.length > 1) return { ok: false, code: 'AMBIGUOUS', candidates: pool };
-    return { ok: false, code: 'NOT_FOUND', candidates: [] };
+    if (exact.length === 1) return { ok: true, status: 'resolved', resolution: 'EXACT', entity: taskCandidate(exact[0]) };
+    if (exact.length > 1) return { ok: false, status: 'ambiguous', resolution: 'AMBIGUOUS', code: 'AMBIGUOUS', candidates: exact.map(taskCandidate) };
+    /* INFERRED допускается только для целых слов/фраз с хотя бы одним содержательным
+       словом (3+ символа). Иначе «а», «от» или кусок слова «чет» могли бы выбрать
+       единственную Task только потому, что других задач сейчас нет. */
+    const meaningful = q.split(/\s+/).some((part) => part.length >= 3);
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const partialRx = meaningful ? wordRx(escaped) : null;
+    const partial = partialRx ? list.filter((t) => partialRx.test(normalize(t.title))) : [];
+    if (partial.length === 1) return { ok: true, status: 'resolved', resolution: 'INFERRED', entity: taskCandidate(partial[0]) };
+    if (partial.length > 1) return { ok: false, status: 'ambiguous', resolution: 'AMBIGUOUS', code: 'AMBIGUOUS', candidates: partial.map(taskCandidate) };
+    return { ok: false, status: 'not_found', resolution: 'UNSUPPORTED', code: 'NOT_FOUND', candidates: [] };
+  }
+  function resolve(intentObj, ctx) {
+    const context = makeContext(ctx);
+    if (!intentObj || intentObj.ok !== true) return { ok: false, status: 'unsupported', resolution: 'UNSUPPORTED', candidates: [] };
+    if (intentObj.action === 'task.complete' || intentObj.action === 'task.reschedule') {
+      return resolveTask((intentObj.params || {}).query, context);
+    }
+    return { ok: true, status: 'resolved', resolution: (intentObj.match && intentObj.match.resolution) || 'EXACT', entity: null };
   }
   function ambiguous(actionName, intentObj, candidates) {
     return result(false, 'ambiguous', actionName, {
-      code: 'AMBIGUOUS_TASK', intent: intentObj,
-      candidates: candidates.map((t) => ({
-        id: t.id, title: t.title,
-        due: Core().tasks.deadline(t) || Core().tasks.date(t) || ''
-      }))
+      code: 'AMBIGUOUS_TASK', resolution: 'AMBIGUOUS', intent: intentObj, candidates
     });
   }
 
@@ -440,27 +474,44 @@ window.AvenCommand = (function () {
           data: { title: res.entity.title, dateISO: res.entity.date, time: C.events.start(res.entity) || '' }
         });
       }
-      case 'task.complete': {
-        const found = resolveTask(p.query, context);
-        if (!found.ok && found.code === 'AMBIGUOUS') return ambiguous('task.complete', intentObj, found.candidates);
-        if (!found.ok) return result(false, 'not_found', 'task.complete', { code: 'TASK_NOT_FOUND', intent: intentObj, query: p.query });
-        const res = C.tasks.completeTask(found.task.id, opts);
-        if (!res.ok) return actionFailed('task.complete', res, intentObj);
-        return result(true, 'done', 'task.complete', {
-          intent: intentObj, entity: res.entity, historyId: res.entry && res.entry.id,
-          data: { title: res.entity.title }
-        });
-      }
+      case 'task.complete':
       case 'task.reschedule': {
-        const found = resolveTask(p.query, context);
-        if (!found.ok && found.code === 'AMBIGUOUS') return ambiguous('task.reschedule', intentObj, found.candidates);
-        if (!found.ok) return result(false, 'not_found', 'task.reschedule', { code: 'TASK_NOT_FOUND', intent: intentObj, query: p.query });
-        const res = C.tasks.updateTask(found.task.id, { date: p.dateISO, deadline: p.dateISO },
+        const actionName = intentObj.action;
+        let found;
+        /* Продолжение flow хранит только id и перед выполнением снова читает
+           сущность из Common Query. Устаревший snapshot никогда не мутируется. */
+        if (context.targetId) {
+          const fresh = C.tasks.getTask(context.targetId);
+          if (!fresh.ok || C.tasks.isCompleted(fresh.entity) ||
+              (context.expectedTitle && normalize(fresh.entity.title) !== normalize(context.expectedTitle))) {
+            return result(false, 'stale', actionName, {
+              code: 'STALE_TARGET', intent: intentObj,
+              message: 'Эта задача уже недоступна или изменилась. Ничего не изменилось.'
+            });
+          }
+          found = { ok: true, resolution: context.selected ? 'EXACT' : 'INFERRED', entity: taskCandidate(fresh.entity) };
+        } else found = resolveTask(p.query, context);
+        if (!found.ok && found.status === 'ambiguous') return ambiguous(actionName, intentObj, found.candidates);
+        if (!found.ok) return result(false, 'not_found', actionName, { code: 'TASK_NOT_FOUND', resolution: 'UNSUPPORTED', intent: intentObj, query: p.query });
+        /* INFERRED mutation только описывается: выполнить её может лишь CommandSession
+           после явного подтверждения. Создание pending action ничего не меняет. */
+        if (found.resolution === 'INFERRED' && !context.confirmed) {
+          const summary = actionName === 'task.complete'
+            ? 'Отметить задачу «' + found.entity.title + '» выполненной?'
+            : 'Перенести задачу «' + found.entity.title + '» на ' + C.dates.dateLabel(p.dateISO) + '?';
+          return result(false, 'confirmation_required', actionName, {
+            code: 'CONFIRMATION_REQUIRED', resolution: 'INFERRED', intent: intentObj,
+            target: found.entity, summary
+          });
+        }
+        let res;
+        if (actionName === 'task.complete') res = C.tasks.completeTask(found.entity.id, opts);
+        else res = C.tasks.updateTask(found.entity.id, { date: p.dateISO, deadline: p.dateISO },
           Object.assign({ title: 'Задача перенесена на ' + C.dates.humanDate(p.dateISO) }, opts));
-        if (!res.ok) return actionFailed('task.reschedule', res, intentObj);
-        return result(true, 'done', 'task.reschedule', {
-          intent: intentObj, entity: res.entity, historyId: res.entry && res.entry.id,
-          data: { title: res.entity.title, dateISO: p.dateISO }
+        if (!res.ok) return actionFailed(actionName, res, intentObj);
+        return result(true, 'done', actionName, {
+          resolution: found.resolution, intent: intentObj, entity: res.entity, historyId: res.entry && res.entry.id,
+          data: actionName === 'task.complete' ? { title: res.entity.title } : { title: res.entity.title, dateISO: p.dateISO }
         });
       }
       case 'day.plan': {
@@ -610,9 +661,11 @@ window.AvenCommand = (function () {
       }
     }
     if (res.status === 'ambiguous') {
-      return 'Под это описание подходит несколько задач: ' + listTitles(res.candidates) +
-        '. Уточните название полностью — я пока ничего не меняла.';
+      return 'Нашла несколько задач: ' + listTitles(res.candidates) +
+        '. Уточните, какую выбрать — пока ничего не изменилось.';
     }
+    if (res.status === 'confirmation_required') return res.summary || 'Подтвердить это действие?';
+    if (res.status === 'stale') return res.message || 'Эта запись уже недоступна. Ничего не изменилось.';
     if (res.status === 'not_found') {
       return 'Не нашла подходящую открытую задачу ' + quote(p.query || res.query || '') +
         '. Проверьте название в разделе «Задачи» — я ничего не меняла.';
@@ -666,12 +719,11 @@ window.AvenCommand = (function () {
         'удаление записей текстом',
         'расходы, заметки, заправки и напоминания текстом',
         'перенос событий текстом',
-        'уточняющие вопросы в несколько шагов',
-        'свободный разговор'
+        'свободный разговор за пределами перечисленных уточнений'
       ]
     };
   }
   function examples() { return EXAMPLES.slice(); }
 
-  return { normalize, parse, execute, respond, respondToParseError, run, supported, examples, context: makeContext };
+  return { normalize, parse, resolve, execute, respond, respondToParseError, run, supported, examples, context: makeContext };
 })();

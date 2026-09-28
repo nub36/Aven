@@ -233,7 +233,9 @@
   });
 
   window.addEventListener('hashchange', () => {
-    if (route() !== 'assistant') A._chat = A._chat; // история чата сохраняется в рамках сессии
+    /* Незавершённое уточнение/подтверждение — не business state и не скрытая память:
+       при уходе из Assistant оно исчезает, обычная история чата с ответами остаётся. */
+    if (route() !== 'assistant' && A._commandSession) A._commandSession.reset();
     setMobileMenu(false, { restoreFocus: false });
     if (A.closeModal) A.closeModal({ restoreFocus: false });
     A.render();
