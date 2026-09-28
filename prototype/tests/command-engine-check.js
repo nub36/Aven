@@ -711,6 +711,33 @@ function partA() {
       delRem.ok === false && delRem.intent.error.code === 'UNSUPPORTED_DELETE' &&
       env14.state.reminders.length === before200.reminders && env14.state.history.length === before200.history);
 
+    /* A200e — review-фикс: широкая (неанкорированная) проверка «слово напоминание/напомни
+       встречается где-то в фразе» ложно классифицировала обычные фразы, вообще не относящиеся
+       к изменению существующего напоминания, как «изменять уже созданное напоминание не умею» —
+       это была неправда (ADR-010: нельзя утверждать то, что не соответствует действительности).
+       Такие фразы должны получать честное общее «не поняла команду», как и у задач/событий/
+       заметок в аналогичной ситуации (ср. «Пожалуйста, создай задачу …» → тоже UNKNOWN_COMMAND). */
+    const notARealReminderCommand = [
+      'Пожалуйста напомни купить хлеб на завтра',
+      'Кто-то напомни мне купить хлеб',
+      'у меня три напоминания уже есть'
+    ];
+    notARealReminderCommand.forEach((text, i) => {
+      const before = { reminders: env14.state.reminders.length, history: env14.state.history.length };
+      const r = K14.run(text, { source: 'test' });
+      ok('A200e.' + i + ' «' + text + '» не путается с «изменить уже созданное напоминание»',
+        r.ok === false && r.intent.error.code === 'UNKNOWN_COMMAND' &&
+        env14.state.reminders.length === before.reminders && env14.state.history.length === before.history, r.response);
+    });
+    /* Ровно эти же формы (начало фразы с триггера напоминания, включая пустой «напомни», и
+       явный глагол изменения рядом с «напоминание») по-прежнему честно отклоняются как
+       UNSUPPORTED_REMINDER — фикс не ослабляет уже протестированное поведение A76b/A200a-c. */
+    ['напомни', 'напомни ', 'Отложи напоминание', 'Верни напоминание про интернет'].forEach((text, i) => {
+      const r = K14.run(text, { source: 'test' });
+      ok('A200f.' + i + ' «' + text + '» по-прежнему честно отклоняется как UNSUPPORTED_REMINDER',
+        r.ok === false && r.intent.error.code === 'UNSUPPORTED_REMINDER', JSON.stringify(r.intent && r.intent.error));
+    });
+
     /* A201 — parse() для напоминаний остаётся чистым: разбор без исполнения не мутирует. */
     const env15 = coreSandbox();
     const beforeParse15 = JSON.stringify(env15.state);
