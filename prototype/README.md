@@ -96,11 +96,13 @@ prototype/tests/
 │                           восстановление после перезагрузки, отсутствие второго пути записи,
 │                           согласованность #/profile ↔ Настройки, честность данных, Help/Tutorial,
 │                           доступность, ширины 320–1280)
-├── command-engine-check.js — Текстовые команды, заметки и Assistant UI (ядро без DOM + jsdom: multi-step
-│                           controls, Escape, confirmation, заметки (создание/поиск/отказы/регрессии
-│                           доменов), History/Undo, разделы, Home, Help/Tutorial, 320–430)
+├── command-engine-check.js — Текстовые команды, заметки, напоминания и Assistant UI (ядро без DOM +
+│                           jsdom: multi-step controls, Escape, confirmation, заметки и напоминания
+│                           (создание/поиск/отказы/регрессии доменов), History/Undo, разделы, Home,
+│                           Help/Tutorial, 320–430)
 ├── command-session-check.js — transient flow без DOM: ambiguity/choice, inferred confirmation/cancel,
-│                           stale/double-submit, reset, owner policy, кириллица и отсутствие hidden memory
+│                           stale/double-submit, reset (включая сброс новой командой о заметке/напоминании),
+│                           owner policy, кириллица и отсутствие hidden memory
 └── stage13-entities-check.js — Заметки/Финансы/Авто/Покупки/Напоминания (115 проверок: часть A — контракт
                            слоя без DOM на фиксированных часах приложения, часть B — jsdom-рендер:
                            производные итоги «Финансов», сценарии через интерфейс, History/Undo,
@@ -110,7 +112,7 @@ prototype/tests/
 
 Зависимостей нет. Сборка не нужна.
 
-## Текстовые команды (Stage 2, итерации 1–3, 2026-09-28)
+## Текстовые команды (Stage 2, итерации 1–4, 2026-09-28)
 
 `js/command.js` (`window.AvenCommand`) — ядро текстовых команд **без DOM, без AI/LLM, без сети и без
 голоса**: `normalize → parse → structured intent → execute → structured result → respond`. Разбор
@@ -155,6 +157,21 @@ PR #27). Пустой текст после «заметку» — честна�
 честное «не нашла». Изменение текста, архивирование и удаление уже существующей заметки текстом **не
 входят** в эту итерацию — это делается в разделе «Заметки»; расходы, заправки, покупки и напоминания
 текстом остаются следующими блоками. Контракт — [docs/COMMAND_ENGINE.md §11](../docs/COMMAND_ENGINE.md).
+
+**Четвёртая итерация** добавляет ещё один домен — **напоминания**. «Напомни <текст с датой[/временем]>»
+или «Создай/добавь напоминание <текст>» создаёт напоминание через существующий
+`AvenActions.reminders.create` (единственный движок — `AvenNotify`, тот же, что у раздела
+«Уведомления»): весь текст после слова «напомни/напоминание» становится содержимым напоминания целиком,
+без повторного разбора внутри него слов других доменов — «встреча», «задача», «расход», «машина»,
+«заметка» внутри текста не переключают команду на другой домен, и наоборот. В отличие от `event.create`,
+**дата у напоминания обязательна** — без неё Aven честно просит уточнить дату, а не подставляет
+«сегодня»: так устроен реальный контракт `AvenNotify.createReminder`. Время, как и у событий,
+необязательно. «Покажи/найди напоминания [про …]» ищет через существующий `AvenActions.reminders.list` —
+read-only, ничего не мутирует и не пишет «Историю»; один результат — короткое превью с датой, несколько —
+список, ноль — честное «не нашла». Изменение, «отложить», «скрыть» и удаление уже существующего
+напоминания текстом **не входят** в эту итерацию — это делается в разделе «Уведомления»; расходы,
+заправки и покупки текстом остаются следующими блоками. Ответ помощника не обещает фоновую доставку
+(push/email) — прототип этого не делает. Контракт — [docs/COMMAND_ENGINE.md §12](../docs/COMMAND_ENGINE.md).
 
 ## Заметки, Финансы, Авто, Покупки, Напоминания (Stage 1.3, 2026-09-28)
 
@@ -468,7 +485,7 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 **Проверка:** `node prototype/tests/actions-core-check.js` — **18 проверок Common Actions без DOM**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/help-tutorial-check.js` — **33 проверки Help/Tutorial/responsive/TTS narration**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js`
-(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage13-entities-check.js` — **115 проверок заметок, финансов, авто, покупок и напоминаний** (контракт слоя без DOM на часах приложения, производные итоги «Финансов», сценарии через интерфейс, история и Undo, согласованность Главной/Истории/помощника/уведомлений, справка и обучение, темы и ширины, запрет записи в обход слоя). `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` — **203 проверки текстовых команд, заметок и Assistant UI**; `node prototype/tests/command-session-check.js` — **77 проверок transient clarification/confirmation flow**. Полный набор из четырнадцати suite — **1201 проверка, 0 провалов**.
+(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage13-entities-check.js` — **115 проверок заметок, финансов, авто, покупок и напоминаний** (контракт слоя без DOM на часах приложения, производные итоги «Финансов», сценарии через интерфейс, история и Undo, согласованность Главной/Истории/помощника/уведомлений, справка и обучение, темы и ширины, запрет записи в обход слоя). `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` — **268 проверок текстовых команд, заметок, напоминаний и Assistant UI**; `node prototype/tests/command-session-check.js` — **84 проверки transient clarification/confirmation flow** (включая сброс pending новой командой о заметке/напоминании). Полный набор из четырнадцати suite — **1273 проверки, 0 провалов**.
 `stage1-proto-check.js` покрывает: меню и метки этапов, история с
 Undo/фильтрами/экспортом, все 8 разделов админки с подтверждениями и аудитом, тема, экраны аккаунта,
 роут-гард, сквозная история и настоящий Undo в задачах/заметках/финансах/авто/покупках/автоматизациях,
