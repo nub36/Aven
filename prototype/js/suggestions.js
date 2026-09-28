@@ -103,9 +103,11 @@ window.AvenSuggestions = (function () {
     if (context.surface === 'day') return; // Day remains about its selected date, not unrelated global cards.
     const st = state(), mods = (st.settings || {}).modules || {}, today = Core().dates.todayISO();
     if (mods.auto !== false && st.car) {
-      const services = (st.car.service || []).slice().sort((a, b) => (Number(b.km) || 0) - (Number(a.km) || 0));
-      if (services[0]) {
-        const left = (Number(services[0].km) || 0) + (Number(st.car.serviceIntervalKm) || 10000) - (Number(st.car.mileage) || 0);
+      /* Пробег до следующего обслуживания считает раздел «Авто» в общем слое действий —
+         подсказка и карточка авто не могут показать разные числа. */
+      const autoStats = Core().auto.stats();
+      if (autoStats.lastService) {
+        const left = autoStats.nextServiceLeft;
         if (left <= 2500) out.push(suggestion({
           id: 'auto:service:' + (st.car.id || 'primary'), type: 'car-service', priority: left <= 0 ? 'critical' : 'high',
           title: left <= 0 ? 'Проверить обслуживание автомобиля' : 'Запланировать обслуживание автомобиля',
@@ -118,7 +120,9 @@ window.AvenSuggestions = (function () {
       }
     }
     if (mods.shopping !== false) {
-      const expiring = (st.purchases || []).filter((p) => p.warrantyISO && p.status !== 'sold' && p.status !== 'archived' && Core().dates.diffDays(p.warrantyISO, today) >= 0 && Core().dates.diffDays(p.warrantyISO, today) < 90);
+      /* «Гарантия скоро закончится» — тот же признак, что на карточках покупок. */
+      const expiring = Core().shopping.getPurchases({ status: 'owned', warranty: 'warn' }).items
+        .filter((p) => Core().dates.diffDays(Core().shopping.warrantyISO(p), today) >= 0);
       if (expiring.length) out.push(suggestion({
         id: 'shopping:warranty:' + expiring.map((p) => p.id).sort().join('-'), type: 'warranty-review', priority: 'medium',
         title: 'Проверить покупки с истекающей гарантией',

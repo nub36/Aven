@@ -372,7 +372,10 @@ window.AvenNotify = (function () {
   const N = window.AvenNotify;
   A.pages = A.pages || {};
   const s = () => S.s();
-  const D = () => window.AvenActions.dates;
+  /* Экран «Уведомления» работает через общий слой действий: напоминания, прочтение,
+     откладывание и скрытие проходят одинаковый путь и одинаково попадают в историю. */
+  const C = () => window.AvenActions;
+  const D = () => C().dates;
 
   let filter = 'all';
   const FILTERS = [
@@ -511,7 +514,8 @@ window.AvenNotify = (function () {
         <div class="s" style="color:var(--muted);font-size:.8rem">Напоминание появится в этом разделе и в блоке «Требует внимания», когда подойдёт дата. Оповещения при закрытой вкладке в прототипе не приходят.</div>`,
       onSubmit: (v) => {
         const payload = { title: v.title, note: v.note, dateISO: v.dateISO, time: v.time };
-        const res = existing ? N.reminders.updateReminder(existing.id, payload) : N.reminders.createReminder(payload);
+        /* Общий слой действий: те же правила и та же запись в истории для любого входа. */
+        const res = existing ? C().reminders.update(existing.id, payload) : C().reminders.create(payload);
         if (!res.ok) { A.toast(res.message || 'Не удалось сохранить напоминание'); return; }
         A.closeModal(); A.render();
         A.toast(existing ? 'Напоминание сохранено · запись в истории' : 'Напоминание создано · запись в истории, можно отменить');
@@ -527,8 +531,8 @@ window.AvenNotify = (function () {
       if (href && href !== '#/notifications') location.hash = href;
       else A.render();
     },
-    'notif-read': (el) => { N.markRead(el.dataset.key); A.render(); },
-    'notif-readall': () => { const r = N.markAllRead(); A.render(); A.toast(r.ok ? ('Отмечено прочитанными: ' + r.count) : 'Непрочитанных нет'); },
+    'notif-read': (el) => { C().reminders.markRead(el.dataset.key); A.render(); },
+    'notif-readall': () => { const r = C().reminders.markAllRead(); A.render(); A.toast(r.ok ? ('Отмечено прочитанными: ' + r.count) : 'Непрочитанных нет'); },
     'notif-snooze': (el) => {
       const key = el.dataset.key;
       A.openModal({
@@ -542,21 +546,21 @@ window.AvenNotify = (function () {
       });
     },
     'notif-snooze-do': (el) => {
-      const r = N.snooze(el.dataset.key, Number(el.dataset.days) || 1);
+      const r = C().reminders.snooze(el.dataset.key, Number(el.dataset.days) || 1);
       A.closeModal(); A.render();
       if (r.ok) A.toast('Отложено до ' + D().humanDate(r.until) + ' · можно отменить в истории');
     },
-    'notif-unsnooze': (el) => { N.unsnooze(el.dataset.key); A.render(); A.toast('Возвращено в список'); },
-    'notif-dismiss': (el) => { N.dismiss(el.dataset.key); A.render(); A.toast('Скрыто · можно вернуть или отменить в истории'); },
-    'notif-restore': (el) => { N.restore(el.dataset.key); A.render(); A.toast('Возвращено в список'); },
+    'notif-unsnooze': (el) => { C().reminders.unsnooze(el.dataset.key); A.render(); A.toast('Возвращено в список'); },
+    'notif-dismiss': (el) => { C().reminders.dismiss(el.dataset.key); A.render(); A.toast('Скрыто · можно вернуть или отменить в истории'); },
+    'notif-restore': (el) => { C().reminders.restore(el.dataset.key); A.render(); A.toast('Возвращено в список'); },
     'rem-add': () => reminderForm(),
-    'rem-edit': (el) => { const r = N.reminders.getReminder(el.dataset.id); if (r) reminderForm(r); },
+    'rem-edit': (el) => { const r = C().reminders.get(el.dataset.id); if (r.ok) reminderForm(r.entity); else A.toast(r.message); },
     'rem-del': (el) => {
-      const r = N.reminders.getReminder(el.dataset.id);
-      if (!r) return;
-      A.confirmModal('Удалить напоминание «' + (r.title || '') + '»? Это можно отменить в истории.', () => {
+      const got = C().reminders.get(el.dataset.id);
+      if (!got.ok) { A.toast(got.message); return; }
+      A.confirmModal('Удалить напоминание «' + (got.entity.title || '') + '»? Это можно отменить в истории.', () => {
         A.closeModal();
-        const res = N.reminders.deleteReminder(el.dataset.id);
+        const res = C().reminders.delete(el.dataset.id);
         A.render();
         A.toast(res.ok ? 'Напоминание удалено · можно отменить' : (res.message || 'Не удалось удалить'));
       });

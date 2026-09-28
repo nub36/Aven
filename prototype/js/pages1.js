@@ -48,14 +48,13 @@
 
   /* ---------- агрегаты Главной и Дня из текущих данных (без хардкода, MVP_SCOPE §10.1) ---------- */
   function daysToISO(iso) { return diffDays(iso, todayISO()); }
-  function homeFinance(st) {
-    const today = todayISO();
-    const pref = today.slice(0, 7);
-    const exp = (st.ops || []).filter((o) => o.type === 'expense');
-    const todaySum = exp.filter((o) => o.dateISO === today).reduce((acc, o) => A.sumMoney(acc, o.amount || 0), 0);
-    const month = exp.filter((o) => String(o.dateISO || '').slice(0, 7) === pref);
-    const largest = month.slice().sort((a, b) => A.minor(b.amount || 0) - A.minor(a.amount || 0))[0] || null;
-    return { todaySum, monthCount: month.length, largest };
+  /* Расходы на «Главной» берутся из тех же финансовых запросов, что и раздел
+     «Финансы»: одна сумма, один источник (Stage 1.3). */
+  function homeFinance() {
+    const summary = Core().finance.summary();
+    const month = Core().finance.getOperations({ period: 'month', type: 'expense' }).items;
+    const largest = month.slice().sort((a, b) => Core().money.minor(b.amount || 0) - Core().money.minor(a.amount || 0))[0] || null;
+    return { todaySum: summary.todayExpense, monthSum: summary.monthExpense, monthCount: month.length, largest };
   }
   function carServiceLeft(car) {
     const last = (car.service || []).slice().sort((a, b) => (Number(b.km) || 0) - (Number(a.km) || 0))[0];
@@ -68,28 +67,24 @@
       return daysToISO(d.untilISO) <= (Number(d.remindDays) || 0);
     }).length;
   }
-  /* тот же порог, что у A.warrantyStatus: < 0 — истекла, < 90 — скоро закончится */
+  /* Состояние гарантии — из общего слоя «Покупок»: один порог и один текст на весь сайт.
+     Проданное и архивное имущество на «Главной» не показываем. */
   function warrantyKind(p) {
-    if (!p || p.status === 'sold' || p.status === 'archived') return 'skip';
-    if (!p.warrantyISO) return 'none';
-    const d = daysToISO(p.warrantyISO);
-    if (d < 0) return 'expired';
-    if (d < 90) return 'warn';
-    return 'ok';
+    if (!p || Core().shopping.statusKey(p) !== 'owned') return 'skip';
+    const kind = Core().shopping.warrantyKind(p);
+    return kind === 'active' ? 'ok' : kind;
   }
-  function homeWarranties(st) {
-    const items = (st.purchases || []).filter((p) => ['skip', 'none'].indexOf(warrantyKind(p)) < 0);
+  function homeWarranties() {
+    const items = Core().shopping.getPurchases({ status: 'owned' }).items.filter((p) => ['skip', 'none'].indexOf(warrantyKind(p)) < 0);
     return {
       active: items.filter((p) => warrantyKind(p) === 'ok').length,
       ending: items.filter((p) => ['warn', 'expired'].indexOf(warrantyKind(p)) >= 0)
     };
   }
-  function homeNotes(st) {
-    const active = (st.notes || []).filter((n) => !n.archived);
-    const pinned = active.filter((n) => n.pinned);
-    const recent = active.slice().sort((a, b) => String(b.updatedISO || '').localeCompare(String(a.updatedISO || '')));
-    const seen = {};
-    return pinned.concat(recent).filter((n) => (seen[n.id] ? false : (seen[n.id] = true))).slice(0, 4);
+  /* Заметки для «Главной»: закреплённые вперёд, дальше — самые свежие. */
+  function homeNotes() {
+    const active = Core().notes.getNotes({ status: 'active' }).items;
+    return active.slice(0, 4);
   }
   /* «Требует внимания» в разделе «День»: единый источник — движок «Уведомления» (AvenNotify).
      Так карточка Дня, блок Главной и раздел «Уведомления» всегда согласованы, а данные не дублируются.
@@ -172,7 +167,7 @@
     const todayEvents = eventsForDate(todayISO());
     const upcoming = nextEvents(1)[0];
     const latestHistory = (st.history || []).slice(0, 5);
-    const fin = homeFinance(st);
+    const fin = homeFinance();
     const taskStats = {
       open: Core().tasks.getTasks({ status: 'active' }).count,
       done: Core().tasks.getTasks({ status: 'completed' }).count,
@@ -180,8 +175,8 @@
     };
     const svcLeft = carServiceLeft(st.car);
     const docsAttn = carDocsAttention(st.car);
-    const warr = homeWarranties(st);
-    const topNotes = homeNotes(st);
+    const warr = homeWarranties();
+    const topNotes = homeNotes();
     const notifTop = window.AvenNotify ? window.AvenNotify.build() : [];
     const notifUnread = window.AvenNotify ? window.AvenNotify.unreadCount() : 0;
     const homeSuggestions = window.AvenSuggestions ? window.AvenSuggestions.getSuggestions({ surface: 'home', dateISO: todayISO() }) : [];
@@ -265,7 +260,7 @@
       <div class="card">
         <div class="head"><h3>Расходы</h3><a href="#/finance" class="btn small">Финансы →</a></div>
         <div class="row-item"><div class="grow"><div class="t">Сегодня</div></div><b class="num">${A.money(fin.todaySum)}</b></div>
-        <div class="row-item"><div class="grow"><div class="t">Месяц</div></div><b class="num">${A.money(st.finMonth.expense)}</b></div>
+        <div class="row-item"><div class="grow"><div class="t">Месяц</div></div><b class="num">${A.money(fin.monthSum)}</b></div>
         ${fin.largest ? `<div class="row-item"><div class="grow"><div class="s">Крупнейшая в месяце: ${A.esc(fin.largest.title)}</div></div><span class="num s">${A.money(fin.largest.amount)}</span></div>` : '<div class="empty">Операций в этом месяце нет</div>'}
       </div>` : ''}
 
@@ -668,67 +663,40 @@
     };
   };
 
-  /* ================= ЗАМЕТКИ ================= */
+  /* ================= ЗАМЕТКИ =================
+     Экран только показывает данные и вызывает общий слой действий: проверка ввода,
+     запись в историю и отмена живут там (Stage 1.3). */
   let noteId = 'n1';
   let noteFilter = { status: 'active', folder: 'all', tag: 'all', q: '' };
 
-  function noteFolders(st) {
-    const out = (st.noteFolders || ['Личное', 'Идеи', 'Документы']).slice();
-    (st.notes || []).forEach((n) => { if (n.folder && out.indexOf(n.folder) < 0) out.push(n.folder); });
-    return out;
-  }
-  function noteTags(notes) {
-    const set = {};
-    (notes || []).forEach((n) => (n.tags || []).forEach((t) => { if (t) set[t] = true; }));
-    return Object.keys(set).sort((a, b) => a.localeCompare(b, 'ru'));
-  }
-  function noteFolder(n) { return n.folder || 'Личное'; }
+  function noteFolders() { return Core().notes.folders(); }
+  function noteTags() { return Core().notes.tags(); }
+  function noteFolder(n) { return Core().notes.folderOf(n); }
   function noteUpdatedISO(n) { return n.updatedISO || todayISO(); }
   function noteUpdatedLabel(n) { return n.updated || dateLabel(noteUpdatedISO(n)); }
-  function noteMatch(n) {
-    const q = noteFilter.q.trim().toLowerCase();
-    if (noteFilter.status === 'active' && n.archived) return false;
-    if (noteFilter.status === 'archived' && !n.archived) return false;
-    if (noteFilter.folder !== 'all' && noteFolder(n) !== noteFilter.folder) return false;
-    if (noteFilter.tag !== 'all' && (n.tags || []).indexOf(noteFilter.tag) < 0) return false;
-    if (!q) return true;
-    return [n.title, n.body, noteFolder(n), (n.tags || []).join(' ')].join(' ').toLowerCase().includes(q);
-  }
-  function noteSort(a, b) {
-    return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) ||
-      String(noteUpdatedISO(b)).localeCompare(String(noteUpdatedISO(a))) ||
-      String(a.title).localeCompare(String(b.title), 'ru');
-  }
-  function notePreview(text) {
-    const one = String(text || '').replace(/\s+/g, ' ').trim();
-    return one.slice(0, 64) + (one.length > 64 ? '…' : '');
-  }
-  function noteTextChange(from, to) {
-    return {
-      field: 'Текст',
-      from: from ? notePreview(from) : '—',
-      to: to ? notePreview(to) : '—'
-    };
-  }
+  function notePreview(text) { return Core().notes.preview(text); }
 
   A.pages.notes = function () {
     const st0 = s();
     const notes = st0.notes || [];
-    const folders = noteFolders(st0);
-    const tags = noteTags(notes);
-    const filtered = notes.filter(noteMatch).sort(noteSort);
+    const folders = noteFolders();
+    const tags = noteTags();
+    const filtered = Core().notes.getNotes(noteFilter).items;
+    const all = Core().notes.getNotes({ status: 'all' }).items;
     if ((!notes.find((n) => n.id === noteId) || (filtered.length && !filtered.some((n) => n.id === noteId))) && filtered.length) noteId = filtered[0].id;
-    if (!notes.find((n) => n.id === noteId) && notes.length) noteId = notes.slice().sort(noteSort)[0].id;
+    if (!notes.find((n) => n.id === noteId) && all.length) noteId = all[0].id;
     const cur = filtered.find((n) => n.id === noteId) || (filtered.length ? filtered[0] : null);
-    const active = notes.filter((n) => !n.archived).length;
-    const archived = notes.filter((n) => n.archived).length;
-    const pinned = notes.filter((n) => n.pinned && !n.archived).length;
+    const stats = Core().notes.summary();
+    const active = stats.active;
+    const archived = stats.archived;
+    const pinned = stats.pinned;
     const html = `
     <div class="page-head">
       <div><h1>Заметки</h1><div class="sub">Папки · теги · архив · автосохранение · история/Undo · демо</div></div>
       <div class="btn-row">
         <button class="btn" data-action="note-folder-add">＋ Папка</button>
-        <button class="btn primary" data-action="note-add">＋ Заметка</button>
+        <button class="btn primary" data-action="note-add" data-tour="notes-create">＋ Заметка</button>
+        ${A.helpActions ? A.helpActions('notes') : ''}
       </div>
     </div>
     <div class="grid cols-4" style="margin-bottom:16px">
@@ -739,7 +707,7 @@
     </div>
     <div class="notes-layout">
       <div class="card note-sidebar">
-        <div class="note-filters">
+        <div class="note-filters" data-tour="notes-filters">
           <label class="field"><span>Поиск</span><input type="search" id="note-search" placeholder="Поиск заметок…" value="${A.esc(noteFilter.q)}"></label>
           <div class="field-row">
             <label class="field"><span>Статус</span><select data-action="note-filter-status">
@@ -757,7 +725,7 @@
             ${tags.map((t) => `<option value="${A.esc(t)}" ${noteFilter.tag === t ? 'selected' : ''}>#${A.esc(t)}</option>`).join('')}
           </select></label>
         </div>
-        <div class="note-list">
+        <div class="note-list" data-tour="notes-list">
           ${filtered.map((n) => `
           <div class="note-li ${n.id === (cur && cur.id) ? 'active' : ''} ${n.archived ? 'archived' : ''}" data-action="note-open" data-id="${n.id}">
             <div class="nt">${n.pinned ? '📌' : n.archived ? '🗄️' : '📄'} ${A.esc(n.title)}</div>
@@ -779,7 +747,7 @@
         </div>
         <div class="s" style="color:var(--muted);font-size:.82rem;margin-bottom:12px">Папка: ${A.esc(noteFolder(cur))} · обновлено: ${A.esc(noteUpdatedLabel(cur))}${cur.archived ? ' · архив' : ''}</div>
         <div class="tags" style="margin-bottom:14px">${(cur.tags || []).map((t) => `<span class="pill accent">${A.esc(t)}</span>`).join('') || '<span class="pill">без тегов</span>'}</div>
-        <div class="field note-autosave-field">
+        <div class="field note-autosave-field" data-tour="notes-editor">
           <label>Текст заметки <span id="note-save-state" class="pill">автосохранение включено</span></label>
           <textarea id="note-autosave" data-id="${cur.id}" rows="14">${A.esc(cur.body || '')}</textarea>
         </div>
@@ -799,23 +767,9 @@
             if (state) state.textContent = 'сохранение…';
             clearTimeout(timer);
             timer = setTimeout(() => {
-              const st = S.s();
-              const n = (st.notes || []).find((x) => x.id === auto.dataset.id);
-              if (!n) return;
-              const body = auto.value;
-              if (String(n.body || '') === body) { if (state) state.textContent = 'без изменений'; return; }
-              const prev = { body: n.body || '', updated: n.updated || '', updatedISO: n.updatedISO || '' };
-              n.body = body;
-              n.updated = 'только что';
-              n.updatedISO = todayISO();
-              S.save();
-              A.logAction({
-                action: 'note.autosave', title: 'Заметка автосохранена', object: n.title, objectType: 'note',
-                undoable: true, sensitive: true,
-                changes: [noteTextChange(prev.body, body)],
-                undo: { type: 'fields', list: 'notes', id: n.id, fields: prev }
-              });
-              if (state) state.textContent = 'сохранено';
+              const res = Core().notes.saveNoteBody(auto.dataset.id, auto.value);
+              if (!res.ok) { if (state) state.textContent = res.message || 'не сохранено'; return; }
+              if (state) state.textContent = res.unchanged ? 'без изменений' : 'сохранено';
             }, 320);
           });
         }
@@ -964,53 +918,23 @@
     'note-add': () => noteForm(),
     'note-folder-add': () => noteFolderForm(),
     'note-edit': (el) => {
-      const n = s().notes.find((x) => x.id === el.dataset.id);
-      if (n) noteForm(n);
+      const n = Core().notes.getNote(el.dataset.id).entity;
+      if (n) noteForm(n); else A.toast('Заметка не найдена');
     },
     'note-pin': (el) => {
-      const n = s().notes.find((x) => x.id === el.dataset.id);
-      if (!n) return;
-      const was = n.pinned;
-      n.pinned = !n.pinned;
-      S.save();
-      A.logAction({
-        action: 'note.update', title: n.pinned ? 'Заметка закреплена' : 'Закрепление снято', object: n.title,
-        objectType: 'note', undoable: true,
-        changes: [{ field: 'Закрепление', from: was ? 'закреплена' : 'обычная', to: n.pinned ? 'закреплена' : 'обычная' }],
-        undo: { type: 'fields', list: 'notes', id: n.id, fields: { pinned: was } }
-      });
-      A.render();
+      const res = Core().notes.setNotePinned(el.dataset.id);
+      if (!res.ok) { A.toast(res.message || 'Заметка не найдена'); return; }
+      A.render(); A.toast(res.entity.pinned ? 'Заметка закреплена · можно отменить' : 'Закрепление снято · можно отменить');
     },
     'note-archive': (el) => {
-      const n = s().notes.find((x) => x.id === el.dataset.id);
-      if (!n) return;
-      const was = !!n.archived;
-      n.archived = !was;
-      n.updated = 'только что';
-      n.updatedISO = todayISO();
-      S.save();
-      A.logAction({
-        action: 'note.update', title: n.archived ? 'Заметка отправлена в архив' : 'Заметка возвращена из архива', object: n.title,
-        objectType: 'note', undoable: true, sensitive: true,
-        changes: [{ field: 'Архив', from: was ? 'в архиве' : 'активна', to: n.archived ? 'в архиве' : 'активна' }],
-        undo: { type: 'fields', list: 'notes', id: n.id, fields: { archived: was } }
-      });
-      A.render(); A.toast(n.archived ? 'Заметка в архиве · можно отменить' : 'Заметка возвращена · можно отменить');
+      const res = Core().notes.setNoteArchived(el.dataset.id);
+      if (!res.ok) { A.toast(res.message || 'Заметка не найдена'); return; }
+      A.render(); A.toast(res.entity.archived ? 'Заметка в архиве · можно отменить' : 'Заметка возвращена · можно отменить');
     },
     'note-del': (el) => {
       A.confirmModal(confirmDelete, () => {
-        const list = S.s().notes;
-        const i = A.indexOfId(list, el.dataset.id);
-        const item = list[i];
-        if (!item) { A.toast('Заметка не найдена'); return; }
-        list.splice(i, 1);
-        S.save();
-        A.logAction({
-          action: 'note.delete', title: 'Заметка удалена', object: item.title, objectType: 'note',
-          undoable: true, danger: true, sensitive: true,
-          changes: [{ field: 'Состояние', from: 'в списке', to: 'Удалена' }],
-          undo: { type: 'restore', list: 'notes', index: i, item: JSON.parse(JSON.stringify(item)) }
-        });
+        const res = Core().notes.deleteNote(el.dataset.id);
+        if (!res.ok) { A.toast(res.message || 'Заметка не найдена'); return; }
         A.render(); A.toast('Заметка удалена — можно отменить в истории');
       });
     }
@@ -1184,128 +1108,76 @@
       title: 'Новая папка заметок',
       body: `<div class="field"><label>Название папки</label><input type="text" name="name" placeholder="Например: Работа"></div>`,
       onSubmit: (v) => {
-        const st = S.s();
-        const name = (v.name || '').trim();
-        if (!name) { A.toast('Введите название папки'); return; }
-        const prev = (st.noteFolders || []).slice();
-        if (prev.some((x) => x.toLowerCase() === name.toLowerCase())) { A.toast('Такая папка уже есть'); return; }
-        st.noteFolders = prev.concat([name]);
-        S.save();
-        A.logAction({
-          action: 'note.folder.create', title: 'Папка заметок создана', object: name, objectType: 'note', undoable: true,
-          changes: [{ field: 'Папка', from: '—', to: name }],
-          undo: { type: 'value', path: 'noteFolders', value: prev }
-        });
+        const res = Core().notes.createFolder(v.name);
+        if (!res.ok) { A.toast(res.message || 'Не удалось создать папку'); return; }
         A.closeModal(); A.render(); A.toast('Папка добавлена · можно отменить');
       }
     });
   }
 
   function noteForm(existing) {
-    const st0 = s();
-    const folders = noteFolders(st0);
-    const ex = existing || { title: '', tags: [], body: '', folder: folders[0] || 'Личное', archived: false };
+    const folders = noteFolders();
+    const ex = existing ? Core().notes.snapshot(existing) : { title: '', tags: [], body: '', folder: folders[0] || 'Личное', archived: false };
     if (ex.folder && folders.indexOf(ex.folder) < 0) folders.push(ex.folder);
     A.openModal({
       title: existing ? 'Редактировать заметку' : 'Новая заметка',
       wide: true,
       body: `
         <div class="field-row">
-          <div class="field"><label>Название</label><input type="text" name="title" value="${A.esc(ex.title || '')}"></div>
-          <div class="field"><label>Папка</label><select name="folder">${folders.map((f) => `<option ${noteFolder(ex) === f ? 'selected' : ''}>${A.esc(f)}</option>`).join('')}</select></div>
+          <div class="field"><label>Название</label><input type="text" name="title" value="${A.esc(ex.title || '')}" placeholder="Коротко, о чём заметка"></div>
+          <div class="field"><label>Папка</label><select name="folder">${folders.map((f) => `<option ${ex.folder === f ? 'selected' : ''}>${A.esc(f)}</option>`).join('')}</select></div>
         </div>
         <div class="field"><label>Теги (через запятую)</label><input type="text" name="tags" value="${A.esc((ex.tags || []).join(', '))}"></div>
         <div class="field"><label>Текст</label><textarea name="body" rows="8">${A.esc(ex.body || '')}</textarea></div>
         <label class="set-row"><input type="checkbox" name="archived" ${ex.archived ? 'checked' : ''}> <div class="grow"><div class="t">В архиве</div><div class="s">Архив скрывает заметку из активного списка, но не удаляет данные.</div></div></label>`,
       onSubmit: (v) => {
-        const st = S.s();
-        const tags = (v.tags || '').split(',').map((x) => x.trim()).filter(Boolean);
-        const fields = {
-          title: (v.title || '').trim() || 'Без названия',
-          tags,
-          body: v.body || '',
-          folder: v.folder || ((st.noteFolders || [])[0] || 'Личное'),
-          archived: !!v.archived,
-          updated: 'только что',
-          updatedISO: todayISO()
-        };
-        if (existing) {
-          const prev = { title: existing.title, tags: (existing.tags || []).slice(), body: existing.body || '',
-            folder: noteFolder(existing), archived: !!existing.archived, updated: existing.updated || '', updatedISO: existing.updatedISO || '' };
-          Object.assign(existing, fields);
-          S.save();
-          const changes = [];
-          if (prev.title !== existing.title) changes.push({ field: 'Заголовок', from: prev.title, to: existing.title });
-          if (prev.folder !== existing.folder) changes.push({ field: 'Папка', from: prev.folder, to: existing.folder });
-          if (prev.tags.join(', ') !== tags.join(', ')) changes.push({ field: 'Теги', from: prev.tags.join(', ') || '—', to: tags.join(', ') || '—' });
-          if (prev.archived !== existing.archived) changes.push({ field: 'Архив', from: prev.archived ? 'в архиве' : 'активна', to: existing.archived ? 'в архиве' : 'активна' });
-          if (prev.body !== existing.body) changes.push(noteTextChange(prev.body, existing.body));
-          A.logAction({
-            action: 'note.update', title: 'Заметка изменена', object: existing.title, objectType: 'note',
-            undoable: true, sensitive: true, changes: changes.length ? changes : [{ field: 'Изменений нет', from: '—', to: '—' }],
-            undo: { type: 'fields', list: 'notes', id: existing.id, fields: prev }
-          });
-          A.closeModal(); A.render(); A.toast('Заметка сохранена · запись в истории');
-        } else {
-          const n = Object.assign({ id: S.id('n'), pinned: false }, fields);
-          st.notes.unshift(n);
-          noteId = n.id;
-          S.save();
-          A.logAction({
-            action: 'note.create', title: 'Заметка создана', object: n.title, objectType: 'note',
-            undoable: true, sensitive: true,
-            changes: [{ field: 'Заголовок', from: '—', to: n.title }, { field: 'Папка', from: '—', to: n.folder },
-                      { field: 'Теги', from: '—', to: tags.join(', ') || '—' }],
-            undo: { type: 'remove', list: 'notes', id: n.id }
-          });
-          A.closeModal(); A.render(); A.toast('Заметка создана · можно отменить в истории');
-        }
+        const payload = { title: v.title, tags: v.tags, body: v.body, folder: v.folder, archived: !!v.archived };
+        const res = existing ? Core().notes.updateNote(existing.id, payload) : Core().notes.createNote(payload);
+        if (!res.ok) { A.toast(res.message || 'Не удалось сохранить заметку'); return; }
+        noteId = res.entity.id;
+        A.closeModal(); A.render();
+        A.toast(existing ? 'Заметка сохранена · запись в истории' : 'Заметка создана · можно отменить в истории');
       }
     });
   }
 
+  /* Быстрый расход с «Главной» — та же операция «Финансов», а не отдельная запись:
+     сумма сразу попадает в итоги, счёт и график. */
   function expenseForm() {
     A.openModal({
       title: 'Новый расход',
       body: `
         <div class="field-row">
-          <div class="field"><label>Сумма, ₽</label><input type="number" name="amount" placeholder="850"></div>
-          <div class="field"><label>Дата</label><input type="date" name="date"></div>
+          <div class="field"><label>Сумма</label><input type="number" name="amount" placeholder="850" step="0.01"></div>
+          <div class="field"><label>Дата</label><input type="date" name="date" value="${todayISO()}"></div>
         </div>
-        <div class="field"><label>Категория</label><select name="cat"><option>Продукты</option><option>Авто</option><option>Дом</option><option>Подписки</option><option>Другое</option></select></div>
+        <div class="field"><label>Категория</label><select name="cat">${Core().finance.categories().map((c) => `<option>${A.esc(c)}</option>`).join('')}</select></div>
         <div class="field"><label>Комментарий</label><input type="text" name="comment" placeholder="необязательно"></div>`,
       onSubmit: (v) => {
-        const st = S.s();
-        const amt = +v.amount || 0;
-        st.ops.unshift({ id: S.id('o'), type: 'expense', cat: v.cat, title: v.comment || v.cat, amount: amt, date: 'сегодня', comment: '' });
-        st.finMonth.expense += amt;
-        S.save(); A.closeModal(); A.render(); A.demoToast('Расход ' + A.money(amt) + ' записан (демо)');
+        const res = Core().finance.createOperation({
+          type: 'expense', amount: v.amount, cat: v.cat, dateISO: v.date, title: v.comment || v.cat, comment: ''
+        });
+        if (!res.ok) { A.toast(res.message || 'Не удалось записать расход'); return; }
+        A.closeModal(); A.render(); A.toast('Расход ' + A.money(res.entity.amount) + ' записан · можно отменить');
       }
     });
   }
 
+  /* Резервная форма заправки (pages2 заменяет её расширенной версией того же
+     общего действия — второй бизнес-логики нет). */
   function fuelForm() {
     A.openModal({
       title: 'Новая заправка',
       body: `
         <div class="field-row">
-          <div class="field"><label>Литры</label><input type="number" name="liters" placeholder="42"></div>
-          <div class="field"><label>Сумма, ₽</label><input type="number" name="sum" placeholder="3200"></div>
+          <div class="field"><label>Литры</label><input type="number" name="liters" placeholder="42" step="0.01"></div>
+          <div class="field"><label>Сумма</label><input type="number" name="sum" placeholder="3200" step="0.01"></div>
         </div>
-        <div class="field"><label>Пробег, км</label><input type="number" name="km" value="${s().car.mileage}"></div>`,
+        <div class="field"><label>Пробег, км</label><input type="number" name="km" value="${Core().auto.car().mileage || 0}"></div>`,
       onSubmit: (v) => {
-        const st = S.s();
-        const f = { id: S.id('f'), liters: +v.liters || 0, sum: +v.sum || 0, km: +v.km || st.car.mileage, date: 'сегодня' };
-        st.car.fuel.unshift(f);
-        S.save();
-        A.logAction({
-          action: 'car.fuel.create', title: 'Заправка добавлена', object: f.liters + ' л · ' + A.money(f.sum),
-          objectType: 'car', undoable: true,
-          changes: [{ field: 'Литры', from: '—', to: String(f.liters) }, { field: 'Сумма', from: '—', to: A.money(f.sum) },
-                    { field: 'Пробег', from: '—', to: f.km + ' км' }],
-          undo: { type: 'remove', list: 'car.fuel', id: f.id }
-        });
-        A.closeModal(); A.render(); A.toast('Заправка добавлена · запись в истории (раздел Stage 1.1)');
+        const res = Core().auto.createRecord('fuel', { liters: v.liters, sum: v.sum, km: v.km, dateISO: todayISO() });
+        if (!res.ok) { A.toast(res.message || 'Не удалось добавить заправку'); return; }
+        A.closeModal(); A.render(); A.toast('Заправка добавлена · запись в истории');
       }
     });
   }

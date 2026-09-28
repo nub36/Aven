@@ -56,7 +56,8 @@ prototype/
     ├── presence.js     — отображение состояния Aven (idle/listening/thinking/speaking/
     │                     waiting/success/important): текст + классы glow/wave; НЕ state engine
     ├── voice.js        — AvenVoice.speak/stop (через AvenTTS) + экспериментальный STT SpeechRecognition
-    ├── actions.js      — Common Action Layer для задач/событий (DOM-free, state → result/history)
+    ├── actions.js      — Common Action Layer (DOM-free, state → result/history): задачи, события, профиль,
+    │                     настройки, заметки, финансы, авто, покупки, напоминания, деньги/даты/форматы
     ├── notify.js       — Напоминания и Центр уведомлений: движок AvenNotify (DOM-free, сборка/счётчики/
     │                     действия read-snooze-dismiss + CRUD напоминаний, History/Undo) и страница «Уведомления»
     ├── suggestions.js  — AvenSuggestions: локальные объяснимые правила, stable IDs, dismiss/snooze,
@@ -88,14 +89,42 @@ prototype/tests/
 │                            CRUD напоминаний, настройки источников, страница, интеграция, Help/Tutorial)
 ├── suggestions-check.js — Suggestions (jsdom, 46 проверок: правила/причины/IDs/order, suppression,
 │                           Common Actions, History/Undo, Home/Day/Assistant, Settings, Help/Tutorial)
-└── settings-profile-check.js — Профиль и Настройки (jsdom, 121 проверка: контракт слоя действий,
-                           проверка ввода, применение форматов во всех разделах, History/Undo,
-                           восстановление после перезагрузки, отсутствие второго пути записи,
-                           согласованность #/profile ↔ Настройки, честность данных, Help/Tutorial,
-                           доступность, ширины 320–1280)
+├── settings-profile-check.js — Профиль и Настройки (jsdom, 121 проверка: контракт слоя действий,
+│                           проверка ввода, применение форматов во всех разделах, History/Undo,
+│                           восстановление после перезагрузки, отсутствие второго пути записи,
+│                           согласованность #/profile ↔ Настройки, честность данных, Help/Tutorial,
+│                           доступность, ширины 320–1280)
+└── stage13-entities-check.js — Заметки/Финансы/Авто/Покупки/Напоминания (111 проверок: часть A — контракт
+                           слоя без DOM на фиксированных часах приложения, часть B — jsdom-рендер:
+                           производные итоги «Финансов», сценарии через интерфейс, History/Undo,
+                           согласованность Главной/Истории/помощника/уведомлений, Help/Tutorial,
+                           темы и ширины 320–1280, запрет записи в обход общего слоя)
 ```
 
 Зависимостей нет. Сборка не нужна.
+
+## Заметки, Финансы, Авто, Покупки, Напоминания (Stage 1.3, 2026-09-28)
+
+Эти разделы больше не меняют данные сами. Страницы собирают то, что ввёл человек, и вызывают общий слой
+`prototype/js/actions.js`; слой проверяет ввод, сохраняет, пишет «Историю» и обратную операцию:
+
+```js
+const res = AvenActions.finance.createOperation({ type: 'expense', amount: '1250,50', cat: 'Авто', account: 'card' });
+if (!res.ok) { A.toast(res.message); return; }   // причина понятна человеку
+A.closeModal(); A.render();                       // экран только перерисовывается
+```
+
+- `notes.*` — создание, правка, автосохранение, папки, закрепление, архив, удаление, поиск и фильтры.
+- `finance.*` — операции, счета, категории и **все производные числа**: `summary()`, `totals(filter)`,
+  `balance()`, `byCategory()`, `monthly(n)`. Сохранённых итогов в состоянии нет, поэтому карточки сверху,
+  итоги под фильтрами, график, «Главная» и помощник не могут разойтись.
+- `auto.*` — заправки, расходы, обслуживание, документы, пробег, `stats()` и связь с «Финансами».
+- `shopping.*` — покупки, статусы, ремонты, состояние гарантии, связь с «Финансами».
+- `reminders.*` — фасад над существующим `AvenNotify` (создать/изменить/удалить, прочитано, отложить,
+  скрыть, вернуть). Второго движка напоминаний нет.
+- `money.minor/sum/format` — деньги в целых копейках: `0.1 + 0.2` даёт ровно `0.3`.
+
+Проверка: `node prototype/tests/stage13-entities-check.js` (нужен jsdom, см. шапку файла).
 
 ## Профиль и Настройки (Stage 1.2, 2026-09-27)
 
@@ -386,7 +415,7 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 **Проверка:** `node prototype/tests/actions-core-check.js` — **18 проверок Common Actions без DOM**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/help-tutorial-check.js` — **33 проверки Help/Tutorial/responsive/TTS narration**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js`
-(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280). Полный набор из одиннадцати suite — **806 проверок, 0 провалов**.
+(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage13-entities-check.js` — **111 проверок заметок, финансов, авто, покупок и напоминаний** (контракт слоя без DOM на часах приложения, производные итоги «Финансов», сценарии через интерфейс, история и Undo, согласованность Главной/Истории/помощника/уведомлений, справка и обучение, темы и ширины, запрет записи в обход слоя). Полный набор из двенадцати suite — **917 проверок, 0 провалов**.
 `stage1-proto-check.js` покрывает: меню и метки этапов, история с
 Undo/фильтрами/экспортом, все 8 разделов админки с подтверждениями и аудитом, тема, экраны аккаунта,
 роут-гард, сквозная история и настоящий Undo в задачах/заметках/финансах/авто/покупках/автоматизациях,

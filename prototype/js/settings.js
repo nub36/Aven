@@ -603,7 +603,7 @@
         A.closeModal();
         const payload = {
           exportedAt: new Date().toISOString(), demo: true,
-          profile: st.profile, tasks: st.tasks, notes: st.notes, ops: st.ops, finMonth: st.finMonth,
+          profile: st.profile, tasks: st.tasks, notes: st.notes, ops: st.ops, finAccounts: st.finAccounts,
           car: st.car, purchases: st.purchases, history: st.history, settings: st.settings
         };
         if (!A.downloadFile('aven-data-demo.json', JSON.stringify(payload, null, 2), 'application/json;charset=utf-8')) return;
@@ -631,7 +631,7 @@
           const st = s();
           const who = (st.auth && st.auth.email) || 'user@demo.aven';
           st.tasks = []; st.notes = []; st.ops = []; st.history = []; st.sessions = []; st.purchases = [];
-          st.finMonth = { expense: 0, income: 0, balance: 0 };
+          (st.finAccounts || []).forEach((a) => { a.balance = 0; });
           if (st.car) { st.car.fuel = []; st.car.expenses = []; st.car.service = []; }
           st.auth.logged = false; st.auth.name = ''; st.auth.email = ''; st.auth.twoFactor = false;
           st.auth.deletedNote = 'Аккаунт и все данные удалены (демо-сценарий). Запись об удалении — в административном аудите (#/admin → Аудит), а не в пользовательской истории: аудит и история разделены (ADR-012).';

@@ -190,7 +190,8 @@ window.AvenDemo = (function () {
         { id: 'savings', name: 'Накопительный счёт', balance: 0 }
       ],
       finCategories: ['Авто', 'Продукты', 'Дом', 'Подписки', 'Другое', 'Доход'],
-      finMonth: { expense: 47850, income: 96000, balance: 128540 },
+      /* Итогов месяца в данных больше нет: баланс, расходы и доходы всегда считаются
+         из операций и счетов, поэтому карточки и таблица не могут разойтись. */
 
       car: {
         model: 'BMW 530d', year: 2018, primary: true, fuelType: 'дизель', serviceIntervalKm: 10000,
