@@ -67,7 +67,8 @@ prototype/
     ├── tts/normalize.js — нормализация текста ТОЛЬКО для речи (числа, время, даты, деньги, единицы)
     ├── tts/providers.js — TTSProvider: System (speechSynthesis, fallback) + Natural (эксперимент)
     ├── command.js      — AvenCommand: текстовые команды (DOM-free ядро: normalize → parse → intent →
-    │                     execute через Common Actions → structured result → respond); без AI/LLM/сети
+    │                     resolve/execute через Common Actions → structured result → respond); без AI/LLM/сети
+    ├── command-session.js — transient clarification/confirmation flow (DOM-free, без business state/History)
     ├── pages1.js       — Главная (hero с Female Aven), День, Календарь, Задачи, Заметки
     ├── pages2.js       — Финансы, Авто, Покупки, Автоматизации, Assistant (строка команд, +персонаж/STT)
     ├── daily.js        — AvenDaily: DOM-free сводки утра/вечера над общими данными (без мутаций)
@@ -95,12 +96,10 @@ prototype/tests/
 │                           восстановление после перезагрузки, отсутствие второго пути записи,
 │                           согласованность #/profile ↔ Настройки, честность данных, Help/Tutorial,
 │                           доступность, ширины 320–1280)
-├── command-engine-check.js — Текстовые команды (152 проверки: часть A — ядро без DOM на фиксированных
-│                           часах приложения (разбор, отсутствие побочных эффектов, неоднозначность,
-│                           неверные дата/время, неизвестная команда, выполнение через общий слой),
-│                           часть B — jsdom: экран помощника, Enter, History/Undo, появление записи в
-│                           «Задачах»/«Календаре»/«Дне»/«Главной», строка «Что сделать?», Help/Tutorial,
-│                           доступность, темы, ширины 320–430)
+├── command-engine-check.js — Текстовые команды и Assistant UI (ядро без DOM + jsdom: multi-step controls,
+│                           Escape, confirmation, History/Undo, разделы, Home, Help/Tutorial, 320–430)
+├── command-session-check.js — transient flow без DOM: ambiguity/choice, inferred confirmation/cancel,
+│                           stale/double-submit, reset, owner policy, кириллица и отсутствие hidden memory
 └── stage13-entities-check.js — Заметки/Финансы/Авто/Покупки/Напоминания (115 проверок: часть A — контракт
                            слоя без DOM на фиксированных часах приложения, часть B — jsdom-рендер:
                            производные итоги «Финансов», сценарии через интерфейс, History/Undo,
@@ -128,8 +127,16 @@ prototype/tests/
 Если под фразу подходит несколько задач — Aven перечисляет их и просит уточнить, **не меняя данные**;
 если ничего не найдено, дата/время неверны или команда непонятна — объясняет причину и тоже ничего не
 меняет. Удаление, расходы, заметки, заправки, покупки и напоминания текстом, перенос событий и
-многошаговые уточнения в первую итерацию **не входят** — это написано и на экране, и в справке
-(раздел «Текстовые команды», 7 статей) и показывается туром обучения «Текстовые команды».
+многошаговые уточнения в первую итерацию **не входят**.
+
+**Вторая итерация** добавляет настоящий transient flow поверх этого же ядра. Полное совпадение Task —
+`EXACT`; единственное совпадение по части названия — `INFERRED`; несколько — `AMBIGUOUS`; неподдержанное —
+`UNSUPPORTED`. Числовых confidence нет. При неоднозначности Assistant показывает semantic buttons с
+названием/датой/временем/статусом и понимает «первая/вторая» или `1/2`. `INFERRED` mutation сначала
+показывает конкретное действие и ждёт Confirm/Cancel. «Нет», «отмена», Escape и уход из Assistant
+очищают flow без mutation/History; stale target и double confirm безопасны. Контекст живёт только в
+`AvenCommandSession` в памяти вкладки, не в `AvenState`/localStorage. Delete, finance mutation и update
+Event остаются неподдержанными командами.
 
 Прежний демонстрационный `flows.js` (имитация многошаговой заправки и «важного события») **удалён**:
 держать имитацию рядом с настоящим разбором нечестно. Заправка создаётся в разделе «Авто» обычной
@@ -448,7 +455,7 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 **Проверка:** `node prototype/tests/actions-core-check.js` — **18 проверок Common Actions без DOM**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/help-tutorial-check.js` — **33 проверки Help/Tutorial/responsive/TTS narration**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js`
-(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage13-entities-check.js` — **115 проверок заметок, финансов, авто, покупок и напоминаний** (контракт слоя без DOM на часах приложения, производные итоги «Финансов», сценарии через интерфейс, история и Undo, согласованность Главной/Истории/помощника/уведомлений, справка и обучение, темы и ширины, запрет записи в обход слоя). `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` — **152 проверки текстовых команд** (ядро без DOM + экран помощника, негативные и безопасностные сценарии). Полный набор из тринадцати suite — **1073 проверки, 0 провалов**.
+(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage13-entities-check.js` — **115 проверок заметок, финансов, авто, покупок и напоминаний** (контракт слоя без DOM на часах приложения, производные итоги «Финансов», сценарии через интерфейс, история и Undo, согласованность Главной/Истории/помощника/уведомлений, справка и обучение, темы и ширины, запрет записи в обход слоя). `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` — **158 проверок текстовых команд и Assistant UI**; `node prototype/tests/command-session-check.js` — **55 проверок transient clarification/confirmation flow**. Полный набор из четырнадцати suite — **1134 проверки, 0 провалов**.
 `stage1-proto-check.js` покрывает: меню и метки этапов, история с
 Undo/фильтрами/экспортом, все 8 разделов админки с подтверждениями и аудитом, тема, экраны аккаунта,
 роут-гард, сквозная история и настоящий Undo в задачах/заметках/финансах/авто/покупках/автоматизациях,

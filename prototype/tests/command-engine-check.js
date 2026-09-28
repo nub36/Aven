@@ -548,9 +548,36 @@ async function partB() {
     ok('B42 неоднозначная команда не меняет данные и просит уточнить',
       /Уточните/i.test(amb) && p.H().length === histAfter &&
       p.st().tasks.filter((t) => /проверка неоднозначности/i.test(t.title)).every((t) => !t.completed));
-    const exact = await p.say('отметь проверка неоднозначности вторая выполненной');
-    ok('B43 уточнённая команда выполняется',
-      /отмечена выполненной/i.test(exact) && p.H()[0].action === 'task.complete');
+    ok('B43 варианты уточнения — настоящие доступные кнопки',
+      p.qa('.command-choice').length === 2 && p.qa('.command-choice').every((b) => b.tagName === 'BUTTON'));
+    p.click(p.qa('.command-choice')[1]);
+    await sleep(250);
+    ok('B44 выбор второго варианта продолжает исходную команду',
+      p.st().tasks.filter((t) => /проверка неоднозначности/i.test(t.title) && t.completed).length === 1 &&
+      p.H().length === histAfter + 1);
+
+    await p.say('создай задачу подготовить квартальный отчёт');
+    const beforeConfirm = p.H().length;
+    const pending = await p.say('отметь квартальный отчёт выполненным');
+    ok('B45 INFERRED mutation показывает конкретное подтверждение',
+      /Подготовить квартальный отчёт/.test(pending) && !!p.q('[data-action="command-confirm"]') && !!p.q('[data-action="command-cancel"]'));
+    ok('B46 до подтверждения нет мутации и History',
+      p.H().length === beforeConfirm && p.st().tasks.some((t) => /квартальный отчёт/i.test(t.title) && !t.completed));
+    p.key(p.q('[data-action="command-confirm"]'), 'Escape');
+    await sleep(180);
+    ok('B47 Escape отменяет pending, возвращает focus и не мутирует',
+      p.H().length === beforeConfirm && p.d.activeElement === p.q('#chat-input') && !p.w.Aven._commandSession.pending());
+
+    await p.say('отметь квартальный отчёт выполненным');
+    const button = p.q('[data-action="command-confirm"]');
+    p.click(button); await sleep(200);
+    const afterConfirm = p.H().length;
+    p.w.Aven.actions['command-confirm'](); await sleep(80);
+    ok('B48 Confirm выполняет ровно одну mutation даже при втором вызове',
+      afterConfirm === beforeConfirm + 1 && p.H().length === afterConfirm &&
+      p.st().tasks.some((t) => /квартальный отчёт/i.test(t.title) && t.completed));
+    ok('B49 controls используют существующие кнопки и aria group',
+      !p.q('[data-action="command-confirm"]') && p.q('#chat').getAttribute('aria-live') === 'polite');
     p.dom.window.close();
   }
 
@@ -582,8 +609,9 @@ async function partB() {
       /помощник/i.test(bodies) && /Enter/.test(bodies));
     ok('B62 справка перечисляет поддерживаемые команды и «сегодня/завтра»',
       /Что у меня сегодня/.test(bodies) && /завтра/i.test(bodies) && /пятниц/i.test(bodies));
-    ok('B63 справка объясняет неоднозначность и отмену',
-      /уточнить/i.test(bodies) && /Отменить/i.test(bodies) && /Истори/i.test(bodies));
+    ok('B63 справка объясняет неоднозначность, подтверждение и отмену',
+      /уточнить/i.test(bodies) && /Подтвердить/i.test(bodies) && /Отмена/i.test(bodies) && /Истори/i.test(bodies),
+      bodies.match(/.{0,80}(?:уточнить|Подтвердить|Отмена|Истори).{0,80}/gi));
     ok('B64 справка честно перечисляет, чего команды не умеют',
       /Удалять/i.test(bodies) && /не свободный разговор/i.test(bodies));
     ok('B65 в пользовательской справке нет технического жаргона',

@@ -597,7 +597,14 @@
      что и обычные формы разделов. Отдельной «демо-машины состояний» рядом
      больше нет — иначе получилось бы два разных помощника. */
   A._chat = null;
+  A._commandSession = null;
   function commandEngine() { return window.AvenCommand || null; }
+  function commandSession() {
+    if (!A._commandSession && window.AvenCommandSession) {
+      A._commandSession = window.AvenCommandSession.create({ source: 'assistant', surface: 'assistant' });
+    }
+    return A._commandSession;
+  }
   A.pages.assistant = function () {
     /* Первый диалог собирается движком команд по вашим настоящим записям: показывать
        заранее написанные цифры, которых нет в данных, нельзя (ADR-010). Это те же
@@ -663,17 +670,33 @@
     const ava = window.AvenChar && !window.AvenChar.isOff() ? window.AvenChar.avatar('s24') : '';
     box.innerHTML = A._chat.map((m, i) => {
       if (m.who === 'user') return `<div class="msg user">${A.esc(m.text)}</div>`;
-      const body = `<div>${A.esc(m.text)}</div>
+      let controls = '';
+      if (m.flow && m.flow.status === 'clarification_required') {
+        controls = `<div class="command-choices" role="group" aria-label="Выберите задачу">${(m.flow.candidates || []).map((c, n) =>
+          `<button type="button" class="command-choice" data-action="command-choice" data-index="${n}"><b>${n + 1}. ${A.esc(c.title)}</b><span>${A.esc([c.dateISO ? window.AvenActions.dates.dateLabel(c.dateISO) : '', c.time ? window.AvenActions.format.time(c.time) : '', c.status === 'completed' ? 'Выполнена' : 'Открыта'].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>`;
+      } else if (m.flow && m.flow.status === 'confirmation_required') {
+        controls = `<div class="command-confirm" role="group" aria-label="Подтверждение действия">
+          <button type="button" class="btn primary" data-action="command-confirm">Подтвердить</button>
+          <button type="button" class="btn" data-action="command-cancel">Отмена</button></div>`;
+      }
+      const body = `<div>${A.esc(m.text)}</div>${controls}
         <button class="speak" data-action="chat-speak" data-i="${i}">🔊 Озвучить</button>`;
-      return `<div class="msg aven"><div class="msg-row">${ava ? `<span class="bubble-avatar">${ava}</span>` : ''}<div style="flex:1">${body}</div></div></div>`;
+      return `<div class="msg aven${controls ? ' command-flow' : ''}"><div class="msg-row">${ava ? `<span class="bubble-avatar">${ava}</span>` : ''}<div style="flex:1;min-width:0">${body}</div></div></div>`;
     }).join('') + (A._stt && A._stt.active ? `<div class="stt-status"><span class="rec"></span>Слушаю… (экспериментальный STT)</div>` : '');
     box.scrollTop = box.scrollHeight;
   }
 
-  function pushAven(text, speak) {
-    A._chat.push({ who: 'aven', text: text });
+  function pushAven(text, speak, flow) {
+    /* Controls only belong to the newest pending response. Old buttons disappear,
+       which also prevents a stale confirmation from looking active. */
+    A._chat.forEach((m) => { if (m.flow) delete m.flow; });
+    A._chat.push({ who: 'aven', text: text, flow: flow || null });
     A._lastReply = text; // для строки статуса на Главной
     renderChat();
+    if (flow && (flow.status === 'clarification_required' || flow.status === 'confirmation_required')) {
+      const first = document.querySelector('.command-flow button');
+      if (first) first.focus();
+    }
     if (speak && s().settings.voice.alwaysVoice) A.speak(text, null);
   }
 
@@ -690,9 +713,10 @@
     setTimeout(() => {
       const E = commandEngine();
       if (!E) { pushAven('Помощник ещё загружается — попробуйте ещё раз через секунду.', false); if (P) P.set('idle'); return; }
-      const out = E.run(t, { source: 'assistant', surface: 'assistant' });
+      const session = commandSession();
+      const out = session ? session.submit(t) : E.run(t, { source: 'assistant', surface: 'assistant' });
       A._lastCommand = out;
-      pushAven(out.response, true);
+      pushAven(out.response, true, out);
       const changed = !!(out.result && out.result.ok && out.intent && out.intent.kind === 'mutation');
       if (P) { if (changed) P.flash('success', 2600); else P.set('idle'); }
     }, 300);
@@ -1059,6 +1083,30 @@
       if (A._stt) A._stt.start();
     },
 
+    'command-choice': (el) => {
+      const session = commandSession();
+      if (!session) return;
+      const out = session.choose(Number(el.dataset.index));
+      A._lastCommand = out; pushAven(out.response, true, out);
+      if (window.AvenPresence) window.AvenPresence.set(out.ok ? 'success' : 'idle');
+      const inp = document.getElementById('chat-input'); if (inp) inp.focus();
+    },
+    'command-confirm': () => {
+      const session = commandSession();
+      if (!session) return;
+      const out = session.confirm();
+      A._lastCommand = out; pushAven(out.response, true, out);
+      if (window.AvenPresence) window.AvenPresence.set(out.ok ? 'success' : 'idle');
+      const inp = document.getElementById('chat-input'); if (inp) inp.focus();
+    },
+    'command-cancel': () => {
+      const session = commandSession();
+      if (!session) return;
+      const out = session.cancel();
+      A._lastCommand = out; pushAven(out.response, false, out);
+      if (window.AvenPresence) window.AvenPresence.set('idle');
+      const inp = document.getElementById('chat-input'); if (inp) inp.focus();
+    },
     'chat-send': () => {
       const inp = document.getElementById('chat-input');
       if (inp && inp.value.trim()) { A._assistantSend(inp.value); inp.value = ''; }
@@ -1074,11 +1122,21 @@
       const m = A._chat[+el.dataset.i];
       if (m) A.speak(m.text, el);
     },
-    'assistant-exit': () => { location.hash = '#/home'; }
+    'assistant-exit': () => {
+      if (A._commandSession) A._commandSession.reset();
+      location.hash = '#/home';
+    }
   });
 
-  // Enter в поле чата
+  // Enter отправляет текст один раз; Escape отменяет только незавершённый flow.
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && A._commandSession && A._commandSession.pending() && document.body.classList.contains('assistant-mode')) {
+      e.preventDefault();
+      const out = A._commandSession.cancel();
+      A._lastCommand = out; pushAven(out.response, false, out);
+      const inp = document.getElementById('chat-input'); if (inp) inp.focus();
+      return;
+    }
     if (e.key === 'Enter' && e.target && e.target.id === 'chat-input') {
       e.preventDefault(); // иначе форма отправится ещё раз и команда уйдёт дважды
       window.Aven.actions['chat-send']();
