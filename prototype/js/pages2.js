@@ -6,12 +6,10 @@
 
   /* ---------- финансы: даты, фильтры, пересчёт итогов ---------- */
   const pad = (n) => String(n).padStart(2, '0');
-  function todayISO(offset) {
-    const d = new Date();
-    d.setHours(12, 0, 0, 0);
-    d.setDate(d.getDate() + (offset || 0));
-    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-  }
+  /* «Сегодня» — только из общего слоя дат, второй копии часов в разделе нет.
+     Иначе Финансы/Авто/Assistant считали бы свой день, расходясь с Главной,
+     Календарём и демо-данными (расхождение видно в любой день, кроме демо-даты). */
+  function todayISO(offset) { return window.AvenActions.dates.todayISO(offset); }
   /* Формат даты — общий для всего сайта (Профиль → Формат даты), без второй копии правил. */
   function humanDate(iso) {
     if (!iso) return '—';
