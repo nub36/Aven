@@ -6,19 +6,42 @@
 
   /* ---------- финансы: даты, фильтры, пересчёт итогов ---------- */
   const pad = (n) => String(n).padStart(2, '0');
-  function todayISO(offset) {
-    const d = new Date();
-    d.setHours(12, 0, 0, 0);
-    d.setDate(d.getDate() + (offset || 0));
-    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-  }
+  /* «Сегодня» — только из общего слоя дат, второй копии часов в разделе нет.
+     Иначе Финансы/Авто/Assistant считали бы свой день, расходясь с Главной,
+     Календарём и демо-данными (расхождение видно в любой день, кроме демо-даты). */
+  function todayISO(offset) { return window.AvenActions.dates.todayISO(offset); }
+  /* Формат даты — общий для всего сайта (Профиль → Формат даты), без второй копии правил. */
   function humanDate(iso) {
     if (!iso) return '—';
     const p = String(iso).split('-').map(Number);
     if (!p[0] || !p[1] || !p[2]) return iso;
-    return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(p[0], p[1] - 1, p[2], 12));
+    return window.AvenActions.dates.humanDate(iso);
   }
   function opDateISO(o) { return o.dateISO || (o.date === 'сегодня' ? todayISO() : o.date === 'вчера' ? todayISO(-1) : ''); }
+
+  /* Расходы по месяцам из реальных операций: одна функция, без второй копии правил.
+     Возвращает только те месяцы, за которые действительно есть записи. */
+  const MONTHS_SHORT = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+  const MONTHS_FULL = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+  function monthlyExpenses(st, limit) {
+    const byKey = {};
+    ((st || s()).ops || []).forEach((o) => {
+      if (o.type === 'income') return;
+      const iso = opDateISO(o);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+      const key = iso.slice(0, 7);
+      byKey[key] = A.sumMoney(byKey[key] || 0, o.amount);
+    });
+    return Object.keys(byKey).sort().slice(-(limit || 12)).map((key) => {
+      const mi = Number(key.slice(5, 7)) - 1;
+      return { key, m: MONTHS_SHORT[mi], full: MONTHS_FULL[mi] + ' ' + key.slice(0, 4), v: byKey[key] };
+    });
+  }
+  /* Короткая подпись столбца: «47,9к» для тысяч, иначе сумма как есть. */
+  function shortSum(v) {
+    if (v >= 1000) return (Math.round(v / 100) / 10).toString().replace('.', ',') + 'к';
+    return String(Math.round(v));
+  }
   function opAccount(st, id) { return (st.finAccounts || []).find((a) => a.id === id) || (st.finAccounts || [])[0] || { id: 'card', name: 'Основная карта', balance: 0 }; }
   function accountPath(st, id) {
     const i = (st.finAccounts || []).findIndex((a) => a.id === id);
@@ -99,7 +122,11 @@
     const catUse = {};
     const accUse = {};
     (st.ops || []).forEach((o) => { catUse[o.cat] = (catUse[o.cat] || 0) + 1; accUse[o.account || 'card'] = (accUse[o.account || 'card'] || 0) + 1; });
-    const maxV = Math.max.apply(null, st.finChart.map((x) => x.v));
+    /* Помесячные расходы считаются из реальных операций. Раньше здесь лежал
+       зашитый набор чисел, который никогда не пересчитывался — это противоречило
+       ADR-010 (честные статусы): пользователь видел «свою» статистику, которой нет. */
+    const monthly = monthlyExpenses(st);
+    const maxV = Math.max(1, ...monthly.map((x) => x.v));
     const html = `
     <div class="page-head">
       <div><h1>Финансы</h1><div class="sub">Операции · фильтры · счета · редактирование · демо · MVP_SCOPE §5.6</div></div>
@@ -144,14 +171,16 @@
     <div class="grid cols-2">
       <div class="card">
         <h3>Расходы по месяцам</h3>
-        <div class="bars">
-          ${st.finChart.map((x) => `
-          <div class="bar-wrap" title="${x.m}: ${A.money(x.v)}">
-            <div class="bv">${Math.round(x.v / 1000)}к</div>
+        ${monthly.length ? `<div class="bars">
+          ${monthly.map((x) => `
+          <div class="bar-wrap" title="${A.esc(x.full)}: ${A.esc(A.money(x.v))}">
+            <div class="bv">${A.esc(shortSum(x.v))}</div>
             <div class="bar" style="height:${Math.max(8, Math.round(x.v / maxV * 100))}%"></div>
-            <div class="bl">${x.m}</div>
+            <div class="bl">${A.esc(x.m)}</div>
           </div>`).join('')}
         </div>
+        <div class="s" style="color:var(--muted);font-size:.8rem;margin-top:6px">Считается по вашим операциям: показаны месяцы, в которых есть записи (${monthly.length}). Сравнение периодов и отчёты — отдельный этап.</div>`
+      : '<div class="empty">Пока нет операций, по которым можно посчитать расходы по месяцам.</div>'}
         <h3 style="margin-top:20px">Категории по фильтру</h3>
         ${catTotals.length ? catTotals.map((c) => `
         <div class="cat-row">
@@ -985,12 +1014,14 @@
   /* ================= ASSISTANT ================= */
   A._chat = null;
   A.pages.assistant = function () {
+    /* Первый диалог собирается из ваших настоящих записей: показывать заранее
+       написанные цифры, которых нет в данных, нельзя (ADR-010). */
     if (!A._chat) {
       A._chat = [
         { who: 'user', text: 'Сколько я потратил сегодня?' },
-        { who: 'aven', text: 'Сегодня записано расходов на 3 420 ₽.' },
+        { who: 'aven', text: assistantExpenseSummary() },
         { who: 'user', text: 'Что у меня завтра?' },
-        { who: 'aven', text: 'Завтра у вас два события: планёрка в 10:00 и спортзал в 18:30. Напомнить о них заранее?' }
+        { who: 'aven', text: assistantDaySummary(window.AvenActions.dates.todayISO(1)) }
       ];
     }
     const assistantSuggestions = window.AvenSuggestions ? window.AvenSuggestions.getSuggestions({ surface: 'assistant', dateISO: window.AvenActions.dates.todayISO() }).slice(0, 2) : [];
@@ -1073,6 +1104,43 @@
     return 'Просроченные задачи: ' + tasks.map((t) => t.title + ' — срок ' + C.format.taskDueLabel(t)).join('; ') + '.';
   }
 
+  /* Ответы про деньги и авто считаются по текущему состоянию. Раньше здесь были
+     зашитые цифры, которые расходились с реальными записями (ADR-010). */
+  function assistantExpenseSummary() {
+    const st = s();
+    const today = todayISO();
+    const month = today.slice(0, 7);
+    const ops = (st.ops || []).filter((o) => o.type !== 'income');
+    const dayOps = ops.filter((o) => opDateISO(o) === today);
+    const monthOps = ops.filter((o) => String(opDateISO(o)).slice(0, 7) === month);
+    const daySum = dayOps.reduce((a, o) => A.sumMoney(a, o.amount), 0);
+    const monthSum = monthOps.reduce((a, o) => A.sumMoney(a, o.amount), 0);
+    const largest = monthOps.slice().sort((a, b) => b.amount - a.amount)[0];
+    if (!monthOps.length) return 'Расходов пока не записано. Добавьте операцию в разделе «Финансы» — и я буду считать по ней.';
+    return 'Сегодня записано расходов на ' + A.money(daySum) + ', за месяц — ' + A.money(monthSum) +
+      (largest ? '. Самая крупная в месяце — ' + largest.title + ', ' + A.money(largest.amount) : '') + '.';
+  }
+  function assistantCarSummary() {
+    const st = s();
+    const car = st.car || {};
+    if (!car.model) return 'Автомобиль не заведён. Добавьте его в разделе «Авто».';
+    const monthSum = (st.ops || []).filter((o) => o.type !== 'income' && o.cat === 'Авто' &&
+      String(opDateISO(o)).slice(0, 7) === todayISO().slice(0, 7)).reduce((a, o) => A.sumMoney(a, o.amount), 0);
+    const last = (car.service || []).slice().sort((a, b) => (Number(b.km) || 0) - (Number(a.km) || 0))[0];
+    const interval = Number(car.serviceIntervalKm) || 0;
+    /* Ответ помощника — обычное предложение (его же читает озвучивание),
+       поэтому разряды разделяются обычным пробелом, а не неразрывным. */
+    const km = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(Number(v) || 0)).replace(/[\u00a0\u202f]/g, ' ') + ' км';
+    let next = '';
+    if (last && interval) {
+      const left = (Number(last.km) || 0) + interval - (Number(car.mileage) || 0);
+      next = left > 0 ? '. До следующего ТО — ' + km(left) : '. Плановое ТО просрочено на ' + km(-left);
+    }
+    return car.model + ', пробег ' + km(car.mileage) +
+      (last ? '. Последнее обслуживание: ' + last.title + ' · ' + autoDateLabel(autoDateISO(last)) : '') + next +
+      '. Расходы по категории «Авто» за месяц: ' + A.money(monthSum) + '.';
+  }
+
   function assistantSuggestionSummary() {
     const list = window.AvenSuggestions ? window.AvenSuggestions.getSuggestions({ surface: 'assistant', dateISO: window.AvenActions.dates.todayISO() }).slice(0, 3) : [];
     if (!list.length) return 'Сейчас предложений нет: по доступным локальным данным не найден полезный следующий шаг.';
@@ -1100,6 +1168,8 @@
     }
     if (/(предлож|рекоменд|что стоит сделать)/.test(tn)) return assistantSuggestionSummary();
     if (/(просроч| overdue)/.test(tn) && /задач/.test(tn)) return assistantOverdueSummary();
+    if (/(потратил|расход|трат)/.test(tn)) return assistantExpenseSummary();
+    if (/(машина|bmw|бэх|авто|пробег)/.test(tn)) return assistantCarSummary();
     if (/(что|план|дела).*(завтра)|завтра.*(что|план|дела)/.test(tn)) return assistantDaySummary(window.AvenActions.dates.todayISO(1));
     if (/(что|план|дела).*(сегодня)|сегодня.*(что|план|дела)/.test(tn)) return assistantDaySummary(window.AvenActions.dates.todayISO());
     if (/заправ|залил|бензин|топлив/.test(tn)) {

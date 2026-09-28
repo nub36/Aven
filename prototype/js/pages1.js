@@ -378,7 +378,7 @@
     const daySuggestions = window.AvenSuggestions ? window.AvenSuggestions.getSuggestions({ surface: 'day', dateISO: iso }) : [];
     const timeline = [];
     evs.forEach((e) => timeline.push({ id: e.id, date: iso, t: eventTime(e), n: e.title, type: e.importance === 'важное' ? 'important' : 'event', sub: (e.place || e.category || repeatLabel(e) || 'событие') + (reminderLabel(e.reminder) !== 'нет' ? ' · напоминание: ' + reminderLabel(e.reminder) : '') }));
-    activeTasks.forEach((t) => timeline.push({ id: t.id, t: taskTime(t) || taskDueLabel(t), n: t.title, type: 'task', sub: 'задача · ' + (t.project || 'без проекта') + (taskTags(t).length ? ' · #' + taskTags(t).join(' #') : '') }));
+    activeTasks.forEach((t) => timeline.push({ id: t.id, t: A.time(taskTime(t)) || taskDueLabel(t), n: t.title, type: 'task', sub: 'задача · ' + (t.project || 'без проекта') + (taskTags(t).length ? ' · #' + taskTags(t).join(' #') : '') }));
     timeline.sort((a, b) => {
       const aa = /^\d{2}:\d{2}$/.test(a.t) ? a.t : (a.t === 'весь день' ? '00:00' : '23:59');
       const bb = /^\d{2}:\d{2}$/.test(b.t) ? b.t : (b.t === 'весь день' ? '00:00' : '23:59');
@@ -476,10 +476,18 @@
       ${A.esc(eventTime(e))} ${rep ? '↻ ' : ''}${A.esc(e.title)}
     </div>`;
   }
+  /* Начало недели берётся из профиля (Профиль → Начало недели), а не зашито «понедельник». */
+  const DOW_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+  function weekStart() { return Core().format.weekStartIndex(); }
+  function dowOffset(date) { return (date.getDay() - weekStart() + 7) % 7; }
+  function dowLabels() {
+    const ws = weekStart();
+    return [0, 1, 2, 3, 4, 5, 6].map((i) => DOW_SHORT[(ws + i) % 7]);
+  }
   function monthView() {
     const mb = monthBounds(calOffset);
     const y = mb.y, m = mb.m;
-    const firstDow = (new Date(y, m, 1).getDay() + 6) % 7; // Пн=0
+    const firstDow = dowOffset(new Date(y, m, 1));
     const daysIn = new Date(y, m + 1, 0).getDate();
     const daysPrev = new Date(y, m, 0).getDate();
     let cells = [];
@@ -489,7 +497,7 @@
     while (cells.length % 7 !== 0) { cells.push({ d: n, other: true, next: true, iso: localISO(new Date(y, m + 1, n, 12)) }); n++; }
     const today = todayISO();
     return `<div class="cal-grid">
-      ${['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((d) => `<div class="cal-dow">${d}</div>`).join('')}
+      ${dowLabels().map((d) => `<div class="cal-dow">${d}</div>`).join('')}
       ${cells.map((c) => {
         const evs = eventsForDate(c.iso);
         const isToday = c.iso === today;
@@ -503,10 +511,9 @@
   }
   function weekView() {
     const base = parseISO(calSelected || todayISO());
-    const dow = (base.getDay() + 6) % 7;
-    const monday = new Date(base); monday.setDate(base.getDate() - dow);
+    const first = new Date(base); first.setDate(base.getDate() - dowOffset(base));
     const days = [];
-    for (let i = 0; i < 7; i++) { const d = new Date(monday); d.setDate(monday.getDate() + i); days.push(localISO(d)); }
+    for (let i = 0; i < 7; i++) { const d = new Date(first); d.setDate(first.getDate() + i); days.push(localISO(d)); }
     return `<div class="week-grid">
       ${days.map((iso) => {
         const evs = eventsForDate(iso);

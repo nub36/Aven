@@ -406,7 +406,7 @@ async function load(hash) {
 
     p.click(p.q('[data-action="task-edit"][data-id="t1"]')); await sleep(180);
     p.set(p.q('#modal-root input[name="title"]'), 'Забрать документы (изменено)');
-    p.set(p.q('#modal-root input[name="deadline"]'), new p.w.Date().toISOString().slice(0, 10));
+    p.set(p.q('#modal-root input[name="deadline"]'), p.w.AvenActions.dates.todayISO());
     p.click(p.modalSubmit()); await sleep(260);
     const eEdit = H()[0];
     ok('G9a редактирование задачи пишет старое/новое значение и payload fields',
@@ -896,7 +896,7 @@ async function load(hash) {
   {
     const p = await load('#/calendar');
     const H = () => p.st().history;
-    const iso = new p.w.Date().toISOString().slice(0, 10);
+    const iso = p.w.AvenActions.dates.todayISO();
     ok('I1 календарь имеет четыре представления: месяц / agenda / неделя / день',
       p.qa('#cal-tabs .tab').map((x) => x.textContent.trim()).join('|') === 'Месяц|Agenda|Неделя|День');
 
@@ -967,7 +967,7 @@ async function load(hash) {
       const c = p.qa('.card').filter((x) => (x.textContent || '').indexOf(name) >= 0)[0];
       return ((c || {}).textContent || '').replace(/[\u00a0\u202f]/g, ' ');
     };
-    const iso = (offset) => new p.w.Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
+    const iso = (offset) => p.w.AvenActions.dates.todayISO(offset);
 
     ok('J1 «Расходы» на Главной считаются из данных: сегодня 4 650 ₽, месяц 47 850 ₽, крупнейшая — АЗС Лукойл',
       /4 650 ₽/.test(txt()) && /47 850 ₽/.test(txt()) && /Крупнейшая в месяце: АЗС Лукойл/.test(txt()) && /3 200 ₽/.test(txt()),
@@ -1083,7 +1083,7 @@ async function load(hash) {
   {
     const p = await load('#/day');
     const H = () => p.st().history;
-    const tomorrow = new p.w.Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const tomorrow = p.w.AvenActions.dates.todayISO(1);
     const dateInp = p.q('[data-action="day-date"]');
     dateInp.value = tomorrow; p.change(dateInp); await sleep(240);
     ok('K1 «День»: выбор даты показывает события выбранного дня', /Планёрка/.test(p.q('#page').textContent) && /Завтра|завтра/.test(p.q('#page').textContent));

@@ -41,8 +41,11 @@ window.AvenDaily = (function () {
   /* Единственное место во всём Morning/Evening, где читается настенное время суток.
      Даты (сегодня/завтра) всегда берутся из общего demo clock. */
   function nowMinutes() {
-    try { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); }
-    catch (e) { return 0; }
+    try {
+      const C = window.AvenActions;
+      if (C && C.dates && C.dates.nowMinutes) return C.dates.nowMinutes();
+      const d = new Date(); return d.getHours() * 60 + d.getMinutes();
+    } catch (e) { return 0; }
   }
   function period(opts) {
     const b = behavior();

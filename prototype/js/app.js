@@ -210,10 +210,9 @@
     'menu-toggle': () => setMobileMenu(!document.body.classList.contains('nav-open')),
     'menu-close': () => setMobileMenu(false),
     'theme-toggle': () => {
-      const st = S.s();
-      // переключение задаёт явную тему ( light ⇄ dark ), уходя от «как в системе»
-      st.settings.theme = A.resolvedTheme() === 'dark' ? 'light' : 'dark';
-      S.save();
+      // переключение задаёт явную тему ( light ⇄ dark ), уходя от «как в системе»;
+      // запись идёт тем же путём, что и в Настройках — с историей и Undo
+      window.AvenActions.settings.set('settings.theme', A.resolvedTheme() === 'dark' ? 'light' : 'dark');
       A.applyEnv();
       A.render();
     },

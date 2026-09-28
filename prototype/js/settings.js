@@ -66,8 +66,48 @@
   function setRow(title, sub, control) {
     return `<div class="set-row"><div class="grow"><div class="t">${title}</div>${sub ? `<div class="s">${sub}</div>` : ''}</div>${control}</div>`;
   }
-  function sw(name, checked, action) {
-    return `<label class="switch"><input type="checkbox" ${checked ? 'checked' : ''} data-action="${action || 'set-toggle'}" data-path="${name}"><span class="slider"></span></label>`;
+  function sw(name, checked, action, label) {
+    return `<label class="switch"><input type="checkbox" ${checked ? 'checked' : ''} data-action="${action || 'set-toggle'}" data-path="${name}"${label ? ` data-label="${A.esc(label)}"` : ''} aria-label="${A.esc(label || Core().settings.label(name))}"><span class="slider"></span></label>`;
+  }
+  /* Переключатель + подпись строки: подпись уходит в data-label, чтобы запись в истории
+     была человеческой («Тихие часы: выключено → включено»), а слой действий не знал про DOM. */
+  function swRow(title, sub, path, checked) {
+    return setRow(title, sub, sw(path, checked, 'set-toggle', title));
+  }
+
+  /* ---------- поля профиля и настроек через общий слой действий ----------
+     Тип контрола, варианты, подпись и подсказка приходят из AvenActions: экран не
+     придумывает свои правила и не пишет в состояние напрямую (ADR-011, ADR-004). */
+  const Core = () => window.AvenActions;
+  function ctrlId(path) { return 'f-' + String(path).replace(/\./g, '-'); }
+  function fieldControl(path, opts) {
+    opts = opts || {};
+    const f = Core().settings.field(path);
+    if (!f) return '';
+    const v = Core().settings.read(path);
+    const id = ctrlId(path);
+    const action = opts.action || 'set-field';
+    const width = opts.width || (f.type === 'time' ? 130 : (f.type === 'number' ? 110 : 220));
+    const base = `data-action="${action}" data-path="${A.esc(path)}" id="${id}" style="width:${width}px"`;
+    if (f.type === 'select') {
+      return `<select ${base}>${(f.options || []).map((o) =>
+        `<option value="${A.esc(o.value)}"${o.value === v ? ' selected' : ''}${o.disabled ? ' disabled' : ''}>${A.esc(o.label)}</option>`).join('')}</select>`;
+    }
+    if (f.type === 'time') return `<input type="time" value="${A.esc(v || '')}" ${base}>`;
+    if (f.type === 'number') return `<input type="number" min="${f.min}" max="${f.max}" step="1" value="${A.esc(String(v == null ? '' : v))}" ${base}>`;
+    return `<input type="text" value="${A.esc(v == null ? '' : String(v))}" maxlength="${f.maxLength || 120}" ${base}>`;
+  }
+  function fieldRow(path, opts) {
+    const f = Core().settings.field(path);
+    if (!f) return '';
+    const sub = (opts && opts.hint != null) ? opts.hint : (f.hint || '');
+    return `<div class="set-row"><div class="grow"><label class="t" for="${ctrlId(path)}">${A.esc(f.label)}</label>${sub ? `<div class="s">${A.esc(sub)}</div>` : ''}</div>${fieldControl(path, opts)}</div>`;
+  }
+  /* Живой пример: видно сразу, как выбранные форматы выглядят в остальных разделах. */
+  function formatPreview() {
+    const C = Core();
+    const today = C.dates.todayISO();
+    return `<div class="tts-priv">Так это выглядит в остальных разделах: <b>${A.esc(A.money(47850))}</b> · <b>${A.esc(C.dates.humanDate(today))}</b> · <b>${A.esc(C.format.time('18:30'))}</b> · неделя начинается с «${A.esc(C.settings.read('profile.weekStart'))}» · сейчас по вашему поясу <b>${A.esc(C.dates.nowHM())}</b> (${A.esc(C.dates.tzLabel())}).</div>`;
   }
 
   A.pages.settings = function () {
@@ -75,7 +115,9 @@
       `<button class="nav-item ${cat === id ? 'active' : ''}" data-action="set-cat" data-id="${id}"
          ${stage ? `title="Не входит в срез Stage 1.0: ${A.esc(stage)} (docs/MVP_SCOPE.md §8)"` : ''}><span class="ico">${ico}</span>${label}${stage ? `<span class="stage-badge ${stage === '1.1' ? 'next' : 'later'}">${A.esc(stage)}</span>` : ''}</button>`).join('');
     const html = `
-    <div class="page-head"><div><h1>Настройки</h1><div class="sub">/settings — настройки конкретного пользователя (ADR-012: отдельно от /admin) · демо, переключения локальные · метки «1.1», «Stage 2–4» означают, что раздел не входит в срез Stage 1.0 (docs/MVP_SCOPE.md §8)</div></div>
+    <div class="page-head">
+      <div><h1>Настройки</h1><div class="sub">/settings — настройки конкретного пользователя (ADR-012: отдельно от /admin) · изменения сохраняются сразу, попадают в «Историю» и отменяются · метки «1.1», «Stage 2–4» означают, что раздел не входит в срез Stage 1.0 (docs/MVP_SCOPE.md §8)</div></div>
+      <div class="btn-row">${A.helpActions ? A.helpActions('settings') : ''}</div>
     ${stageOf(cat) ? `<div class="card"><div class="tts-priv warn">Раздел «${A.esc((cats.filter((c) => c[0] === cat)[0] || [])[1] || cat)}» не входит в срез Stage 1.0 (${A.esc(stageOf(cat))}). В прототипе он показан для проектирования; в реализации 1.0 такого раздела не будет — заглушки запрещены (ADR-010).</div></div>` : ''}
     <div class="set-layout">
       <div class="set-nav">${nav}</div>
@@ -89,36 +131,33 @@
     const V = st.settings.voice, N = st.settings.notify, B = st.settings.behavior;
 
     if (cat === 'profile') return `
-      <h2 class="set-h">Профиль</h2><p class="set-sub">Имя, обращение, язык, регион, форматы</p>
+      <h2 class="set-h">Профиль</h2><p class="set-sub">Имя, обращение, язык, регион, форматы. Значения применяются сразу во всех разделах</p>
+      <div class="card" data-tour="settings-profile">
+        ${['profile.name', 'profile.greeting', 'profile.locale', 'profile.city',
+      'profile.tz', 'profile.currency', 'profile.dateFormat', 'profile.timeFormat', 'profile.weekStart']
+      .map((p) => fieldRow(p)).join('')}
+        ${formatPreview()}
+      </div>
       <div class="card">
-        ${setRow('Имя', '', `<input type="text" value="${A.esc(st.profile.name)}" style="width:220px" data-action-stop>`)}
-        ${setRow('Обращение', 'как Aven обращается к вам', `<input type="text" value="${A.esc(st.profile.greeting)}" style="width:220px">`)}
-        ${setRow('Язык', '', `<select><option selected>Русский</option><option>English (перспектива)</option></select>`)}
-        ${setRow('Регион / город', '', `<input type="text" value="${A.esc(st.profile.city)}" style="width:220px">`)}
-        ${setRow('Часовой пояс', '', `<input type="text" value="${A.esc(st.profile.tz)}" style="width:220px">`)}
-        ${setRow('Валюта', '', `<input type="text" value="${A.esc(st.profile.currency)}" style="width:220px">`)}
-        ${setRow('Формат даты', '', `<select><option selected>ДД.ММ.ГГГГ</option><option>ГГГГ-ММ-ДД</option></select>`)}
-        ${setRow('Формат времени', '', `<select><option selected>24 ч</option><option>12 ч</option></select>`)}
-        ${setRow('Начало недели', '', `<select><option selected>Понедельник</option><option>Воскресенье</option></select>`)}
+        ${setRow('Почта', 'адрес входа меняется в разделе «Безопасность» — это не настройка отображения', `<span>${A.esc(st.profile.email || '—')}</span>`)}
+        <div class="tts-priv">Каждое изменение здесь попадает в «Историю действий» и отменяется кнопкой «Отменить». Время событий хранится как вы его ввели; часовой пояс определяет «сейчас» — приветствие, утро/вечер и отметки времени.</div>
       </div>`;
 
     if (cat === 'aven') return `
       <h2 class="set-h">Aven</h2><p class="set-sub">Поведение помощника и временные понятия</p>
-      <div class="card">
-        ${setRow('Ответы', 'краткие или подробные', `<select data-action-stop><option ${B.answers === 'краткие' ? 'selected' : ''}>краткие</option><option ${B.answers === 'подробные' ? 'selected' : ''}>подробные</option></select>`)}
-        ${setRow('Уровень подтверждений', 'когда спрашивать перед действием', `<select><option ${B.confirmation === 'только перед опасными' ? 'selected' : ''}>перед опасными действиями</option><option ${B.confirmation === 'перед удалениями' ? 'selected' : ''}>перед удалениями</option><option>всегда спрашивать</option></select>`)}
-        ${setRow('«Утро» начинается в', '', `<input type="time" value="${B.morning}" style="width:130px">`)}
-        ${setRow('«День» начинается в', '', `<input type="time" value="${B.day}" style="width:130px">`)}
-        ${setRow('«Вечер» начинается в', '', `<input type="time" value="${B.evening}" style="width:130px">`)}
-        ${setRow('«Ночь» начинается в', '', `<input type="time" value="${B.night}" style="width:130px">`)}
-        ${setRow('«После работы» — с', '', `<input type="time" value="${B.afterWork}" style="width:130px">`)}
+      <div class="card" data-tour="settings-aven">
+        ${fieldRow('settings.behavior.answers', { hint: 'краткие или подробные' })}
+        ${fieldRow('settings.behavior.confirmation', { hint: 'когда спрашивать перед действием', width: 260 })}
+        ${['settings.behavior.morning', 'settings.behavior.day', 'settings.behavior.evening',
+      'settings.behavior.night', 'settings.behavior.afterWork'].map((p) => fieldRow(p)).join('')}
+        <div class="tts-priv">Границы суток должны идти по возрастанию: утро → день → вечер → ночь. Если порядок нарушен, значение не сохранится и Aven скажет об этом.</div>
       </div>
       <h3 class="set-h">Дневные сценарии</h3>
       <p class="set-sub">Утренний обзор и итоги дня работают с уже существующими задачами, событиями и уведомлениями</p>
       <div class="card">
-        ${setRow('Показывать утренний обзор', 'подсказка на «Главной» утром; сам раздел остаётся доступен всегда', sw('settings.daily.morning', ((st.settings.daily || {}).morning !== false)))}
-        ${setRow('Показывать вечерний обзор', 'подсказка на «Главной» вечером; итоги дня можно открыть в любой момент', sw('settings.daily.evening', ((st.settings.daily || {}).evening !== false)))}
-        <div class="tts-priv">Какой сейчас период — определяется временем выше («Утро», «Вечер»). Это только подсказка в интерфейсе: прототип не будит и не шлёт оповещения при закрытой вкладке.</div>
+        ${swRow('Показывать утренний обзор', 'подсказка на «Главной» утром; сам раздел остаётся доступен всегда', 'settings.daily.morning', ((st.settings.daily || {}).morning !== false))}
+        ${swRow('Показывать вечерний обзор', 'подсказка на «Главной» вечером; итоги дня можно открыть в любой момент', 'settings.daily.evening', ((st.settings.daily || {}).evening !== false))}
+        <div class="tts-priv">Какой сейчас период — определяется временем выше («Утро», «Вечер») и часовым поясом из профиля. Это только подсказка в интерфейсе: прототип не будит и не шлёт оповещения при закрытой вкладке.</div>
       </div>`;
 
     if (cat === 'character') {
@@ -129,12 +168,12 @@
       <h2 class="set-h">Персонаж</h2><p class="set-sub">Вымышленный визуальный образ Aven · опциональный слой оформления</p>
       <div class="card">
         <div class="set-row"><div class="grow"><div class="t">Текущий образ</div><div class="s">персонаж — только оформление, функции от него не зависят</div></div>${preview}</div>
-        ${setRow('Показывать персонажа', 'выключите — будет нейтральный логотип «A»', sw('settings.character.enabled', C.enabled))}
+        ${swRow('Показывать персонажа', 'выключите — будет нейтральный логотип «A»', 'settings.character.enabled', C.enabled)}
         ${setRow('Персонаж', 'вымышленные Female / Male', `<select data-action="set-char" style="width:220px">${Object.keys(chars).map((k) => `<option value="${k}" ${C.id === k ? 'selected' : ''}>${A.esc(chars[k].label)}</option>`).join('')}</select>`)}
         ${setRow('Своё имя персонажа', 'пусто — имя по умолчанию', `<input type="text" value="${A.esc(C.name || '')}" style="width:220px" data-action="set-char-name">`)}
-        ${setRow('Плавающий Aven', 'кнопка-персонаж в углу экрана', sw('settings.character.floating', C.floating))}
-        ${setRow('Приветствие при запуске', 'показывать пузырь-приветствие', sw('settings.character.greet', C.greet))}
-        ${setRow('Голосовой профиль персонажа', 'подбирать тембр под образ (демо)', sw('settings.character.voiceProfile', C.voiceProfile))}
+        ${swRow('Плавающий Aven', 'кнопка-персонаж в углу экрана', 'settings.character.floating', C.floating)}
+        ${swRow('Приветствие при запуске', 'показывать пузырь-приветствие', 'settings.character.greet', C.greet)}
+        ${swRow('Голосовой профиль персонажа', 'подбирать тембр под образ (демо)', 'settings.character.voiceProfile', C.voiceProfile)}
         <div class="s" style="color:var(--muted);font-size:.82rem;padding:10px 4px">Персонажи — фикциональные. Это Presentation Layer: при отключении весь функционал сайта работает идентично.</div>
       </div>`;
     }
@@ -166,8 +205,8 @@
       return `
       <h2 class="set-h">Голос</h2><p class="set-sub">Озвучивание ответов и голосовой ввод · демо</p>
       <div class="card">
-        ${setRow('Голосовые ответы', 'озвучивать ответы Aven', sw('settings.voice.enabled', V.enabled))}
-        ${setRow('Всегда отвечать голосом', 'если выключено — только по запросу', sw('settings.voice.alwaysVoice', V.alwaysVoice))}
+        ${swRow('Голосовые ответы', 'озвучивать ответы Aven', 'settings.voice.enabled', V.enabled)}
+        ${swRow('Всегда отвечать голосом', 'если выключено — только по запросу', 'settings.voice.alwaysVoice', V.alwaysVoice)}
         ${setRow('Движок речи', 'системный голос остаётся всегда доступным запасным вариантом',
           `<select data-action="set-voice-engine" style="width:240px">
             <option value="system" ${engine === 'system' ? 'selected' : ''}>Системный (браузер / ОС)</option>
@@ -181,7 +220,7 @@
         ${engine === 'natural' ? setRow('Self-hosted TTS-сервер', 'адрес VPS с research/tts/server.py · пусто — тот же адрес, что у страницы',
           `<div style="display:flex;gap:6px;align-items:center"><input type="text" value="${A.esc(NV.serverUrl || '')}" placeholder="https://tts.ваш-домен.ru" style="width:190px" data-action="set-natural-server"><button class="btn small" data-action="tts-check-server">Проверить</button></div>`) : ''}
         ${engine === 'natural' ? setRow('Статус сервера', '', '<span class="pill" id="tts-server-status">проверяю…</span>') : ''}
-        ${engine === 'natural' ? setRow('Кэш озвучки', 'только память вкладки; фразы с цифрами и именами не кэшируются', sw('settings.voice.natural.cache', NV.cache !== false)) : ''}
+        ${engine === 'natural' ? swRow('Кэш озвучки', 'только память вкладки; фразы с цифрами и именами не кэшируются', 'settings.voice.natural.cache', NV.cache !== false) : ''}
         ${engine === 'natural' ? setRow('Таймаут Natural, сек', 'сервер не ответил за это время → честный переход на системный голос · VPS 1 CPU (Silero) отвечает за доли секунды, значения по умолчанию (10 с) достаточно',
           `<input type="number" min="2" max="600" step="1" value="${A.esc(NV.timeoutSec != null ? NV.timeoutSec : 10)}" style="width:80px" data-action="set-natural-timeout">`) : ''}
         ${priv ? `<div class="tts-priv ${priv.ok ? '' : 'warn'}"><span class="pill ${priv.ok ? 'ok' : ''}">${A.esc(priv.tag)}</span><span>${A.esc(priv.text)}</span></div>` : ''}
@@ -193,9 +232,9 @@
         ${setRow('Последний запуск', 'время до начала звука · источник', `<span class="pill" id="tts-last">${stats.lastLatencyMs != null ? stats.lastLatencyMs + ' мс · ' + A.esc(stats.lastSource || stats.lastEngine) : '—'}</span>`)}
         ${setRow('Лаборатория голосов', 'исследование: A/B-прослушивание готовых образцов кандидатов, слепой режим', '<a class="btn" href="voice-lab.html" target="_blank" rel="noopener">Открыть лабораторию ↗</a>')}
         ${setRow('Поддержка браузера', 'честный статус возможностей', `<span class="pill ${ttsOn ? 'ok' : ''}">TTS: ${ttsOn ? 'да' : 'нет'}</span> <span class="pill ${sttOn ? 'ok' : ''}">STT: ${sttOn ? 'да' : 'нет'}</span>`)}
-        ${setRow('Голосовой ввод (STT)', 'экспериментально · SpeechRecognition', sttOn ? sw('settings.voice.stt.enabled', ST.enabled) : '<span class="pill">недоступно</span>')}
-        ${sttOn && ST.enabled ? setRow('Промежуточный текст', 'показывать распознанное по мере речи', sw('settings.voice.stt.interim', ST.interim)) : ''}
-        ${sttOn && ST.enabled ? setRow('Автоотправка', 'отправлять фразу сразу после распознавания', sw('settings.voice.stt.autoSend', ST.autoSend)) : ''}
+        ${setRow('Голосовой ввод (STT)', 'экспериментально · SpeechRecognition', sttOn ? sw('settings.voice.stt.enabled', ST.enabled, 'set-toggle', 'Голосовой ввод (STT)') : '<span class="pill">недоступно</span>')}
+        ${sttOn && ST.enabled ? swRow('Промежуточный текст', 'показывать распознанное по мере речи', 'settings.voice.stt.interim', ST.interim) : ''}
+        ${sttOn && ST.enabled ? swRow('Автоотправка', 'отправлять фразу сразу после распознавания', 'settings.voice.stt.autoSend', ST.autoSend) : ''}
         ${setRow('Fallback при недоступности TTS', 'натуральный голос недоступен → системный; нет TTS → текст', '<span class="pill ok">включён всегда</span>')}
       </div>
       <div class="card" style="margin-top:12px">
@@ -220,21 +259,21 @@
       return `
       <h2 class="set-h">Уведомления</h2><p class="set-sub">Что показывать в разделе «Уведомления» · это уведомления внутри приложения</p>
       <div class="card">
-        ${setRow('Уведомления в приложении', 'собирать напоминания на одном экране и на «колокольчике»', sw('settings.notify.inapp', N.inapp !== false))}
+        ${swRow('Уведомления в приложении', 'собирать напоминания на одном экране и на «колокольчике»', 'settings.notify.inapp', N.inapp !== false)}
       </div>
       <h3 class="set-h" style="font-size:1rem;margin-top:16px">Что учитывать</h3>
       <p class="set-sub">Выключите то, о чём напоминать не нужно. Данные разделов при этом не меняются.</p>
       <div class="card">
-        ${srcRows.map(([id, label]) => setRow(label, '', sw('settings.notify.sources.' + id, SRC[id] !== false))).join('')}
+        ${srcRows.map(([id, label]) => swRow(label, '', 'settings.notify.sources.' + id, SRC[id] !== false)).join('')}
         <div class="s" style="color:var(--muted);font-size:.82rem;padding-top:8px">Пункты собираются из ваших задач, событий, авто и покупок. Пока вкладка закрыта, оповещений, писем и push нет — для этого нужен сервер и почтовый сервис (позже, открытые вопросы №16, №17).</div>
       </div>
       <h3 class="set-h" style="font-size:1rem;margin-top:16px">Голосовое произнесение <span class="stage-badge later">Stage 3</span></h3>
       <p class="set-sub">Голосовые события · тихие часы · приватность произнесения — относится к голосу (Stage 3, VOICE.md)</p>
       <div class="card">
-        ${setRow('Разрешить голосовое произнесение уведомлений', '', sw('settings.notify.voiceAllowed', N.voiceAllowed))}
-        ${setRow('Тихие часы', 'не беспокоить голосом ночью', sw('settings.notify.quietHours', N.quietHours))}
+        ${swRow('Разрешить голосовое произнесение уведомлений', '', 'settings.notify.voiceAllowed', N.voiceAllowed)}
+        ${swRow('Тихие часы', 'не беспокоить голосом ночью', 'settings.notify.quietHours', N.quietHours)}
         ${N.quietHours ? setRow('Интервал тихих часов', '', `<div style="display:flex;gap:6px;align-items:center"><input type="time" value="${N.quietFrom}" style="width:110px"> — <input type="time" value="${N.quietTo}" style="width:110px"></div>`) : ''}
-        ${setRow('Звук перед голосом', '', sw('settings.notify.soundBefore', N.soundBefore))}
+        ${swRow('Звук перед голосом', '', 'settings.notify.soundBefore', N.soundBefore)}
         ${setRow('При подключённых наушниках', 'поведение (реализуемость — открытый вопрос №22)', `<select><option ${N.headphones === 'продолжать' ? 'selected' : ''}>продолжать</option><option>только звук</option><option>молча</option></select>`)}
         ${setRow('Приватная информация', 'правила произнесения сумм и имен', `<select><option ${N.privateInfo === 'не произносить суммы' ? 'selected' : ''}>не произносить суммы</option><option>произносить всё</option><option>всегда молча</option></select>`)}
         <div class="s" style="color:var(--muted);font-size:.82rem;padding:10px 4px">Ограничения платформ отображаются честно: закрытая вкладка не получит голос (ADR-010).</div>
@@ -252,7 +291,7 @@
           <tr>
             <td><code>${A.esc(c.phrase)}</code></td>
             <td><span class="pill accent">${A.esc(c.action)}</span></td>
-            <td>${sw('cmd', c.enabled, 'cmd-toggle:' + c.id)}</td>
+            <td>${sw('cmd', c.enabled, 'cmd-toggle:' + c.id, 'Команда «' + c.phrase + '»')}</td>
             <td><button class="btn small" data-action="cmd-test" data-id="${c.id}">Тест</button></td>
           </tr>`).join('')}
         </table>
@@ -307,8 +346,8 @@
       return `
       <h2 class="set-h">Главная</h2><p class="set-sub">Включение/отключение карточек · порядок — в перспективе (вопрос №25)</p>
       <div class="card">
-      ${setRow('Предложения Aven', 'локальные подсказки по вашим задачам, событиям, авто и покупкам', sw('settings.suggestions.enabled', SG.enabled !== false))}
-      ${rows.map(([id, label]) => setRow(label, '', sw('settings.homeCards.' + id, C[id] !== false))).join('')}
+      ${swRow('Предложения Aven', 'локальные подсказки по вашим задачам, событиям, авто и покупкам', 'settings.suggestions.enabled', SG.enabled !== false)}
+      ${rows.map(([id, label]) => swRow(label, '', 'settings.homeCards.' + id, C[id] !== false)).join('')}
       <div class="s" style="color:var(--muted);font-size:.82rem;padding-top:10px">Изменения сразу применяются на главной странице.</div></div>`;
     }
 
@@ -318,7 +357,7 @@
       return `
       <h2 class="set-h">Модули</h2><p class="set-sub">Включение/отключение ненужных модулей — пункты скрываются в меню (демо)</p>
       <div class="card">
-        ${rows.map(([id, label]) => setRow(label, '', sw('settings.modules.' + id, M[id]))).join('')}
+        ${rows.map(([id, label]) => swRow(label, '', 'settings.modules.' + id, M[id])).join('')}
         ${setRow('Пользовательские модули', 'собственные разделы — перспектива (ADR-009)', '<span class="pill">позже</span>')}
       </div>`;
     }
@@ -326,7 +365,7 @@
     if (cat === 'automations') return `
       <h2 class="set-h">Автоматизации</h2><p class="set-sub">Управление из настроек · полный список — в разделе «Автоматизации»</p>
       <div class="card">
-        ${st.automations.map((a) => setRow(`${a.icon} ${A.esc(a.name)}`, A.esc(a.trigger), sw('auto', a.enabled, 'auto-toggle:' + a.id))).join('')}
+        ${st.automations.map((a) => setRow(`${a.icon} ${A.esc(a.name)}`, A.esc(a.trigger), sw('auto', a.enabled, 'auto-toggle:' + a.id, 'Автоматизация «' + a.name + '»'))).join('')}
         ${setRow('Visual Automation Canvas', 'Stage 4 — планируется', '<span class="pill">планируется</span>')}
       </div>`;
 
@@ -363,7 +402,7 @@
         ${setRow('Экспорт финансовых операций', 'CSV для таблиц (§5.6, приёмка 5)', '<a class="btn small" href="#/finance">Финансы → Экспорт CSV</a>')}
         ${setRow('Удаление аккаунта и всех данных', 'необратимо: повторная аутентификация + ввод слова DELETE', '<button class="btn danger" data-action="priv-delete-account">Удалить аккаунт…</button>')}
         ${setRow('Сброс демо-данных', 'вернуть исходный набор прототипа (это не удаление аккаунта)', '<button class="btn" data-action="privacy-reset">Сбросить демо-данные</button>')}
-        ${setRow('Диагностические данные', 'управление телеметрией (вопрос №22)', sw('privacy.diag', false))}
+        ${swRow('Диагностические данные', 'управление телеметрией (вопрос №22)', 'privacy.diag', false)}
         ${setRow('История действий', 'что сделано и что можно отменить (Undo)', '<a class="btn small" href="#/history">Открыть историю</a>')}
         ${setRow('Экспорт истории', 'JSON-выгрузка записей истории', '<a class="btn small" href="#/history">История → Экспорт JSON</a>')}
         ${setRow('Постоянная память', 'управление тем, что разрешено сохранять', '<a href="#/settings" data-action="set-cat-link" data-id="memory">раздел «Память»</a>')}
@@ -387,36 +426,38 @@
     if (cat === 'a11y') return `
       <h2 class="set-h">Доступность</h2><p class="set-sub">Размер текста · тема · анимации (демо)</p>
       <div class="card">
-        ${setRow('Размер текста', '', `<select data-action="set-textsize"><option value="sm" ${st.settings.textSize === 'sm' ? 'selected' : ''}>Мелкий</option><option value="md" ${st.settings.textSize === 'md' ? 'selected' : ''}>Обычный</option><option value="lg" ${st.settings.textSize === 'lg' ? 'selected' : ''}>Крупный</option></select>`)}
-        ${setRow('Тема оформления', 'вопрос №32: светлая / тёмная / как в системе', `<select data-action="set-theme">
-            <option value="light" ${st.settings.theme === 'light' ? 'selected' : ''}>Светлая</option>
-            <option value="dark" ${st.settings.theme === 'dark' ? 'selected' : ''}>Тёмная</option>
-            <option value="system" ${(st.settings.theme === 'system' || st.settings.theme === 'auto') ? 'selected' : ''}>Как в системе</option>
-          </select>`)}
-        ${setRow('Уменьшить анимации', 'reduced motion', sw('settings.reduceMotion', st.settings.reduceMotion))}
+        ${fieldRow('settings.textSize', { action: 'set-textsize' })}
+        ${fieldRow('settings.theme', { action: 'set-theme', hint: 'вопрос №32: светлая / тёмная / как в системе' })}
+        ${swRow('Уменьшить анимации', 'меньше движения в интерфейсе', 'settings.reduceMotion', st.settings.reduceMotion)}
         ${setRow('Управление с клавиатуры', 'базовая навигация Tab/Enter работает в прототипе', '<span class="pill ok">включено</span>')}
       </div>`;
 
     if (cat === 'exp') return `
       <h2 class="set-h">Экспериментальные функции</h2><p class="set-sub">Возможность отдельно включать будущие возможности Aven</p>
       <div class="card">
-        ${setRow('Automation Canvas (превью)', 'Stage 4', sw('settings.experiments.canvas', st.settings.experiments.canvas))}
-        ${setRow('AI Router (заглушка)', 'AI — необязательный слой, ADR-002', sw('settings.experiments.aiRouter', st.settings.experiments.aiRouter))}
-        ${setRow('Гео-напоминания', 'перспектива', sw('settings.experiments.geoReminders', st.settings.experiments.geoReminders))}
+        ${swRow('Automation Canvas (превью)', 'Stage 4', 'settings.experiments.canvas', st.settings.experiments.canvas)}
+        ${swRow('AI Router (заглушка)', 'AI — необязательный слой, ADR-002', 'settings.experiments.aiRouter', st.settings.experiments.aiRouter)}
+        ${swRow('Гео-напоминания', 'перспектива', 'settings.experiments.geoReminders', st.settings.experiments.geoReminders)}
         <div class="s" style="color:var(--muted);font-size:.82rem;padding-top:10px">Экспериментальные функции могут работать нестабильно — это ожидаемо.</div>
       </div>`;
 
     return '';
   }
 
+  /* Страница «Профиль» — не копия настроек «только для чтения», а те же самые поля
+     того же слоя действий: что изменено здесь, то изменено и в Настройках → Профиль. */
   A.pages.profile = function () {
     const p = s().profile;
+    const initial = String(p.name || 'A').trim().charAt(0).toUpperCase() || 'A';
     return { html: `
-    <div class="page-head"><div><h1>Профиль</h1><div class="sub">Демо-пользователь · настоящая авторизация не нужна</div></div></div>
-    <div class="grid cols-2" style="max-width:860px">
-      <div class="card">
+    <div class="page-head">
+      <div><h1>Профиль</h1><div class="sub">Имя, обращение и форматы отображения · те же поля, что в Настройках → Профиль · демо-аккаунт</div></div>
+      <div class="btn-row">${A.helpActions ? A.helpActions('profile') : ''}</div>
+    </div>
+    <div class="grid cols-2" style="max-width:920px">
+      <div class="card" data-tour="profile-fields">
         <div class="profile-head">
-          <button class="avatar big">А</button>
+          <button class="avatar big" aria-hidden="true" tabindex="-1">${A.esc(initial)}</button>
           <div>
             <div style="font-size:1.2rem;font-weight:700">${A.esc(p.name)}</div>
             <div style="color:var(--muted)">${A.esc(p.email)}</div>
@@ -424,28 +465,61 @@
           </div>
         </div>
         <div style="margin-top:16px">
-          ${setRow('Город', '', `<span>${A.esc(p.city)}</span>`)}
-          ${setRow('Часовой пояс', '', `<span>${A.esc(p.tz)}</span>`)}
-          ${setRow('Валюта', '', `<span>${A.esc(p.currency)}</span>`)}
+          ${['profile.name', 'profile.greeting', 'profile.city'].map((x) => fieldRow(x)).join('')}
         </div>
+      </div>
+      <div class="card" data-tour="profile-formats">
+        <h3>Как показывать данные</h3>
+        ${['profile.tz', 'profile.currency', 'profile.dateFormat', 'profile.timeFormat', 'profile.weekStart'].map((x) => fieldRow(x)).join('')}
+        ${formatPreview()}
       </div>
       <div class="card">
         <h3>Быстрые ссылки</h3>
         ${setRow('Настройки', 'все категории', '<a class="btn small" href="#/settings">Открыть</a>')}
         ${setRow('Память Aven', 'что Aven знает о вас', `<a class="btn small" href="#/settings" data-action="set-cat-link" data-id="memory">Открыть</a>`)}
         ${setRow('Безопасность', 'сессии и устройства', `<a class="btn small" href="#/settings" data-action="set-cat-link" data-id="security">Открыть</a>`)}
-        ${setRow('Выйти', 'в прототипе — просто вернуться на главную', '<a class="btn small" href="#/home">На главную</a>')}
+        ${setRow('История изменений', 'что и когда вы меняли, с возможностью отменить', '<a class="btn small" href="#/history">Открыть</a>')}
       </div>
     </div>` };
   };
 
   /* ---------- действия ---------- */
-  function getByPath(obj, path) { return path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj); }
-  function setByPath(obj, path, val) {
-    const ks = path.split('.');
-    let o = obj;
-    for (let i = 0; i < ks.length - 1; i++) o = o[ks[i]];
-    o[ks[ks.length - 1]] = val;
+
+  /* Единственная точка записи настроек и профиля с этого экрана. */
+  function write(path, value, opts) { return Core().settings.set(path, value, opts || {}); }
+
+  /* Изменение поля: проверка → сохранение → перерисовка с возвратом фокуса на тот же
+     контрол (иначе после сохранения фокус терялся бы, и с клавиатуры экран был бы неудобен). */
+  function applyField(path, value, el) {
+    const res = write(path, value);
+    if (!res.ok) {
+      A.toast(res.message);
+      if (el) {
+        el.setAttribute('aria-invalid', 'true');
+        const back = Core().settings.read(path);
+        if (back != null) el.value = back;
+        try { el.focus(); } catch (e) { /* демо */ }
+      }
+      return res;
+    }
+    if (el) el.removeAttribute('aria-invalid');
+    if (/^settings\.(theme|textSize)$/.test(path)) A.applyEnv();
+    if (!res.unchanged) A.toast(res.entity.label + ': ' + Core().settings.display(path, res.entity.value));
+    renderKeepFocus(path);
+    return res;
+  }
+  function renderKeepFocus(path) {
+    const active = document.activeElement;
+    const wasFocused = !!(active && active.dataset && active.dataset.path === path);
+    const selStart = (wasFocused && active.selectionStart != null) ? active.selectionStart : null;
+    A.render();
+    if (!wasFocused) return;
+    const next = document.querySelector('[data-path="' + path + '"]');
+    if (!next) return;
+    try {
+      next.focus();
+      if (selStart != null && next.setSelectionRange) next.setSelectionRange(selStart, selStart);
+    } catch (e) { /* демо */ }
   }
 
   /* Открыть настройки на нужной категории из другого раздела (например, из «Уведомлений»). */
@@ -459,33 +533,36 @@
     'set-cat': (el) => { cat = el.dataset.id; A.render(); },
     'set-cat-link': (el) => { cat = el.dataset.id; },
     'set-open-cat': (el) => { A.openSettingsCat(el.dataset.id); },
+    /* Любое изменение настройки или профиля идёт одним путём: слой действий проверяет
+       значение, сохраняет, пишет в историю и готовит Undo. Экран только показывает
+       результат (ADR-011; MVP_SCOPE §5.2, §8). */
+    'set-field': (el) => applyField(el.dataset.path, el.value, el),
     'set-toggle': (el) => {
-      setByPath(s(), el.dataset.path, el.checked);
-      S.save();
-      A.toast(el.checked ? 'Включено (демо)' : 'Выключено (демо)');
+      const r = write(el.dataset.path, el.checked, { label: el.dataset.label });
+      if (!r.ok) { el.checked = !el.checked; A.toast(r.message); return; }
+      A.toast((r.entity.label || 'Настройка') + ': ' + (el.checked ? 'включено' : 'выключено'));
       if (/^settings\.modules\./.test(el.dataset.path) || /^settings\.homeCards\./.test(el.dataset.path)) A.applyEnv();
+      if (/^settings\.reduceMotion$/.test(el.dataset.path)) A.applyEnv();
       if (/^settings\.character\./.test(el.dataset.path)) A.render(); // hero перестраивается под character on/off
     },
     'set-slider': (el) => {
-      setByPath(s(), el.dataset.path, parseFloat(el.value));
-      S.save();
+      write(el.dataset.path, parseFloat(el.value), { silent: true });
       const val = el.parentElement.querySelector('.val');
       if (val) val.textContent = el.value;
     },
-    'set-voice': (el) => { s().settings.voice.voiceURI = el.value; S.save(); A.render(); },
+    'set-voice': (el) => { write('settings.voice.voiceURI', el.value); A.render(); },
     'set-voice-engine': (el) => {
       if (window.AvenTTS) window.AvenTTS.stop();
-      s().settings.voice.engine = el.value === 'natural' ? 'natural' : 'system';
-      S.save(); A.render();
+      write('settings.voice.engine', el.value === 'natural' ? 'natural' : 'system');
+      A.render();
       if (el.value === 'natural') A.toast('Natural Voice: произвольный текст озвучивается вашим TTS-сервером (Silero Aigul на VPS). Без сервера — системный голос');
     },
-    'set-natural-voice': (el) => { s().settings.voice.natural.voice = el.value; S.save(); A.render(); },
-    'set-natural-server': (el) => { s().settings.voice.natural.serverUrl = el.value.trim(); S.save(); },
+    'set-natural-voice': (el) => { write('settings.voice.natural.voice', el.value); A.render(); },
+    'set-natural-server': (el) => { write('settings.voice.natural.serverUrl', el.value.trim()); },
     'set-natural-timeout': (el) => {
       const t = Math.round(parseFloat(el.value));
-      s().settings.voice.natural.timeoutSec = (isFinite(t) && t >= 2 && t <= 600) ? t : 10;
+      write('settings.voice.natural.timeoutSec', (isFinite(t) && t >= 2 && t <= 600) ? t : 10, { silent: true });
       el.value = s().settings.voice.natural.timeoutSec;
-      S.save();
     },
     'tts-check-server': () => { refreshTtsServer(true); },
     'tts-stop': () => { if (window.AvenTTS) window.AvenTTS.stop(); },
@@ -494,15 +571,14 @@
       if (o && window.AvenSpeechText) o.textContent = window.AvenSpeechText.normalize(el.value);
     },
     'set-char': (el) => {
-      s().settings.character.id = el.value;
-      S.save();
+      write('settings.character.id', el.value);
       A.render();
       if (window.AvenChar) window.AvenChar.mountFloat();
-      A.toast('Персонаж: ' + (window.AvenChar ? window.AvenChar.current().label : el.value) + ' (демо)');
+      A.toast('Персонаж: ' + (window.AvenChar ? window.AvenChar.current().label : el.value));
     },
-    'set-char-name': (el) => { s().settings.character.name = el.value; S.save(); A.render(); if (window.AvenChar) window.AvenChar.mountFloat(); },
-    'set-textsize': (el) => { s().settings.textSize = el.value; S.save(); A.applyEnv(); },
-    'set-theme': (el) => { s().settings.theme = el.value; S.save(); A.applyEnv(); A.render(); },
+    'set-char-name': (el) => { write('settings.character.name', el.value); A.render(); if (window.AvenChar) window.AvenChar.mountFloat(); },
+    'set-textsize': (el) => applyField('settings.textSize', el.value, el),
+    'set-theme': (el) => applyField('settings.theme', el.value, el),
     'voice-test': (el) => {
       // Для Natural — тестовая фраза владельца (этап 6): имя «Авен», время, числа, километры.
       // Для системного движка — T1 из research/tts/phrases.json.

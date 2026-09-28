@@ -71,7 +71,7 @@ prototype/
     ├── daily.js        — AvenDaily: DOM-free сводки утра/вечера над общими данными (без мутаций)
     ├── daily-ui.js     — экраны «Утренний обзор» (#/morning) и «Итоги дня» (#/evening)
     ├── tools.js        — Инструменты (часть функций реально работает)
-    ├── settings.js     — Настройки и Профиль (+категория «Персонаж», метки этапов у разделов вне 1.0)
+    ├── settings.js     — Настройки и Профиль: экраны строятся из описаний полей общего слоя, своих записей в состояние не делают
     ├── history.js      — История действий + Undo (сквозной слой: A.logAction / A.undoAction)
     ├── admin.js        — /admin: пользователи, роли, аудит, миграции, health, бэкапы, флаги, аварийные
     ├── auth.js         — экраны аккаунта: вход, шаг 2FA, регистрация, восстановление, сессии, выход
@@ -86,11 +86,53 @@ prototype/tests/
 │                           normalize → контракт сервера → воспроизведение → состояния → честный fallback)
 ├── notifications-check.js — раздел «Уведомления» (jsdom, 49 проверок: движок AvenNotify, действия+Undo,
 │                            CRUD напоминаний, настройки источников, страница, интеграция, Help/Tutorial)
-└── suggestions-check.js — Suggestions (jsdom, 46 проверок: правила/причины/IDs/order, suppression,
-                           Common Actions, History/Undo, Home/Day/Assistant, Settings, Help/Tutorial)
+├── suggestions-check.js — Suggestions (jsdom, 46 проверок: правила/причины/IDs/order, suppression,
+│                           Common Actions, History/Undo, Home/Day/Assistant, Settings, Help/Tutorial)
+└── settings-profile-check.js — Профиль и Настройки (jsdom, 121 проверка: контракт слоя действий,
+                           проверка ввода, применение форматов во всех разделах, History/Undo,
+                           восстановление после перезагрузки, отсутствие второго пути записи,
+                           согласованность #/profile ↔ Настройки, честность данных, Help/Tutorial,
+                           доступность, ширины 320–1280)
 ```
 
 Зависимостей нет. Сборка не нужна.
+
+## Профиль и Настройки (Stage 1.2, 2026-09-27)
+
+Профиль и настройки — настоящие данные, а не демонстрационные строки. Все значения пишутся **только**
+через общий слой действий `prototype/js/actions.js`:
+
+- `AvenActions.profile.setField(field, value)` и `AvenActions.settings.set(path, value, opts)` — единая
+  точка записи: проверка ввода → запись → сохранение → запись в «Историю» с обратной операцией
+  (`undo: { type: 'value', path, value }`, уже поддерживалась движком отмены).
+- `AvenActions.profile.fields()` / `settings.fields()` — описания полей (тип, подпись, варианты, правила).
+  Экран настроек и страница `#/profile` строятся из этих описаний, поэтому это одни и те же поля, а не
+  два набора: правка в одном месте видна в другом.
+- `AvenActions.format.money/date/time/weekStartIndex` и `dates.nowDate/nowMinutes/tzOffsetMinutes/tzLabel` —
+  единственные функции форматирования. Копий форматирования по разделам нет.
+- `AvenActions.options.*` — справочники валют, форматов даты и времени, начала недели, часовых поясов,
+  языков, стилей ответов, уровней подтверждения, размеров текста и тем.
+
+Что это даёт пользователю: 9 полей профиля и 7 полей «Настройки → Aven» действительно сохраняются и
+переживают перезагрузку; валюта, формат даты, формат времени и начало недели применяются во всех
+разделах; каждое изменение видно в «Истории» строкой «было → стало» человеческими словами и отменяется.
+Неверное значение не сохраняется: поле возвращается к прежнему, помечается `aria-invalid`, причина
+пишется словами. Границы суток обязаны возрастать (утро → день → вечер → ночь). Непрерывные регуляторы
+сохраняются с `silent`, чтобы не засорять историю каждым шагом.
+
+**Честное ограничение по часовому поясу:** пояс задаёт, который час «сейчас» (приветствие, выбор
+утреннего или вечернего сценария, отметки времени), но время уже сохранённых событий **не
+пересчитывается** — события хранятся как «время на стене» без пояса. Это отклонение от буквы
+`docs/MVP_SCOPE.md §5.2` (2) описано там же и вынесено как вопрос владельцу.
+
+**Второго пути записи нет:** переключение темы в шапке (`app.js`) и скрытие плавающего персонажа
+(`character.js`) идут через тот же слой. Проверка: `prototype/tests/settings-profile-check.js` —
+121 проверка, 0 провалов (в том числе регрессия на дефект «контрол выглядит рабочим, но ничего не
+меняет» и восстановление после настоящей перезагрузки страницы).
+
+Ещё в этом этапе: «Расходы по месяцам» в «Финансах» считаются из реальных операций (зашитый `finChart`
+удалён), ответы помощника про расходы, завтрашний день и автомобиль считаются по текущим записям, а
+мёртвые демо-поля `finCats`, `car.consumption/monthCost/lastService/nextService` удалены из данных.
 
 ## Утро и вечер (дневные сценарии)
 
@@ -344,7 +386,7 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 **Проверка:** `node prototype/tests/actions-core-check.js` — **18 проверок Common Actions без DOM**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/help-tutorial-check.js` — **33 проверки Help/Tutorial/responsive/TTS narration**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js`
-(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**. Полный набор из десяти suite — **685 проверок, 0 провалов**.
+(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280). Полный набор из одиннадцати suite — **806 проверок, 0 провалов**.
 `stage1-proto-check.js` покрывает: меню и метки этапов, история с
 Undo/фильтрами/экспортом, все 8 разделов админки с подтверждениями и аудитом, тема, экраны аккаунта,
 роут-гард, сквозная история и настоящий Undo в задачах/заметках/финансах/авто/покупках/автоматизациях,

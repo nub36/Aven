@@ -138,7 +138,7 @@ window.AvenChar = (function () {
 
   A.register({
     'float-toggle': () => { floatOpen = !floatOpen; mountFloat(); },
-    'float-hide': () => { s().settings.character.floating = false; S.save(); floatOpen = false; mountFloat(); A.toast('Плавающий персонаж скрыт (Настройки → Персонаж)'); },
+    'float-hide': () => { window.AvenActions.settings.set('settings.character.floating', false); floatOpen = false; mountFloat(); A.toast('Плавающий персонаж скрыт (Настройки → Персонаж)'); },
     'float-open-assistant': () => { floatOpen = false; mountFloat(); location.hash = '#/assistant'; },
     'float-test-voice': () => {
       const text = phrase('greet');

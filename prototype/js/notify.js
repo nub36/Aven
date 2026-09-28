@@ -60,7 +60,7 @@ window.AvenNotify = (function () {
         const sev = delta < 0 ? 'warn' : 'info';
         raw.push({
           key: 'manual:' + r.id, source: 'manual', sourceId: r.id, editable: true,
-          icon: '🔔', title: r.title, sub: (r.note ? r.note + ' · ' : '') + (delta < 0 ? 'просрочено · ' : '') + 'напоминание · ' + D().dateLabel(date) + (r.time ? ' · ' + r.time : ''),
+          icon: '🔔', title: r.title, sub: (r.note ? r.note + ' · ' : '') + (delta < 0 ? 'просрочено · ' : '') + 'напоминание · ' + D().dateLabel(date) + (r.time ? ' · ' + Core().format.time(r.time) : ''),
           dateISO: date, time: r.time || '', severity: sev, href: '#/notifications'
         });
       });
@@ -86,7 +86,7 @@ window.AvenNotify = (function () {
         const tm = Core().tasks.time(t);
         raw.push({
           key: 'task-due:' + t.id, source: 'taskDue', sourceId: t.id,
-          icon: '✅', title: t.title, sub: 'задача на сегодня' + (tm ? ' · ' + tm : ''),
+          icon: '✅', title: t.title, sub: 'задача на сегодня' + (tm ? ' · ' + Core().format.time(tm) : ''),
           dateISO: today, time: tm, severity: 'info', href: '#/tasks'
         });
       });
@@ -266,7 +266,7 @@ window.AvenNotify = (function () {
   }
 
   /* ---------------- CRUD напоминаний, созданных вручную (без DOM) ---------------- */
-  function reminderObject(r) { return 'Напоминание «' + (r.title || 'Без названия') + '» · ' + D().humanDate(r.dateISO) + (r.time ? ' · ' + r.time : ''); }
+  function reminderObject(r) { return 'Напоминание «' + (r.title || 'Без названия') + '» · ' + D().humanDate(r.dateISO) + (r.time ? ' · ' + Core().format.time(r.time) : ''); }
   function reminderSnapshot(r) { return { title: r.title || '', note: r.note || '', dateISO: r.dateISO || '', time: r.time || '', link: r.link || '' }; }
   function buildReminderFields(params, existing) {
     const ex = existing ? reminderSnapshot(existing) : {};
@@ -313,7 +313,7 @@ window.AvenNotify = (function () {
     const entry = log({
       action: 'reminder.create', title: 'Напоминание создано', object: reminderObject(r), objectType: 'reminder',
       source: opts.source || 'ui', undoable: true,
-      changes: [{ field: 'Название', from: '—', to: r.title }, { field: 'Дата', from: '—', to: D().humanDate(r.dateISO) + (r.time ? ' · ' + r.time : '') }],
+      changes: [{ field: 'Название', from: '—', to: r.title }, { field: 'Дата', from: '—', to: D().humanDate(r.dateISO) + (r.time ? ' · ' + Core().format.time(r.time) : '') }],
       undo: { type: 'remove', list: 'reminders', id: r.id }
     });
     return { ok: true, action: 'reminder.create', entity: r, entry };
