@@ -156,7 +156,9 @@
   function autoSnapshot(kind, item) { return Core().auto.snapshot(kind, item); }
   function autoLinkedOp(st, item) { return Core().auto.linkedOp(item); }
   function autoRowActions(kind, item) {
-    const linked = !!item.financeOpId;
+    /* «Связано» определяется по самой операции, а не по сохранённому номеру:
+       если операцию удалили в «Финансах», запись снова можно связать. */
+    const linked = !!autoLinkedOp(null, item);
     return `<span class="btn-row compact">
       <button class="btn small" data-action="auto-${kind}-edit" data-id="${item.id}">Ред.</button>
       ${kind !== 'doc' ? `<button class="btn small" data-action="auto-fin-link" data-kind="${kind}" data-id="${item.id}" ${linked ? 'disabled' : ''}>В финансы</button>` : ''}

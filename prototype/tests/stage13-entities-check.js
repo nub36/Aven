@@ -164,6 +164,15 @@ function partA() {
   ok('F11 удаление операции возвращает деньги на счёт и остаётся отменяемым',
     delOp.ok && H()[0].danger === true && H()[0].undo.type === 'restore' &&
     (H()[0].changes || []).some((c) => c.field === 'Баланс'));
+  /* Регрессия ревью PR #26: дату можно не указывать (тогда «сегодня» по общим часам),
+     но непонятная дата — ошибка, а не молчаливая подстановка. */
+  const noDate = C.finance.createOperation({ type: 'expense', amount: '15', cat: 'Продукты', account: 'card', title: 'без даты' });
+  ok('F13 операция без даты записывается на «сегодня» по общим часам приложения',
+    noDate.ok && noDate.entity.dateISO === C.dates.todayISO(), JSON.stringify(noDate).slice(0, 120));
+  ok('F14 непонятная дата отклоняется, а не подставляется молча',
+    C.finance.createOperation({ type: 'expense', amount: '15', cat: 'Продукты', account: 'card', dateISO: 'вчера вечером' }).code === 'DATE_INVALID');
+  C.finance.deleteOperation(noDate.entity.id);
+
   ok('F12 разбивка по категориям и помесячный ряд считаются из тех же операций',
     C.finance.byCategory({ period: 'month' }).length >= 1 && C.finance.monthly(3).length === 3 &&
     C.finance.monthly(3)[2].key === C.dates.todayISO().slice(0, 7),
@@ -366,6 +375,24 @@ async function partB() {
     ok('B21 одна отмена убрала и запись авто, и трату (без «половины»)',
       !p.st().car.service.some((x) => x.id === svcId) && p.st().ops.length === ops0 &&
       C.money.minor(C.finance.summary().monthExpense) === exp0);
+
+    /* Регрессия ревью PR #26: если связанную операцию удалили в «Финансах»,
+       запись авто снова должна поддаваться связыванию — кнопка не остаётся «вечно выключенной». */
+    await p.go('#/auto'); p.click(p.q('[data-tab="fuel"]')); await sleep(220);
+    const linkedFuel = (p.st().car.fuel || []).filter((f) => f.financeOpId && p.st().ops.some((o) => o.id === f.financeOpId))[0];
+    if (linkedFuel) {
+      const btnBefore = p.qa('[data-action="auto-fin-link"]').filter((b) => b.dataset.id === linkedFuel.id)[0];
+      ok('B26 у связанной записи кнопка «В финансы» выключена', !!btnBefore && btnBefore.disabled);
+      C.finance.deleteOperation(linkedFuel.financeOpId);
+      p.w.Aven.render(); await sleep(220);
+      const btnAfter = p.qa('[data-action="auto-fin-link"]').filter((b) => b.dataset.id === linkedFuel.id)[0];
+      ok('B27 после удаления операции запись снова можно связать (нет зависшей ссылки)',
+        !!btnAfter && !btnAfter.disabled, btnAfter ? ('disabled=' + btnAfter.disabled) : 'кнопка не найдена');
+      p.w.Aven.undoAction(p.H()[0].id); await sleep(200);
+    } else {
+      ok('B26 у связанной записи кнопка «В финансы» выключена', false, 'нет связанной заправки в демо-данных');
+      ok('B27 после удаления операции запись снова можно связать (нет зависшей ссылки)', false, 'нет связанной заправки в демо-данных');
+    }
 
     await p.go('#/shopping');
     const pid = p.st().purchases[0].id;

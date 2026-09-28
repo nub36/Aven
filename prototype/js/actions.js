@@ -1174,7 +1174,12 @@ window.AvenActions = (function () {
     const has = (k) => Object.prototype.hasOwnProperty.call(params || {}, k);
     const type = has('type') ? (params.type === 'income' ? 'income' : 'expense') : (ex.type || 'expense');
     const rawAmount = has('amount') ? params.amount : ex.amount;
-    const dateISO = has('dateISO') ? params.dateISO : (has('date') ? params.date : ex.dateISO);
+    /* Дату можно не указывать — тогда это «сегодня» по общим часам приложения
+       (так же ведут себя задачи, события и записи авто). Но если дату передали
+       и она непонятна — операция не сохраняется, молча подставлять нельзя. */
+    const hasDate = has('dateISO') || has('date');
+    const dateISO = hasDate ? (has('dateISO') ? params.dateISO : params.date)
+      : (ex.dateISO != null && ex.dateISO !== '' ? ex.dateISO : todayISO());
     const cat = String(has('cat') ? (params.cat || '') : (has('category') ? (params.category || '') : (ex.cat || ''))).trim();
     return {
       type,
