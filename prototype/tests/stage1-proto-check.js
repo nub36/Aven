@@ -1131,8 +1131,11 @@ async function load(hash) {
 
     await p.go('#/assistant');
     p.w.Aven._assistantSend('Что у меня завтра?'); await sleep(700);
+    /* Stage 2: ответ даёт движок команд по тем же task/event данным. Формулировка —
+       обычный человеческий текст без внутренних терминов (COMMAND_ENGINE §7). */
     ok('K9 Assistant-ответ «Что у меня завтра?» читает общие task/event данные',
-      /Событие из Дня/.test(p.w.Aven._lastReply || '') && /Задача из Дня/.test(p.w.Aven._lastReply || '') && /общего task\/event state/.test(p.w.Aven._lastReply || ''), p.w.Aven._lastReply || '');
+      /Событие из Дня/.test(p.w.Aven._lastReply || '') && /Задача из Дня/.test(p.w.Aven._lastReply || '') &&
+      /Завтра/i.test(p.w.Aven._lastReply || '') && !/state|intent|payload/i.test(p.w.Aven._lastReply || ''), p.w.Aven._lastReply || '');
     p.dom.window.close();
   }
 

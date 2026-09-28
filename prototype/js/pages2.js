@@ -13,6 +13,9 @@
   function todayISO(offset) { return Core().dates.todayISO(offset); }
   /* Формат даты — общий для всего сайта (Профиль → Формат даты), без второй копии правил. */
   function humanDate(iso) { return iso ? Core().dates.humanDate(iso) : '—'; }
+  /* Сумма с копейками — для пояснения про точность денег: там округление до
+     целых скрыло бы весь смысл примера. Формат валюты общий, второй копии нет. */
+  function moneyExact(v) { return Core().money.exact(v); }
   function opDateISO(o) { return Core().finance.dateISO(o); }
   function opAccount(st, id) { return Core().finance.account(id); }
   function opSnapshot(o) { return Core().finance.snapshot(o); }
@@ -100,7 +103,7 @@
             <div class="bl">${A.esc(x.m)}</div>
           </div>`).join('')}
         </div>
-        <div class="s" style="color:var(--muted);font-size:.8rem;margin-top:6px">Считается по вашим операциям: показаны месяцы, в которых есть записи (${monthly.length}). Сравнение периодов и отчёты — отдельный этап.</div>`
+        <div class="s" style="color:var(--muted);font-size:.8rem;margin-top:6px">Считается по вашим операциям: показаны последние ${monthly.length} месяцев подряд, включая месяцы без расходов (у них столбик нулевой). Сравнение периодов и отчёты — отдельный этап.</div>`
       : '<div class="empty">Пока нет операций, по которым можно посчитать расходы по месяцам.</div>'}
         <h3 style="margin-top:20px">Категории по фильтру</h3>
         ${catTotals.length ? catTotals.map((c) => `
@@ -130,9 +133,10 @@
         <div style="color:var(--muted);font-size:.82rem;margin-top:10px">Категории: ${cats.map(A.esc).join(' · ')}</div>
         <div class="tts-priv" style="margin-top:12px"><span>🧮</span>
           <div><b>Точность денег (SECURITY §5, MVP_SCOPE §5.6, приёмка 1):</b> суммы хранятся целыми
-          в минимальных единицах валюты, поэтому <code>0.1 + 0.2 = ${A.money(A.sumMoney(0.1, 0.2))}</code>
+          в минимальных единицах валюты, поэтому <code>${moneyExact(0.1)} + ${moneyExact(0.2)} = ${moneyExact(A.sumMoney(0.1, 0.2))}</code>
           (в копейках <code>${A.minor(0.1)} + ${A.minor(0.2)} = ${A.minor(0.1) + A.minor(0.2)}</code>), а не
-          <code>${0.1 + 0.2}</code>, как получилось бы при сложении float. Итоги месяца, баланс и баланс счёта
+          <code>${0.1 + 0.2}</code>, как получилось бы при сложении float. В списках суммы показаны округлённо
+          до целых, но считаются всегда по копейкам. Итоги месяца, баланс и баланс счёта
           пересчитываются при добавлении, редактировании и удалении операции; удаление требует подтверждения и отменяется
           через Undo (§5.6, приёмка 4).</div>
         </div>
@@ -586,58 +590,71 @@
     return { html };
   };
 
-  /* ================= ASSISTANT ================= */
+  /* ================= ASSISTANT =================
+     Stage 2: экран помощника — это адаптер интерфейса над общим движком команд
+     (`AvenCommand`). Здесь нет своего разбора текста, своих правил и своей записи
+     в состояние: текст уходит в движок, а движок вызывает те же общие действия,
+     что и обычные формы разделов. Отдельной «демо-машины состояний» рядом
+     больше нет — иначе получилось бы два разных помощника. */
   A._chat = null;
+  function commandEngine() { return window.AvenCommand || null; }
   A.pages.assistant = function () {
-    /* Первый диалог собирается из ваших настоящих записей: показывать заранее
-       написанные цифры, которых нет в данных, нельзя (ADR-010). */
+    /* Первый диалог собирается движком команд по вашим настоящим записям: показывать
+       заранее написанные цифры, которых нет в данных, нельзя (ADR-010). Это те же
+       вопросы, которые можно задать вручную, — второго источника ответов нет. */
     if (!A._chat) {
+      const E = commandEngine();
+      const answer = (q, fallback) => (E ? E.run(q, { source: 'assistant-intro', surface: 'assistant' }).response : fallback);
       A._chat = [
         { who: 'user', text: 'Сколько я потратил сегодня?' },
-        { who: 'aven', text: assistantExpenseSummary() },
+        { who: 'aven', text: answer('сколько я потратил сегодня', 'Помощник ещё загружается.') },
         { who: 'user', text: 'Что у меня завтра?' },
-        { who: 'aven', text: assistantDaySummary(window.AvenActions.dates.todayISO(1)) }
+        { who: 'aven', text: answer('что у меня завтра', 'Помощник ещё загружается.') }
       ];
     }
     const assistantSuggestions = window.AvenSuggestions ? window.AvenSuggestions.getSuggestions({ surface: 'assistant', dateISO: window.AvenActions.dates.todayISO() }).slice(0, 2) : [];
+    const E = commandEngine();
+    const examples = E ? E.examples() : [];
+    const notYet = E ? E.supported().notYet : [];
     const html = `
     <div class="assistant">
       <div class="a-inner">
-        <div class="a-top"><button class="btn" data-action="assistant-exit">← Выйти из Assistant</button></div>
+        <div class="a-top"><button class="btn" data-action="assistant-exit">← Выйти из Assistant</button>${A.helpActions ? A.helpActions('commands', 'commands') : ''}</div>
         <div class="a-logo">
           <div class="char-wrap">${(window.AvenChar && !window.AvenChar.isOff() && window.AvenChar.current().id === 'female')
             ? `<img class="char-bust" src="assets/character/web/female-aven-transparent.png" alt="${A.esc(window.AvenChar.current().label)} — виртуальный помощник">`
             : (window.AvenChar ? window.AvenChar.avatar('s52') : '<div class="logo-mark mark">A</div>')}</div>
           <h1>${window.AvenChar && !window.AvenChar.isOff() ? A.esc(window.AvenChar.display()) : 'Aven'}</h1>
           ${window.AvenChar && !window.AvenChar.isOff() ? `<div class="char-name">${A.esc(window.AvenChar.current().label)} · персонаж-оформление</div>` : ''}
-          <p>Что сделать?</p>
+          <p>Напишите короткую команду или вопрос</p>
         </div>
-        <div class="chat" id="chat"></div>
+        <div class="chat" id="chat" data-tour="command-chat" role="log" aria-live="polite" aria-label="Ответы Aven"></div>
         ${assistantSuggestions.length ? `<div class="assistant-suggestions" aria-label="Текущие предложения Aven">
           <div class="dc-label">Предложения по текущим данным</div>
           ${assistantSuggestions.map((item) => `<a class="btn small" href="${A.esc(((item.actions || []).filter((x) => x.href)[0] || {}).href || '#/home')}" title="Почему: ${A.esc(item.reason)}">✦ ${A.esc(item.title)}</a>`).join('')}
         </div>` : ''}
-        <div class="sugg">
-          <button class="btn small" data-action="sugg" data-q="Что сегодня?">Что сегодня?</button>
-          <button class="btn small" data-action="sugg" data-q="Добавить расход">Добавить расход</button>
-          <button class="btn small" data-action="sugg" data-q="Моя машина">Моя машина</button>
-          <button class="btn small" data-action="sugg" data-q="Создать напоминание">Создать напоминание</button>
+        <div class="sugg" data-tour="command-examples" aria-label="Примеры команд">
+          <span class="dc-label">Примеры — нажмите, чтобы подставить в поле</span>
+          ${examples.map((q) => `<button class="btn small" type="button" data-action="cmd-example" data-q="${A.esc(q)}">${A.esc(q)}</button>`).join('')}
         </div>
-        <div class="demo-cmds">
-          <span class="dc-label">Демо-команды (state machine, без AI)</span>
-          ${window.AvenFlows ? window.AvenFlows.listCommands().map((c) => `<button class="btn small" data-action="flow-start" data-id="${c.id}">⚡ ${A.esc(c.command)}</button>`).join('') : ''}
-          <button class="btn small" data-action="sugg" data-q="Отмена">Отмена</button>
-          <button class="btn small" data-action="sugg" data-q="Помощь">Помощь</button>
+        <form class="a-input" id="cmd-form" data-tour="command-input" autocomplete="off">
+          <button class="icon-btn" type="button" data-action="mic-stt" title="Голосовой ввод (экспериментально)" aria-label="Голосовой ввод (экспериментально)">🎤</button>
+          <label class="sr-only" for="chat-input">Команда для Aven</label>
+          <input type="text" id="chat-input" name="command" placeholder="Например: что у меня сегодня?" aria-describedby="cmd-hint">
+          <button class="btn primary" type="button" data-action="chat-send" title="Отправить" aria-label="Отправить команду">→</button>
+        </form>
+        <div class="s" id="cmd-hint" data-tour="command-limits" style="color:var(--muted);font-size:.78rem;text-align:center;padding:8px 0 14px">
+          Команды разбираются по понятным правилам на вашем устройстве: это не свободный разговор и не внешний AI.
+          Всё, что создано командой, попадает в обычные разделы и в «Историю» — там же это можно отменить.
+          Пока не умею: ${A.esc(notYet.join(' · '))}. Assistant не заменяет обычные страницы сайта.
         </div>
-        <div class="a-input">
-          <button class="icon-btn" data-action="mic-stt" title="Голосовой ввод (экспериментально)">🎤</button>
-          <input type="text" id="chat-input" placeholder="Напишите команду… (демо)">
-          <button class="btn primary" data-action="chat-send" title="Отправить">→</button>
-        </div>
-        <div class="s" style="color:var(--muted);font-size:.78rem;text-align:center;padding:8px 0 14px">Assistant не заменяет обычные страницы сайта · прототип · персонаж и голос — опциональный слой</div>
       </div>
     </div>`;
-    return { html, mount: renderChat };
+    return { html, mount: (root) => {
+      renderChat();
+      const form = root.querySelector('#cmd-form');
+      if (form) form.addEventListener('submit', (e) => { e.preventDefault(); A.actions['chat-send'](); });
+    } };
   };
 
   function renderChat() {
@@ -653,70 +670,6 @@
     box.scrollTop = box.scrollHeight;
   }
 
-  function replyFor(q) {
-    const qn = q.toLowerCase();
-    for (const r of window.AvenDemo.staticData.assistantReplies) {
-      if (new RegExp(r.q).test(qn)) return r.a;
-    }
-    return window.AvenDemo.staticData.assistantDefault;
-  }
-
-  function assistantDaySummary(dateISO) {
-    const C = window.AvenActions;
-    const label = C.dates.dateLabel(dateISO);
-    const evs = C.events.getEventsForDate(dateISO).items;
-    const tasks = C.tasks.getTasksForDate(dateISO, { includeCompleted: true }).items;
-    const openTasks = tasks.filter((t) => !C.tasks.isCompleted(t));
-    const doneTasks = tasks.filter((t) => C.tasks.isCompleted(t));
-    const eText = evs.length ? evs.map((e) => (C.format.eventTime(e) + ' — ' + e.title)).join('; ') : 'событий нет';
-    const tText = openTasks.length ? openTasks.map((t) => t.title).join('; ') : 'активных задач нет';
-    return label.charAt(0).toUpperCase() + label.slice(1) + ': ' + eText + '. Задачи: ' + tText + (doneTasks.length ? '. Выполнено: ' + doneTasks.length + '.' : '.') + ' Данные взяты из общего task/event state.';
-  }
-  function assistantOverdueSummary() {
-    const C = window.AvenActions;
-    const tasks = C.tasks.getOverdueTasks(C.dates.todayISO()).items;
-    if (!tasks.length) return 'Просроченных задач нет. Проверено по общему task state.';
-    return 'Просроченные задачи: ' + tasks.map((t) => t.title + ' — срок ' + C.format.taskDueLabel(t)).join('; ') + '.';
-  }
-
-  /* Ответы про деньги и авто считаются по текущему состоянию. Раньше здесь были
-     зашитые цифры, которые расходились с реальными записями (ADR-010). */
-  function assistantExpenseSummary() {
-    const C = Core();
-    const summary = C.finance.summary();
-    const monthOps = C.finance.getOperations({ period: 'month', type: 'expense' }).items;
-    const largest = monthOps.slice().sort((a, b) => C.money.minor(b.amount || 0) - C.money.minor(a.amount || 0))[0];
-    if (!monthOps.length) return 'Расходов пока не записано. Добавьте операцию в разделе «Финансы» — и я буду считать по ней.';
-    return 'Сегодня записано расходов на ' + A.money(summary.todayExpense) + ', за месяц — ' + A.money(summary.monthExpense) +
-      (largest ? '. Самая крупная в месяце — ' + largest.title + ', ' + A.money(largest.amount) : '') + '.';
-  }
-  function assistantCarSummary() {
-    const C = Core();
-    const car = C.auto.car();
-    if (!car.model) return 'Автомобиль не заведён. Добавьте его в разделе «Авто».';
-    const monthSum = C.finance.totals({ period: 'month', type: 'expense', cat: 'Авто' }).expense;
-    const stats = C.auto.stats();
-    const last = stats.lastService;
-    const interval = Number(car.serviceIntervalKm) || 0;
-    /* Ответ помощника — обычное предложение (его же читает озвучивание),
-       поэтому разряды разделяются обычным пробелом, а не неразрывным. */
-    const km = (v) => new Intl.NumberFormat('ru-RU').format(Math.round(Number(v) || 0)).replace(/[\u00a0\u202f]/g, ' ') + ' км';
-    let next = '';
-    if (last && interval) {
-      const left = (Number(last.km) || 0) + interval - (Number(car.mileage) || 0);
-      next = left > 0 ? '. До следующего ТО — ' + km(left) : '. Плановое ТО просрочено на ' + km(-left);
-    }
-    return car.model + ', пробег ' + km(car.mileage) +
-      (last ? '. Последнее обслуживание: ' + last.title + ' · ' + autoDateLabel(autoDateISO(last)) : '') + next +
-      '. Расходы по категории «Авто» за месяц: ' + A.money(monthSum) + '.';
-  }
-
-  function assistantSuggestionSummary() {
-    const list = window.AvenSuggestions ? window.AvenSuggestions.getSuggestions({ surface: 'assistant', dateISO: window.AvenActions.dates.todayISO() }).slice(0, 3) : [];
-    if (!list.length) return 'Сейчас предложений нет: по доступным локальным данным не найден полезный следующий шаг.';
-    return 'Текущие предложения: ' + list.map((x) => x.title + '. Почему: ' + x.reason).join(' ');
-  }
-
   function pushAven(text, speak) {
     A._chat.push({ who: 'aven', text: text });
     A._lastReply = text; // для строки статуса на Главной
@@ -724,36 +677,9 @@
     if (speak && s().settings.voice.alwaysVoice) A.speak(text, null);
   }
 
-  function helpText() {
-    const cmds = window.AvenFlows ? window.AvenFlows.listCommands().map((c) => '«' + c.command + '»').join(', ') : '';
-    return 'Демо-команды (без AI): ' + cmds + '. Также работают подсказки выше. Скажите «Отмена», чтобы прервать сценарий.';
-  }
-
-  /* демо-роутинг: многошаговые сценарии + простые команды; fallback — статичные ответы */
-  function routeCommand(t) {
-    const tn = t.toLowerCase();
-    if (/(отмен|cancel|стоп|stop)/.test(tn)) {
-      if (window.AvenFlows) window.AvenFlows.cancel();
-      return window.AvenChar ? window.AvenChar.phrase('cancel') : 'Отменено.';
-    }
-    if (/(предлож|рекоменд|что стоит сделать)/.test(tn)) return assistantSuggestionSummary();
-    if (/(просроч| overdue)/.test(tn) && /задач/.test(tn)) return assistantOverdueSummary();
-    if (/(потратил|расход|трат)/.test(tn)) return assistantExpenseSummary();
-    if (/(машина|bmw|бэх|авто|пробег)/.test(tn)) return assistantCarSummary();
-    if (/(что|план|дела).*(завтра)|завтра.*(что|план|дела)/.test(tn)) return assistantDaySummary(window.AvenActions.dates.todayISO(1));
-    if (/(что|план|дела).*(сегодня)|сегодня.*(что|план|дела)/.test(tn)) return assistantDaySummary(window.AvenActions.dates.todayISO());
-    if (/заправ|залил|бензин|топлив/.test(tn)) {
-      const r = window.AvenFlows.start('fuel');
-      return 'Начинаю демо-сценарий «Заправка» (многошагово). ' + r.question;
-    }
-    if (/(важн|событ)/.test(tn)) {
-      const r = window.AvenFlows.start('event');
-      return 'Начинаю демо-сценарий «Важное событие». ' + r.question;
-    }
-    if (/(помощь|команды|что ты умеешь)/.test(tn)) return helpText();
-    return replyFor(t);
-  }
-
+  /* Единственный путь текстовой команды: движок разбирает текст, сам вызывает общие
+     действия и возвращает структурированный результат; экран показывает только
+     человеческий ответ. Структура остаётся в A._lastCommand для отладки и тестов. */
   A._assistantSend = function (text) {
     const t = (text || '').trim();
     if (!t) return;
@@ -762,20 +688,13 @@
     const P = window.AvenPresence;
     if (P) P.set('thinking');
     setTimeout(() => {
-      let out; let kind = null;
-      if (window.AvenFlows && window.AvenFlows.isActive()) {
-        const r = window.AvenFlows.advance(t);
-        out = r ? r.text : replyFor(t);
-        kind = r ? r.kind : null;
-      } else {
-        out = routeCommand(t);
-      }
-      pushAven(out, true);
-      if (P) {
-        if (kind === 'done') { if (/ВАЖНОЕ/.test(out)) P.flash('important', 4200); else P.flash('success', 2600); }
-        else if (kind === 'next') P.set('waiting');
-        else P.set('idle'); // если TTS заговорит — voice.js сам переведёт в speaking
-      }
+      const E = commandEngine();
+      if (!E) { pushAven('Помощник ещё загружается — попробуйте ещё раз через секунду.', false); if (P) P.set('idle'); return; }
+      const out = E.run(t, { source: 'assistant', surface: 'assistant' });
+      A._lastCommand = out;
+      pushAven(out.response, true);
+      const changed = !!(out.result && out.result.ok && out.intent && out.intent.kind === 'mutation');
+      if (P) { if (changed) P.flash('success', 2600); else P.set('idle'); }
     }, 300);
   };
 
@@ -1116,16 +1035,6 @@
     },
     'auto-tpl': (el) => A.toast('Шаблон «' + el.dataset.name + '» — демо. Состав решается отдельно (открытый вопрос №30).'),
 
-    'flow-start': (el) => {
-      const r = window.AvenFlows.start(el.dataset.id);
-      if (r) {
-        A._chat.push({ who: 'aven', text: 'Начинаю демо-сценарий «' + r.flow.title + '». ' + r.question });
-        A._lastReply = r.question;
-        renderChat();
-        if (window.AvenPresence) window.AvenPresence.set('waiting'); // сценарий ждёт ответа пользователя
-      }
-    },
-
     'mic-stt': () => {
       if (!window.AvenVoice || !window.AvenVoice.support.stt) {
         A.toast('Голосовой ввод недоступен в этом браузере — используйте текст (экспериментально)');
@@ -1153,17 +1062,13 @@
     'chat-send': () => {
       const inp = document.getElementById('chat-input');
       if (inp && inp.value.trim()) { A._assistantSend(inp.value); inp.value = ''; }
+      else A.toast('Напишите команду — например: «Что у меня сегодня?»');
     },
-    'sugg': (el) => {
-      const q = el.dataset.q;
-      if (q === 'Добавить расход') {
-        A._chat.push({ who: 'user', text: q });
-        A._chat.push({ who: 'aven', text: 'Открываю форму расхода (демо).' });
-        renderChat();
-        setTimeout(() => window.Aven.actions['fin-add'](), 250);
-        return;
-      }
-      A._assistantSend(q);
+    /* Пример не выполняется сразу: он подставляется в поле, чтобы человек видел,
+       что именно будет отправлено, и мог поправить текст. */
+    'cmd-example': (el) => {
+      const inp = document.getElementById('chat-input');
+      if (inp && el.dataset.q) { inp.value = el.dataset.q; inp.focus(); }
     },
     'chat-speak': (el) => {
       const m = A._chat[+el.dataset.i];
@@ -1175,6 +1080,7 @@
   // Enter в поле чата
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && e.target && e.target.id === 'chat-input') {
+      e.preventDefault(); // иначе форма отправится ещё раз и команда уйдёт дважды
       window.Aven.actions['chat-send']();
     }
   });

@@ -399,6 +399,17 @@ window.AvenActions = (function () {
     const num = new Intl.NumberFormat(c.locale).format(Math.round(Number(n) || 0));
     return c.position === 'prefix' ? c.sign + num : num + ' ' + c.sign;
   }
+  /* Обычный money() округляет до целых — так удобнее читать суммы в списках.
+     Но там, где смысл именно в копейках (объяснение точности денег), округление
+     превращает 0,30 в «0 ₽» и делает пример неверным. Поэтому здесь — тот же
+     формат валюты, но с сохранением копеек. Арифметика не меняется: значение
+     по-прежнему считается в целых минимальных единицах. */
+  function moneyExact(n) {
+    const c = currencyInfo();
+    const num = new Intl.NumberFormat(c.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      .format(minorUnits(n) / 100);
+    return c.position === 'prefix' ? c.sign + num : num + ' ' + c.sign;
+  }
   const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
     'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
   function formatDateByProfile(iso) {
@@ -2183,7 +2194,7 @@ window.AvenActions = (function () {
     dates: { todayISO, localISO, parseISO, diffDays, addDays, humanDate, dateLabel, normalizeDate,
       nowDate, nowMinutes, nowHM, tzOffsetMinutes, tzLabel },
     format: { taskDueLabel, eventTime, eventStart, eventEnd, repeatLabel, reminderLabel,
-      money, date: formatDateByProfile, time: formatTimeByProfile, weekStartIndex, currency: currencyInfo },
+      money, moneyExact, date: formatDateByProfile, time: formatTimeByProfile, weekStartIndex, currency: currencyInfo },
     profile: { get: getProfile, setField: setProfileField, update: updateProfile,
       fields: () => fieldsOf('profile'), read: readValue, display: displayValue, validate: validateField },
     settings: { get: getSetting, set: setSetting, fields: fieldsOf, label: labelOf,
@@ -2199,7 +2210,7 @@ window.AvenActions = (function () {
       normalize: applyEventAliases, occursOn: eventOccursOn, start: eventStart, end: eventEnd, description: eventDesc, snapshot: eventSnapshot },
 
     /* --- Stage 1.3: те же правила контракта, что у задач и событий --- */
-    money: { minor: minorUnits, sum: sumMoney, format: money },
+    money: { minor: minorUnits, sum: sumMoney, format: money, exact: moneyExact },
     notes: { createNote, updateNote, deleteNote, getNote, getNotes, setNotePinned, setNoteArchived, saveNoteBody,
       createFolder: createNoteFolder, folders: noteFolders, tags: noteTagList, summary: notesSummary,
       snapshot: noteSnapshot, preview: notePreview, folderOf: noteFolderOf },
