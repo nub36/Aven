@@ -61,7 +61,12 @@ function coreSandbox() {
       const entry = Object.assign({ id: 'h' + (++seq), when: 'test', actor: 'test' }, e);
       state.history.unshift(entry);
       return entry;
-    }
+    },
+    /* notify.js регистрирует свои DOM-обработчики страницы «Уведомления» через
+       A.register(...) при загрузке модуля — в DOM-free сборке страница не нужна,
+       но вызов должен быть безопасным no-op, чтобы можно было загрузить сам
+       движок AvenNotify (единственный контракт напоминаний, docs/MVP_SCOPE.md §4.2.4). */
+    register() {}
   };
   /* Общие часы приложения: движок обязан брать «сегодня» отсюда, а не из системного времени. */
   sandbox.window.AvenDemo = {
@@ -72,10 +77,13 @@ function coreSandbox() {
     }
   };
   vm.createContext(sandbox);
-  ['actions.js', 'command.js'].forEach((f) => {
+  /* notify.js — единственный существующий движок напоминаний/уведомлений (AvenNotify);
+     reminder.create/reminder.search в command.js вызывают его через AvenActions.reminders,
+     поэтому он должен быть загружен, а не имитирован отдельной DOM-free заглушкой. */
+  ['actions.js', 'notify.js', 'command.js'].forEach((f) => {
     vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', f), 'utf8'), sandbox, { filename: f });
   });
-  return { sandbox, state, C: sandbox.window.AvenActions, K: sandbox.window.AvenCommand };
+  return { sandbox, state, C: sandbox.window.AvenActions, K: sandbox.window.AvenCommand, N: sandbox.window.AvenNotify };
 }
 
 function partA() {
@@ -200,9 +208,16 @@ function partA() {
     const fin = env3.K.run('запиши 850 рублей продукты', { source: 'test' });
     ok('A75 запись расхода текстом отклоняется с подсказкой про раздел «Финансы»',
       fin.ok === false && /Финанс/.test(fin.response) && env3.state.ops.length === 0);
+    /* Stage 2, итерация 4: создание напоминания текстом теперь поддержано через
+       существующий AvenActions.reminders (см. блок A14 ниже для полного покрытия);
+       здесь — только то, что оно больше не попадает в общий «не поняла». */
     const rem = env3.K.run('напомни завтра позвонить', { source: 'test' });
-    ok('A76 создание напоминания текстом отклоняется честно',
-      rem.ok === false && /напомин/i.test(rem.response) && env3.state.history.length === 0);
+    ok('A76 создание напоминания текстом выполняется через общее действие',
+      rem.ok === true && rem.result.action === 'reminder.create' &&
+      rem.result.entity.title === 'Позвонить' && /Напомин/.test(rem.response), rem.response);
+    const remBare = env3.K.run('напомни', { source: 'test' });
+    ok('A76b «напомни» без содержимого честно отклоняется, а не «не поняла» в общем виде',
+      remBare.ok === false && remBare.intent.error.code === 'UNSUPPORTED_REMINDER');
     const ev = env3.K.run('перенеси встречу на 12', { source: 'test' });
     ok('A77 перенос события текстом отклоняется и не трогает календарь',
       ev.ok === false && /Календар/.test(ev.response) && env3.state.events.length === 0);
@@ -386,7 +401,7 @@ function partA() {
     ok('A143 список возможностей честно перечисляет и то, чего движок не умеет',
       /Пока не умею/.test(cap.response) && /удаление записей текстом/.test(cap.response));
     ok('A144 перечень возможностей доступен как данные для интерфейса и справки',
-      K9.supported().queries.length >= 5 && K9.supported().mutations.length === 5 &&
+      K9.supported().queries.length >= 5 && K9.supported().mutations.length === 6 &&
       K9.supported().notYet.length >= 4 && K9.examples().length >= 6);
   }
 
@@ -512,6 +527,230 @@ function partA() {
       JSON.stringify(env12.state) === beforeParse && env12.state.history.length === 0);
   }
 
+  /* ---- A14. Напоминания текстом (Stage 2, итерация 4) ----
+     MVP_SCOPE.md §4.2.4/§4.2.6/§4.2.8 относил напоминания (наравне с расходами, покупками
+     и заправками) к следующим документированным блокам после заметок. Единственный
+     существующий контракт напоминания — `AvenActions.reminders`, фасад над `AvenNotify`
+     (второго движка напоминаний в командном слое нет — см. также A153 выше). */
+  {
+    const env13 = coreSandbox();
+    const K13 = env13.K, C13 = env13.C, N13 = env13.N;
+    ok('A180 фасад напоминаний и движок AvenNotify действительно загружены для проверки',
+      typeof N13 === 'object' && typeof C13.reminders.create === 'function' && typeof C13.reminders.list === 'function');
+
+    /* A181–A184 — точное создание, содержимое и дата/время сохранены дословно. */
+    const r181 = K13.run('Напомни купить масло на завтра', { source: 'assistant' });
+    const rem181 = env13.state.reminders[0];
+    ok('A181 «напомни …» создаёт настоящее напоминание через общее действие',
+      r181.ok && rem181 && rem181.title === 'Купить масло' && rem181.dateISO === '2026-09-29' && rem181.time === '',
+      JSON.stringify(rem181));
+    ok('A182 напоминание находится обычным запросом раздела (общий Common Query)',
+      C13.reminders.list({}).items.some((x) => x.id === rem181.id));
+    ok('A183 запись истории создана один раз, через общий фасад, помечена отменяемой',
+      env13.state.history.length === 1 && env13.state.history[0].action === 'reminder.create' &&
+      env13.state.history[0].undoable === true && env13.state.history[0].undo.type === 'remove' &&
+      env13.state.history[0].undo.list === 'reminders' && env13.state.history[0].source === 'assistant');
+    ok('A184 ответ пользователю понятен, называет дату и упоминает «Уведомления»/«Историю», без служебных терминов',
+      /Напомин/.test(r181.response) && /завтра/i.test(r181.response) && /Уведомлен/.test(r181.response) &&
+      /Истори/.test(r181.response) && !/(reminder\.create|intent|payload|JSON)/i.test(r181.response), r181.response);
+    ok('A184b ответ не обещает доставку при закрытом сайте (push/email/фон)',
+      !/(push|письм|email|почт|даже.{0,15}закрыт)/i.test(r181.response), r181.response);
+
+    /* A185 — время необязательно, но сохраняется, когда указано. */
+    const r185 = K13.run('Напомни завтра в 10 позвонить Сергею', { source: 'test' });
+    ok('A185 время распознаётся отдельно от содержимого и сохраняется в напоминании',
+      r185.ok && r185.result.entity.time === '10:00' && r185.result.entity.title === 'Позвонить Сергею',
+      JSON.stringify(r185.result && r185.result.entity));
+
+    /* A186 — «создай/добавь напоминание …» работает тем же образом, что и «напомни …». */
+    const r186 = K13.run('Создай напоминание оплатить интернет на пятницу', { source: 'test' });
+    ok('A186 «создай напоминание …» создаёт напоминание тем же общим действием',
+      r186.ok && r186.result.action === 'reminder.create' && r186.result.entity.title === 'Оплатить интернет' &&
+      r186.result.entity.dateISO === '2026-10-02', r186.response);
+
+    /* A187 — общие часы, а не системное время: контекст передаёт «сегодня». */
+    const r187 = K13.run('напомни завтра позвонить маме', { source: 'test', todayISO: '2026-12-31' });
+    ok('A187 напоминание считает «завтра» от переданных общих часов, а не системной даты',
+      r187.ok && r187.result.entity.dateISO === '2027-01-01', JSON.stringify(r187.result && r187.result.entity));
+
+    /* A188–A189 — обязательные поля: без даты и без содержимого напоминание не создаётся. */
+    const remindersBefore188 = env13.state.reminders.length;
+    const histBefore188 = env13.state.history.length;
+    const noDate = K13.run('напомни купить масло', { source: 'test' });
+    ok('A188 без даты напоминание честно не создаётся (общий слой требует дату)',
+      noDate.ok === false && noDate.intent.error.code === 'REMINDER_DATE_REQUIRED' &&
+      /дату/i.test(noDate.response) && env13.state.reminders.length === remindersBefore188 &&
+      env13.state.history.length === histBefore188, noDate.response);
+    const noContent = K13.run('напомни завтра', { source: 'test' });
+    ok('A189 без содержимого напоминание честно не создаётся, а не с выдуманным текстом',
+      noContent.ok === false && noContent.intent.error.code === 'REMINDER_CONTENT_REQUIRED' &&
+      env13.state.reminders.length === remindersBefore188 && env13.state.history.length === histBefore188,
+      noContent.response);
+    ['создай напоминание', 'добавь напоминание'].forEach((phrase, i) => {
+      const r = K13.run(phrase, { source: 'test' });
+      ok('A189' + String.fromCharCode(98 + i) + ' «' + phrase + '» без текста тоже честно отклоняется',
+        r.ok === false && r.intent.error.code === 'REMINDER_CONTENT_REQUIRED' &&
+        env13.state.reminders.length === remindersBefore188 && env13.state.history.length === histBefore188, r.response);
+    });
+
+    /* A190–A191 — невозможные дата/время: ошибка, а не «почти похожая» дата, ноль мутаций. */
+    const badDate = K13.run('напомни купить масло на 31.02', { source: 'test' });
+    ok('A190 несуществующая дата не создаёт напоминание',
+      badDate.ok === false && badDate.intent.error.code === 'DATE_INVALID' &&
+      env13.state.reminders.length === remindersBefore188 && env13.state.history.length === histBefore188);
+    const badTime = K13.run('напомни завтра в 25:00 позвонить', { source: 'test' });
+    ok('A191 несуществующее время не создаёт напоминание',
+      badTime.ok === false && badTime.intent.error.code === 'TIME_INVALID' &&
+      env13.state.reminders.length === remindersBefore188 && env13.state.history.length === histBefore188);
+
+    /* A192 — Undo общим механизмом истории удаляет именно это напоминание. */
+    const before192 = env13.state.reminders.length;
+    const r192 = K13.run('напомни завтра проверить почту', { source: 'test' });
+    const entry192 = env13.state.history[0];
+    ok('A192a напоминание действительно добавлено', env13.state.reminders.length === before192 + 1 && r192.ok);
+    const undoEntry = env13.state.history.filter((e) => e.id === entry192.id)[0];
+    /* Симулируем обратную операцию так же, как её выполняет общий undo (history.js
+       читает undo.type === 'remove' и убирает запись из указанного списка по id). */
+    if (undoEntry && undoEntry.undo && undoEntry.undo.type === 'remove') {
+      const list = env13.state[undoEntry.undo.list];
+      const idx = list.findIndex((x) => x.id === undoEntry.undo.id);
+      if (idx >= 0) list.splice(idx, 1);
+    }
+    ok('A192b Undo убирает ровно созданное напоминание и ничего больше',
+      env13.state.reminders.length === before192 && !env13.state.reminders.some((r) => r.id === r192.result.entity.id));
+
+    /* A193–A196 — обязательные regression-кейсы домена: содержимое напоминания не
+       переключает команду на другой домен, даже если внутри есть слова других разделов. */
+    const domainCases = [
+      ['напомни создать задачу купить масло завтра', 'Создать задачу купить масло'],
+      ['напомни про встречу завтра', 'Про встречу'],
+      ['напомни завтра записать расход 500 рублей', 'Записать расход 500 рублей'],
+      ['напомни завтра создать заметку про отпуск', 'Создать заметку про отпуск']
+    ];
+    domainCases.forEach((pair, i) => {
+      const before = { tasks: env13.state.tasks.length, events: env13.state.events.length,
+        ops: env13.state.ops.length, notes: env13.state.notes.length };
+      const r = K13.run(pair[0], { source: 'test' });
+      ok('A193' + String.fromCharCode(97 + i) + ' «' + pair[0] + '» создаёт напоминание, а не другой домен',
+        r.ok === true && r.result.action === 'reminder.create' && r.result.entity.title === pair[1] &&
+        env13.state.tasks.length === before.tasks && env13.state.events.length === before.events &&
+        env13.state.ops.length === before.ops && env13.state.notes.length === before.notes, r.response);
+    });
+    /* Без даты (как в примерах §9 задания) — честная просьба указать дату, тоже без
+       случайного попадания в Finance/Note: домен остаётся «reminder», просто с ошибкой. */
+    const noDateDomainCases = [
+      'создай напоминание записать расход 500 рублей',
+      'напомни создать заметку про отпуск'
+    ];
+    noDateDomainCases.forEach((t, i) => {
+      const before = { ops: env13.state.ops.length, notes: env13.state.notes.length, history: env13.state.history.length };
+      const r = K13.run(t, { source: 'test' });
+      ok('A194' + String.fromCharCode(97 + i) + ' «' + t + '» без даты остаётся в домене «напоминание», не создаёт Finance/Note',
+        r.ok === false && r.intent.error.rule === 'reminder.create' && r.intent.error.code === 'REMINDER_DATE_REQUIRED' &&
+        env13.state.ops.length === before.ops && env13.state.notes.length === before.notes &&
+        env13.state.history.length === before.history, r.response);
+    });
+
+    /* A195 — настоящие Task/Event/Note команды по-прежнему работают рядом с напоминаниями. */
+    const r195a = K13.run('создай задачу проверить шины', { source: 'test' });
+    ok('A195a обычная команда задачи продолжает работать', r195a.ok && r195a.result.action === 'task.create');
+    const r195b = K13.run('добавь завтра в 9 встречу с механиком', { source: 'test' });
+    ok('A195b обычная команда события продолжает работать',
+      r195b.ok && r195b.result.action === 'event.create' && r195b.result.entity.title === 'Встреча с механиком');
+    const r195c = K13.run('создай заметку про отпуск в горах', { source: 'test' });
+    ok('A195c обычная команда заметки продолжает работать',
+      r195c.ok && r195c.result.action === 'note.create');
+
+    /* A196 — read-only список/поиск: ничего не меняет, не пишет историю. */
+    const env14 = coreSandbox();
+    const K14 = env14.K, C14 = env14.C;
+    C14.reminders.create({ title: 'Оплатить интернет', dateISO: '2026-10-05' }, { source: 'ui' });
+    C14.reminders.create({ title: 'Купить билет на поезд', dateISO: '2026-10-06', time: '09:00' }, { source: 'ui' });
+    C14.reminders.create({ title: 'Позвонить маме', dateISO: '2026-10-07' }, { source: 'ui' });
+    const histBeforeSearch = env14.state.history.length;
+    const one = K14.run('Найди напоминание про интернет', { source: 'test' });
+    ok('A196 поиск с одним результатом называет напоминание, дату и не меняет данные',
+      one.ok && one.result.action === 'reminder.search' && /Оплатить интернет/.test(one.response) &&
+      env14.state.history.length === histBeforeSearch && env14.state.reminders.length === 3, one.response);
+    const many = K14.run('покажи напоминания', { source: 'test' });
+    ok('A197 показ без слов после «напоминания» показывает все напоминания списком',
+      many.ok && many.result.data.items.length === 3 &&
+      /Оплатить интернет/.test(many.response) && /Купить билет на поезд/.test(many.response), many.response);
+    const many2 = K14.run('какие у меня напоминания', { source: 'test' });
+    ok('A198 «какие у меня напоминания?» — тот же список, а не обзор дня',
+      many2.ok && many2.result.action === 'reminder.search' && many2.result.data.items.length === 3, many2.response);
+    const none = K14.run('покажи напоминания про динозавров', { source: 'test' });
+    ok('A199 поиск без результатов честно об этом сообщает и не создаёт напоминание',
+      none.ok && none.result.data.items.length === 0 && /Не нашла/i.test(none.response) &&
+      env14.state.reminders.length === 3, none.response);
+    ok('A199b ответ поиска не показывает внутренние id/JSON/имя действия',
+      !/(reminder\.search|intent|payload|"id"|\{)/i.test(one.response + many.response + many2.response + none.response));
+    const caseInsensitive = K14.run('Покажи Напоминания Про ИНТЕРНЕТ', { source: 'test' });
+    ok('A199c поиск напоминаний нечувствителен к регистру (кириллица, не ASCII \\b/\\w)',
+      caseInsensitive.ok && caseInsensitive.result.data.items.length === 1 &&
+      caseInsensitive.result.data.items[0].title === 'Оплатить интернет', caseInsensitive.response);
+
+    /* A200 — операции над уже существующим напоминанием (изменить/отложить/скрыть/удалить)
+       вне scope этой итерации и остаются честно неподдержанными, без мутации и истории. */
+    const before200 = { reminders: env14.state.reminders.length, history: env14.state.history.length };
+    const upd = K14.run('измени напоминание про интернет на завтра', { source: 'test' });
+    ok('A200a «измени напоминание …» безопасно отклоняется',
+      upd.ok === false && upd.intent.error.code === 'UNSUPPORTED_REMINDER' &&
+      /не умею/i.test(upd.response) && env14.state.reminders.length === before200.reminders &&
+      env14.state.history.length === before200.history, upd.response);
+    const snooze = K14.run('отложи напоминание про интернет', { source: 'test' });
+    ok('A200b «отложи напоминание …» безопасно отклоняется',
+      snooze.ok === false && snooze.intent.error.code === 'UNSUPPORTED_REMINDER' &&
+      env14.state.reminders.length === before200.reminders && env14.state.history.length === before200.history);
+    const dismiss = K14.run('скрой напоминание про интернет', { source: 'test' });
+    ok('A200c «скрой напоминание …» безопасно отклоняется',
+      dismiss.ok === false && dismiss.intent.error.code === 'UNSUPPORTED_REMINDER' &&
+      env14.state.reminders.length === before200.reminders && env14.state.history.length === before200.history);
+    const delRem = K14.run('удали напоминание про интернет', { source: 'test' });
+    ok('A200d «удали напоминание …» остаётся неподдержанным удалением, как и другие домены',
+      delRem.ok === false && delRem.intent.error.code === 'UNSUPPORTED_DELETE' &&
+      env14.state.reminders.length === before200.reminders && env14.state.history.length === before200.history);
+
+    /* A200e — review-фикс: широкая (неанкорированная) проверка «слово напоминание/напомни
+       встречается где-то в фразе» ложно классифицировала обычные фразы, вообще не относящиеся
+       к изменению существующего напоминания, как «изменять уже созданное напоминание не умею» —
+       это была неправда (ADR-010: нельзя утверждать то, что не соответствует действительности).
+       Такие фразы должны получать честное общее «не поняла команду», как и у задач/событий/
+       заметок в аналогичной ситуации (ср. «Пожалуйста, создай задачу …» → тоже UNKNOWN_COMMAND). */
+    const notARealReminderCommand = [
+      'Пожалуйста напомни купить хлеб на завтра',
+      'Кто-то напомни мне купить хлеб',
+      'у меня три напоминания уже есть'
+    ];
+    notARealReminderCommand.forEach((text, i) => {
+      const before = { reminders: env14.state.reminders.length, history: env14.state.history.length };
+      const r = K14.run(text, { source: 'test' });
+      ok('A200e.' + i + ' «' + text + '» не путается с «изменить уже созданное напоминание»',
+        r.ok === false && r.intent.error.code === 'UNKNOWN_COMMAND' &&
+        env14.state.reminders.length === before.reminders && env14.state.history.length === before.history, r.response);
+    });
+    /* Ровно эти же формы (начало фразы с триггера напоминания, включая пустой «напомни», и
+       явный глагол изменения рядом с «напоминание») по-прежнему честно отклоняются как
+       UNSUPPORTED_REMINDER — фикс не ослабляет уже протестированное поведение A76b/A200a-c. */
+    ['напомни', 'напомни ', 'Отложи напоминание', 'Верни напоминание про интернет'].forEach((text, i) => {
+      const r = K14.run(text, { source: 'test' });
+      ok('A200f.' + i + ' «' + text + '» по-прежнему честно отклоняется как UNSUPPORTED_REMINDER',
+        r.ok === false && r.intent.error.code === 'UNSUPPORTED_REMINDER', JSON.stringify(r.intent && r.intent.error));
+    });
+
+    /* A201 — parse() для напоминаний остаётся чистым: разбор без исполнения не мутирует. */
+    const env15 = coreSandbox();
+    const beforeParse15 = JSON.stringify(env15.state);
+    ['напомни купить масло на завтра', 'покажи напоминания', 'найди напоминание про интернет',
+      'напомни купить масло', 'напомни завтра', 'напомни купить масло на 31.02',
+      'измени напоминание тест', 'отложи напоминание тест', 'удали напоминание тест'].forEach((t) => env15.K.parse(t));
+    ok('A201 разбор reminder-команд не меняет данные и не пишет историю',
+      JSON.stringify(env15.state) === beforeParse15 && env15.state.history.length === 0);
+    /* Сброс старого pending Task-флоу новой независимой командой о напоминании — это
+       поведение AvenCommandSession (transient orchestration), а не голого AvenCommand.run();
+       проверено поведенчески в command-session-check.js (раздел «Напоминания сбрасывают…»). */
+  }
+
   /* ---- A12. Второго слоя действий и своей истории не появилось ---- */
   ok('A150 движок не пишет в состояние напрямую',
     !/AvenState|\.save\s*\(\)|state\s*\./.test(src.replace(/\/\*[\s\S]*?\*\//g, '')));
@@ -521,6 +760,10 @@ function partA() {
     /\bC\.tasks\.createTask\(/.test(src) && /\bC\.tasks\.completeTask\(/.test(src) &&
     /\bC\.tasks\.updateTask\(/.test(src) && /\bC\.events\.createEvent\(/.test(src) &&
     /\bC\.notes\.createNote\(/.test(src) && !/\bC\.notes\.(updateNote|deleteNote|setNoteArchived)\(/.test(src));
+  ok('A153 напоминания идут только через существующий фасад reminders (не через собственный движок)',
+    /\bC\.reminders\.create\(/.test(src) && /\bC\.reminders\.list\(/.test(src) &&
+    !/\bC\.reminders\.(update|delete|snooze|dismiss|markRead)\(/.test(src) &&
+    !/window\.AvenNotify\s*=/.test(src) && !/CommandReminders|ReminderCommandStore/.test(src));
 }
 
 /* ======================= ЧАСТЬ B. Поведение экранов ======================= */
@@ -730,6 +973,103 @@ async function partB() {
     p.dom.window.close();
   }
 
+  /* ---- B3c. Напоминание командой: сквозная согласованность и безопасность (Stage 2, итерация 4) ----
+     Единственный существующий движок напоминаний — AvenNotify; команда идёт через тот же
+     AvenActions.reminders, что и кнопка «＋ Напоминание» в «Уведомлениях» (docs/MVP_SCOPE.md §4.2.4). */
+  {
+    const p = await load('#/assistant');
+    const C = p.C();
+    const tomorrow = C.dates.todayISO(1);
+    const unreadBefore = C.reminders.counts().unread;
+    const reply = await p.say('Напомни купить масло на завтра');
+    const rem = p.st().reminders[0];
+    ok('B44 команда создала настоящее напоминание через общий слой (AvenActions.reminders → AvenNotify)',
+      rem && rem.title === 'Купить масло' && rem.dateISO === tomorrow && p.H()[0].action === 'reminder.create', reply);
+    ok('B45 ответ пользователю — человеческий текст с датой, без служебных терминов и без обещания push/email',
+      /Напомин/.test(reply) && /завтра/i.test(reply) && /Уведомлен/.test(reply) &&
+      !/(reminder\.create|intent|JSON)/i.test(reply) && !/(push|письм|email|почт)/i.test(reply), reply);
+    await p.go('#/notifications');
+    ok('B46 напоминание из команды видно в разделе «Уведомления», без второй копии',
+      p.text().indexOf('Купить масло') >= 0 && !p.broken());
+    ok('B47 счётчик непрочитанных («колокольчик») учитывает созданное напоминание',
+      C.reminders.counts().unread === unreadBefore + 1 &&
+      (p.q('#notif-badge') || {}).hidden === false, C.reminders.counts());
+    await p.go('#/home');
+    ok('B48 «Главная» согласована с тем же напоминанием (карточка уведомлений/напоминаний или те же данные)',
+      p.text().indexOf('Купить масло') >= 0 ||
+      C.reminders.list({}).items.some((x) => x.id === rem.id));
+    await p.go('#/history');
+    ok('B49 действие команды попало в общую «Историю» с кнопкой отмены',
+      p.text().indexOf('Купить масло') >= 0 && !!p.q('[data-action="hist-undo"]'));
+    p.w.Aven.undoAction(p.H().filter((e) => e.action === 'reminder.create')[0].id);
+    await sleep(280);
+    ok('B49a отмена командного напоминания работает как обычная отмена: напоминания больше нет',
+      !p.st().reminders.some((r) => r.id === rem.id) && !p.broken());
+    ok('B49b счётчик «колокольчика» возвращается к исходному значению после отмены',
+      C.reminders.counts().unread === unreadBefore);
+    await p.go('#/notifications');
+    ok('B49c после отмены раздел «Уведомления» тоже не показывает запись',
+      p.text().indexOf('Купить масло') < 0);
+
+    await p.go('#/assistant');
+    /* Обязательные регрессии: слова внутри напоминания не переклассифицируют команду. */
+    const beforeCounts = () => ({ tasks: p.st().tasks.length, events: p.st().events.length,
+      notes: p.st().notes.length, ops: p.st().ops.length, reminders: p.st().reminders.length });
+    const c1 = beforeCounts();
+    const rTask = await p.say('напомни создать задачу купить масло завтра');
+    ok('B50a «напомни создать задачу …» создаёт напоминание, а не задачу',
+      p.st().reminders.length === c1.reminders + 1 && p.st().tasks.length === c1.tasks &&
+      p.st().reminders[0].title === 'Создать задачу купить масло', rTask);
+    const c2 = beforeCounts();
+    const rEvent = await p.say('напомни про встречу завтра');
+    ok('B50b «напомни про встречу завтра» создаёт напоминание, а не событие',
+      p.st().reminders.length === c2.reminders + 1 && p.st().events.length === c2.events &&
+      p.st().reminders[0].title === 'Про встречу', rEvent);
+    const c3 = beforeCounts();
+    const rFin = await p.say('напомни завтра записать расход 500 рублей');
+    ok('B50c «напомни … записать расход 500 рублей» создаёт напоминание, а не расход',
+      p.st().reminders.length === c3.reminders + 1 && p.st().ops.length === c3.ops &&
+      p.st().reminders[0].title === 'Записать расход 500 рублей', rFin);
+    const c4 = beforeCounts();
+    const rNote = await p.say('напомни завтра создать заметку про отпуск');
+    ok('B50d «напомни … создать заметку …» создаёт напоминание, а не заметку',
+      p.st().reminders.length === c4.reminders + 1 && p.st().notes.length === c4.notes &&
+      p.st().reminders[0].title === 'Создать заметку про отпуск', rNote);
+
+    /* Обычные Task/Event/Note команды рядом продолжают работать как раньше. */
+    const c5 = beforeCounts();
+    const rRealTask = await p.say('создай задачу проверить шины');
+    ok('B51a обычная команда задачи продолжает работать рядом с напоминаниями',
+      p.st().tasks.length === c5.tasks + 1 && p.st().reminders.length === c5.reminders, rRealTask);
+
+    /* Без даты — честная просьба уточнить, без мутации. */
+    const histBeforeNoDate = p.H().length;
+    const remindersBeforeNoDate = p.st().reminders.length;
+    const noDate = await p.say('напомни купить хлеб');
+    ok('B52 «напомни …» без даты честно просит дату и ничего не создаёт',
+      /дату/i.test(noDate) && p.st().reminders.length === remindersBeforeNoDate && p.H().length === histBeforeNoDate);
+
+    /* Поиск/показ: несколько результатов списком, без мутации. */
+    await p.say('напомни на 10.10 оплатить страховку');
+    const histBeforeSearch = p.H().length;
+    const searchReply = await p.say('найди напоминание про страховку');
+    ok('B53 поиск напоминаний находит и не пишет «Историю»',
+      /страховку/i.test(searchReply) && p.H().length === histBeforeSearch, searchReply);
+    const listReply = await p.say('покажи напоминания');
+    ok('B54 «покажи напоминания» показывает список и не пишет «Историю»',
+      p.H().length === histBeforeSearch && /Напомин|напоминани/i.test(listReply), listReply);
+
+    /* Изменение/отложить/скрыть/удалить уже существующего напоминания — честно неподдержано. */
+    const remindersBeforeGuard = p.st().reminders.length;
+    const updReply = await p.say('измени напоминание про страховку');
+    ok('B55 «измени напоминание …» не редактирует данные',
+      /не умею/i.test(updReply) && p.st().reminders.length === remindersBeforeGuard);
+    const delReply = await p.say('удали напоминание про страховку');
+    ok('B56 «удали напоминание …» остаётся неподдержанным удалением, как и другие домены',
+      /не умею/i.test(delReply) && p.st().reminders.length === remindersBeforeGuard);
+    p.dom.window.close();
+  }
+
   /* ---- B4. Безопасность в интерфейсе: неизвестное, неоднозначное, запрещённое ---- */
   {
     const p = await load('#/assistant');
@@ -850,6 +1190,25 @@ async function partB() {
       bodies.match(/.{0,60}архив.{0,80}/gi));
     ok('B67e раздел «Заметки» тоже упоминает создание текстом',
       /Быструю заметку можно создать/.test((p.w.AvenHelp.articles.find((a) => a.id === 'notes-basics') || {}).body || ''));
+    /* Stage 2, итерация 4: напоминания текстом — справка объясняет создание, обязательную
+       дату, поиск/показ, где посмотреть результат и честные ограничения (без push/email). */
+    ok('B67f справка объясняет создание напоминания текстом с примером',
+      /Напомни купить масло на завтра/.test(bodies));
+    ok('B67g справка объясняет, что дата обязательна, а время — нет',
+      /дата обязательна/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-reminders') || {}).body || '') &&
+      /время необязательно/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-reminders') || {}).body || ''));
+    ok('B67h справка объясняет, что текст внутри напоминания не переключает домен',
+      /Про встречу/.test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-reminders') || {}).body || '') &&
+      /не переключают/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-reminders') || {}).body || ''));
+    ok('B67i справка объясняет поиск напоминаний текстом',
+      /Покажи напоминания/.test(bodies) && /Найди напоминание/.test(bodies));
+    ok('B67j справка честно говорит, что изменение/откладывание/удаление напоминания текстом не поддерживаются',
+      /изменить, отложить, скрыть или удалить уже существующее напоминание[^.]*пока нельзя/i.test(bodies) ||
+      /изменить.{0,20}отложить.{0,20}(?:отметить прочитанным.{0,20})?скрыть.{0,20}удалить уже существующее напоминание/i.test(bodies));
+    ok('B67k справка честно не обещает доставку при закрытом сайте',
+      /не придёт по почте или push/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-reminders') || {}).body || ''));
+    ok('B67l раздел «Уведомления» тоже упоминает создание текстом',
+      /текстовой командой/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'notif-reminders') || {}).body || ''));
     p.dom.window.close();
   }
 

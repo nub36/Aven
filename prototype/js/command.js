@@ -193,7 +193,9 @@ window.AvenCommand = (function () {
     'Отметь купить масло выполненной',
     'Перенеси задачу купить масло на пятницу',
     'Создай заметку купить фильтр для машины',
-    'Покажи заметки про отпуск'
+    'Покажи заметки про отпуск',
+    'Напомни купить масло на завтра',
+    'Покажи напоминания'
   ];
   const PARSE_MESSAGES = {
     EMPTY: 'Напишите команду — например: «Что у меня сегодня?»',
@@ -207,11 +209,13 @@ window.AvenCommand = (function () {
     UNSUPPORTED_DELETE: 'Удалять записи текстовой командой я пока не умею — это делается в разделе, с подтверждением и возможностью отмены.',
     UNSUPPORTED_EVENT_UPDATE: 'Переносить события текстом я пока не умею. Откройте событие в «Календаре» — там можно изменить дату и время.',
     UNSUPPORTED_FINANCE: 'Записывать расходы и доходы текстом я пока не умею. Добавьте операцию в разделе «Финансы».',
-    UNSUPPORTED_REMINDER: 'Создавать напоминания текстом я пока не умею. Добавьте напоминание в разделе «Уведомления» — или создайте задачу с датой.',
+    UNSUPPORTED_REMINDER: 'Изменять, откладывать или скрывать уже созданное напоминание текстовой командой я пока не умею. Откройте «Уведомления» — там это можно сделать, и действие попадёт в «Историю». Создать новое напоминание и посмотреть список я уже умею: «Напомни купить масло на завтра», «Покажи напоминания».',
     UNSUPPORTED_AUTO: 'Записывать заправки и обслуживание текстом я пока не умею. Это делается в разделе «Авто».',
     NOTE_CONTENT_REQUIRED: 'Не поняла, что записать в заметку. Напишите так: «Создай заметку купить фильтр для машины».',
     UNSUPPORTED_NOTE_UPDATE: 'Изменять текст уже существующей заметки текстовой командой я пока не умею. Откройте заметку в разделе «Заметки» — там можно отредактировать текст.',
-    UNSUPPORTED_NOTE_ARCHIVE: 'Отправлять заметку в архив или возвращать её текстом я пока не умею. Это делается в разделе «Заметки».'
+    UNSUPPORTED_NOTE_ARCHIVE: 'Отправлять заметку в архив или возвращать её текстом я пока не умею. Это делается в разделе «Заметки».',
+    REMINDER_CONTENT_REQUIRED: 'Не поняла, о чём напомнить. Напишите так: «Напомни купить масло на завтра».',
+    REMINDER_DATE_REQUIRED: 'Не поняла, на какую дату напомнить — у напоминания обязательно должна быть дата. Напишите так: «Напомни купить масло на завтра» или «Напомни завтра в 10 позвонить Сергею».'
   };
   function intent(action, kind, params, rule, extra) {
     return Object.assign({
@@ -271,6 +275,12 @@ window.AvenCommand = (function () {
       { title, dateISO: when.dateISO || '', time: when.time || '' }, 'task.create');
   }
 
+  /* Напоминания (Stage 2, итерация 4): «напомни …» — прямой триггер, «создай/добавь
+     напоминание …» — тот же домен через обычный CREATE_VERB, как у задач/заметок.
+     Любое кириллическое окончание принимается сознательно (см. NOTE_WORD выше). */
+  const REMINDER_VERB = '(?:напомни(?:те)?|напомнить)';
+  const REMINDER_WORD = '(?:напоминани[а-яе]*)';
+
   /* Заголовок заметки для общего действия (у него title обязателен и ограничен 120
      символами — docs/MVP_SCOPE.md §5.5). Второй схемы заметок здесь нет: это просто
      подготовка поля перед вызовом единственного существующего Common Action. */
@@ -304,6 +314,48 @@ window.AvenCommand = (function () {
     const m = rx.exec(raw) || rx.exec(n);
     const q = tidy(String(m[1] || '').replace(/^(?:про|о|об|на тему)\s+/i, ''));
     return intent('note.search', 'query', { q }, 'note.search');
+  }
+
+  /* «Напомни …» или «Создай/добавь напоминание …» — весь остаток после триггера
+     становится содержимым напоминания целиком, той же логикой, что и у заметок
+     (раздел 11.2 COMMAND_ENGINE.md): «встреча», «задача», «заметка», «расход» и
+     другие доменные слова внутри содержимого не переключают команду на другой
+     домен — ровно тот же урок про PR #27, применённый к напоминаниям. Единственный
+     существующий контракт напоминания — общий слой `AvenActions.reminders`
+     (фасад над `AvenNotify`, docs/MVP_SCOPE.md §4.2.4): дата обязательна, время
+     необязательно, второй схемы здесь нет. */
+  function parseReminderCreate(n, raw, context) {
+    let rx = new RegExp('^' + REMINDER_VERB + NOT_AFTER + '\\s+(.+)$', 'i');
+    let matched = rx.test(n);
+    if (!matched) {
+      rx = new RegExp('^' + CREATE_VERB + '\\s+(?:нов(?:ое|ую|ый)\\s+)?' + REMINDER_WORD + NOT_AFTER + '\\s*(.*)$', 'i');
+      matched = rx.test(n);
+    }
+    if (!matched) return null;
+    const m = rx.exec(raw) || rx.exec(n);
+    const when = extractWhen(m[1] || '', context);
+    if (when.error) return fail(when.error, 'reminder.create');
+    const content = tidy(when.rest || '');
+    /* Содержимого может не быть даже при найденной дате («напомни завтра») —
+       без текста непонятно, о чём напоминать, а выдумывать его нельзя. */
+    if (!content) return fail('REMINDER_CONTENT_REQUIRED', 'reminder.create');
+    /* Общий слой требует дату (§4.2.4): без неё — честная просьба уточнить,
+       а не молчаливая подстановка «сегодня». */
+    if (!when.dateISO) return fail('REMINDER_DATE_REQUIRED', 'reminder.create');
+    return intent('reminder.create', 'mutation',
+      { title: capitalize(content), dateISO: when.dateISO, time: when.time || '' }, 'reminder.create');
+  }
+
+  /* «Покажи/найди [мои] напоминания [про …]» и «Какие [у меня] напоминания?» —
+     read-only поиск/показ через существующий Common Query `AvenActions.reminders.list`.
+     Пустой остаток означает «покажи все», а не ошибку — как и у заметок. */
+  function parseReminderSearch(n, raw) {
+    const rx = new RegExp('^(?:' + SHOW_VERB + '\\s+(?:мои\\s+)?|как[а-яе]*\\s+(?:у\\s+меня\\s+)?)' +
+      REMINDER_WORD + NOT_AFTER + '\\s*(?:про|о|об|на тему)?\\s*(.*)$', 'i');
+    if (!rx.test(n)) return null;
+    const m = rx.exec(raw) || rx.exec(n);
+    const q = tidy(String(m[1] || '').replace(/^(?:про|о|об|на тему)\s+/i, ''));
+    return intent('reminder.search', 'query', { q }, 'reminder.search');
   }
 
   function parseEventCreate(n, raw, context) {
@@ -392,7 +444,23 @@ window.AvenCommand = (function () {
   /* Честные отказы: команда понята, но возможности пока нет. Состояние не меняется. */
   function parseUnsupported(n) {
     if (hasWord(n, 'удали|удалить|удаляй|сотри|стереть|стирай|очисти|очистить|убери')) return fail('UNSUPPORTED_DELETE', 'guard.delete');
-    if (new RegExp(NOT_BEFORE + 'напомн').test(n)) return fail('UNSUPPORTED_REMINDER', 'guard.reminder');
+    /* Создание и поиск/показ уже разобраны отдельными правилами выше (parseReminderCreate/
+       parseReminderSearch) — если разбор дошёл сюда, это НЕ удалось разобрать как create/search.
+       Честный отказ «изменять/откладывать/скрывать уже существующее напоминание не умею»
+       уместен только тогда, когда фраза действительно похожа на попытку такого действия:
+       начинается с триггера напоминания (включая «напомни» без содержимого — «создай
+       напоминание …» без текста) или содержит слово «напоминание/напоминания/…» рядом с
+       глаголом изменения. Проверка на «слово где-то в середине предложения» была слишком
+       широкой: «Пожалуйста, напомни купить хлеб на завтра» или «Кто-то напомни мне купить
+       хлеб» не являются попыткой изменить существующее напоминание, и им нельзя честно
+       отвечать «уже созданное напоминание менять не умею» — это была бы неправда (ADR-010:
+       Aven не должен утверждать то, что не соответствует действительности). Для таких фраз
+       правильный честный ответ — общее «не поняла команду», как у задач/событий/заметок в
+       эквивалентной ситуации. */
+    const reminderStartsHere = startRx(REMINDER_VERB + '|' + REMINDER_WORD, '').test(n);
+    const reminderEditVerbNearby = new RegExp(NOT_BEFORE + REMINDER_WORD).test(n) &&
+      hasWord(n, 'измени|изменить|перенеси|перенести|перенос|отложи|отложить|скрой|скрыть|верни|вернуть|восстанови|восстановить');
+    if (reminderStartsHere || reminderEditVerbNearby) return fail('UNSUPPORTED_REMINDER', 'guard.reminder');
     if (/(заправ|залил|бензин|топлив)/.test(n)) return fail('UNSUPPORTED_AUTO', 'guard.auto');
     if (/(запиши|добавь|созда|внеси|потратил|заплатил|оплатил)/.test(n) && (/(рубл|₽|расход|доход|трат)/.test(n) || hasWord(n, 'р'))) return fail('UNSUPPORTED_FINANCE', 'guard.finance');
     /* Создание заметки уже разобрано отдельным правилом выше (см. parseNoteCreate) —
@@ -409,7 +477,8 @@ window.AvenCommand = (function () {
   }
 
   const RULES = [
-    parseTaskCreate, parseNoteCreate, parseNoteSearch, parseEventCreate, parseTaskComplete, parseTaskReschedule,
+    parseTaskCreate, parseNoteCreate, parseNoteSearch, parseReminderCreate, parseReminderSearch,
+    parseEventCreate, parseTaskComplete, parseTaskReschedule,
     parseCapabilities, parseFinanceQuery, parseAutoQuery, parseOverdueQuery,
     parseSuggestionsQuery, parseDayQuery, parseUnsupported
   ];
@@ -537,6 +606,22 @@ window.AvenCommand = (function () {
         const q = tidy(p.q || '');
         const items = C.notes.getNotes({ status: 'active', q }).items || [];
         return result(true, 'info', 'note.search', { intent: intentObj, data: { q, items } });
+      }
+      case 'reminder.create': {
+        /* Единственный существующий контракт напоминания: `AvenActions.reminders`
+           (фасад над AvenNotify, docs/MVP_SCOPE.md §4.2.4). Второй схемы полей
+           здесь нет — движок готовит ровно те поля, что понимает общий слой. */
+        const res = C.reminders.create({ title: p.title, dateISO: p.dateISO, time: p.time || '' }, opts);
+        if (!res.ok) return actionFailed('reminder.create', res, intentObj);
+        return result(true, 'done', 'reminder.create', {
+          intent: intentObj, entity: res.entity, historyId: res.entry && res.entry.id,
+          data: { title: res.entity.title, dateISO: res.entity.dateISO || '', time: res.entity.time || '' }
+        });
+      }
+      case 'reminder.search': {
+        const q = tidy(p.q || '');
+        const items = (C.reminders.list({ q }).items) || [];
+        return result(true, 'info', 'reminder.search', { intent: intentObj, data: { q, items } });
       }
       case 'task.complete':
       case 'task.reschedule': {
@@ -707,6 +792,29 @@ window.AvenCommand = (function () {
     return 'Нашла ' + plural(items.length, 'заметка', 'заметки', 'заметок') + ': ' +
       listTitles(items, 5) + '. Откройте «Заметки», чтобы посмотреть их целиком.';
   }
+  /* Ответ на поиск/показ напоминаний: заголовок и когда (дата/время), без
+     служебных полей id/status. Список напоминаний не имеет собственного признака
+     «активно/скрыто/отложено» — это реакция на производное уведомление в Центре
+     уведомлений (AvenNotify), а не свойство самого напоминания, поэтому команда
+     честно показывает все существующие ручные напоминания, как и раздел «Уведомления»
+     при открытии карточки для редактирования. */
+  function reminderSearchText(data) {
+    const items = data.items || [];
+    if (!items.length) {
+      return data.q
+        ? 'Не нашла напоминаний про ' + quote(data.q) + '. Проверьте название в разделе «Уведомления» — я ничего не меняла.'
+        : 'Напоминаний пока нет. Создайте их командой «Напомни …» или в разделе «Уведомления».';
+    }
+    if (items.length === 1) {
+      const r0 = items[0];
+      return 'Напоминание ' + quote(r0.title) + ' — на ' + whenPhrase(r0.dateISO, r0.time) +
+        (r0.note ? '. Заметка: ' + r0.note : '') + '. Посмотреть и изменить можно в «Уведомлениях».';
+    }
+    const shown = items.slice(0, 5).map((r) => quote(r.title) + ' (' + whenPhrase(r.dateISO, r.time) + ')');
+    const rest = items.length - shown.length;
+    return 'Нашла ' + plural(items.length, 'напоминание', 'напоминания', 'напоминаний') + ': ' +
+      shown.join(', ') + (rest > 0 ? ' и ещё ' + rest : '') + '. Откройте «Уведомления», чтобы увидеть все.';
+  }
 
   /* respond(result) → обычный текст. Ни JSON, ни имён действий, ни внутренних номеров записей. */
   function respond(res) {
@@ -725,6 +833,10 @@ window.AvenCommand = (function () {
         case 'note.create':
           return 'Заметка ' + quote(res.data.title) + ' создана. Она уже видна в «Заметках»; отменить можно в «Истории».';
         case 'note.search': return noteSearchText(res.data);
+        case 'reminder.create':
+          return 'Напоминание ' + quote(res.data.title) + ' создано на ' + whenPhrase(res.data.dateISO, res.data.time) +
+            '. Оно уже видно в разделе «Уведомления»; отменить создание можно в «Истории».';
+        case 'reminder.search': return reminderSearchText(res.data);
         case 'task.complete':
           return 'Задача ' + quote(res.data.title) + ' отмечена выполненной. Вернуть её можно в «Задачах» или отменить в «Истории».';
         case 'task.reschedule':
@@ -794,6 +906,7 @@ window.AvenCommand = (function () {
         { action: 'finance.summary', example: 'Сколько я потратил?', about: 'расходы за сегодня и за месяц' },
         { action: 'auto.status', example: 'Какой пробег?', about: 'автомобиль, пробег и ближайшее ТО' },
         { action: 'note.search', example: 'Покажи заметки про отпуск', about: 'ищет заметки по тексту' },
+        { action: 'reminder.search', example: 'Покажи напоминания', about: 'показывает или ищет напоминания' },
         { action: 'help.capabilities', example: 'Что ты умеешь?', about: 'список понятных команд' }
       ],
       mutations: [
@@ -801,12 +914,14 @@ window.AvenCommand = (function () {
         { action: 'event.create', example: 'Добавь завтра в 10 встречу с Сергеем', about: 'создаёт событие' },
         { action: 'task.complete', example: 'Отметь купить масло выполненной', about: 'отмечает задачу выполненной' },
         { action: 'task.reschedule', example: 'Перенеси задачу купить масло на пятницу', about: 'меняет дату задачи' },
-        { action: 'note.create', example: 'Создай заметку купить фильтр для машины', about: 'создаёт заметку с этим текстом' }
+        { action: 'note.create', example: 'Создай заметку купить фильтр для машины', about: 'создаёт заметку с этим текстом' },
+        { action: 'reminder.create', example: 'Напомни купить масло на завтра', about: 'создаёт напоминание на указанную дату' }
       ],
       notYet: [
         'удаление записей текстом',
-        'расходы, заправки и напоминания текстом',
+        'расходы и заправки текстом',
         'изменение, архивирование и удаление уже существующих заметок текстом',
+        'изменение, откладывание, скрытие и удаление уже существующих напоминаний текстом',
         'перенос событий текстом',
         'свободный разговор за пределами перечисленных уточнений'
       ]

@@ -18,13 +18,19 @@ function sandbox() {
   let seq = 0;
   const box = { console, Date, Intl, window: {} };
   box.window.AvenState = { s: () => state, save: () => {}, id: (p) => p + (++seq) };
-  box.window.Aven = { logAction(e) { const x = Object.assign({ id: 'h' + (++seq) }, e); state.history.unshift(x); return x; } };
+  box.window.Aven = {
+    logAction(e) { const x = Object.assign({ id: 'h' + (++seq) }, e); state.history.unshift(x); return x; },
+    /* notify.js вызывает A.register(...) при загрузке модуля страницы «Уведомления» —
+       здесь нет DOM/страниц, но AvenNotify (единственный движок напоминаний) должен
+       загружаться, поэтому вызов — безопасный no-op. */
+    register() {}
+  };
   box.window.AvenDemo = { todayISO(offset) {
     const d = new Date(2026, 8, 28, 12); d.setDate(d.getDate() + (offset || 0));
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   } };
   vm.createContext(box);
-  ['actions.js', 'command.js', 'command-session.js'].forEach((f) => vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', f), 'utf8'), box, { filename: f }));
+  ['actions.js', 'notify.js', 'command.js', 'command-session.js'].forEach((f) => vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', f), 'utf8'), box, { filename: f }));
   return {
     state, C: box.window.AvenActions, K: box.window.AvenCommand,
     session: box.window.AvenCommandSession.create({ source: 'test' }),
@@ -265,6 +271,46 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
       r.ok && r.result.action === 'note.search' && e.session.pending() === null);
     ok('S93 pending mutation не выполнилась, поиск ничего не изменил',
       !isDone(e, t.id) && e.state.history.length === 0);
+  }
+
+  /* Stage 2, итерация 4: новая распознанная команда о напоминании должна сбрасывать
+     старый pending flow (уточнение/подтверждение) точно так же, как заметка (S90–S93)
+     и любая другая независимая команда (S30) — второго pending context для напоминаний
+     тоже нет (раздел «REMINDER TEXT COMMANDS», требование §27). */
+  {
+    const e = sandbox(); const a = task(e, 'Отчёт за август'), b = task(e, 'Отчёт для Сергея'); clearHistory(e);
+    e.session.submit('Отметь отчёт выполненным'); // AMBIGUOUS clarification pending
+    const r = e.session.submit('Напомни завтра оплатить интернет');
+    ok('S94 новая команда о напоминании сбрасывает pending уточнение задачи',
+      r.ok && r.result.action === 'reminder.create' && e.session.pending() === null);
+    ok('S95 старые задачи не мутировали, напоминание создано ровно одной записью истории',
+      !isDone(e, a.id) && !isDone(e, b.id) && e.state.reminders.length === 1 && e.state.history.length === 1 &&
+      e.state.history[0].action === 'reminder.create');
+  }
+  {
+    const e = sandbox(); const t = task(e, 'Подготовить квартальный отчёт'); clearHistory(e);
+    e.session.submit('Отметь отчёт выполненным'); // INFERRED confirmation pending
+    const r = e.session.submit('Покажи напоминания');
+    ok('S96 новая read-only команда о напоминаниях сбрасывает pending подтверждение',
+      r.ok && r.result.action === 'reminder.search' && e.session.pending() === null);
+    ok('S97 pending mutation не выполнилась, показ списка ничего не изменил',
+      !isDone(e, t.id) && e.state.history.length === 0);
+  }
+  {
+    /* Точное создание напоминания (EXACT safe mutation) выполняется сразу, без
+       clarification/confirmation — как задача/событие/заметка (§20 требования). */
+    const e = sandbox(); clearHistory(e);
+    const r = e.session.submit('Напомни купить масло на завтра');
+    ok('S98 точное создание напоминания выполняется сразу, без pending',
+      r.ok && r.status === 'done' && r.result.action === 'reminder.create' && e.session.pending() === null);
+    ok('S98a создание напоминания через session пишет ровно одну History entry',
+      e.state.reminders.length === 1 && e.state.history.length === 1);
+    /* Без даты — честная ошибка через тот же submit(), ноль pending и ноль мутаций. */
+    const e2 = sandbox(); clearHistory(e2);
+    const noDate = e2.session.submit('Напомни купить хлеб');
+    ok('S98b «напомни …» без даты не создаёт pending и не мутирует через session',
+      noDate.ok === false && e2.session.pending() === null && e2.state.reminders.length === 0 &&
+      e2.state.history.length === 0);
   }
   ['первую', 'вторая', 'вторую', 'отмена', 'нет', 'подтвердить'].forEach((word, i) => {
     const e = sandbox(); const a = task(e, 'Тест один'), b = task(e, 'Тест два'); clearHistory(e);
