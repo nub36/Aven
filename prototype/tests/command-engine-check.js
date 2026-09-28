@@ -983,6 +983,55 @@ function partA() {
       KK.parse('Потратила 500 рублей на продукты').action === 'finance.expense.create' &&
       KK.parse('Сколько я потратил сегодня?').action === 'finance.summary');
 
+    /* Дефекты, найденные независимым ревью перед мержем (итерация 5). */
+    const envR = finSandbox();
+    const KR = envR.K;
+    const parseCode = (t) => { const x = KR.parse(t, { source: 'test' }); return x.ok ? x.action : x.error.code; };
+    ok('A273 «удали расход …» не отвечает сводкой расходов, а честно отказывает',
+      parseCode('удали расход 500') === 'UNSUPPORTED_DELETE' &&
+      parseCode('удали последний расход') === 'UNSUPPORTED_DELETE');
+    ok('A274 «измени расход …» — честный отказ об изменении операции, а не сводка',
+      parseCode('измени расход 500') === 'UNSUPPORTED_FINANCE_UPDATE' &&
+      parseCode('исправь сумму расхода') === 'UNSUPPORTED_FINANCE_UPDATE');
+    ok('A275 отказ об изменении операции объясняет, где это делается, без жаргона',
+      /Финанс/.test(KR.run('измени расход 500', { source: 'test' }).response) &&
+      !/(intent|parse|JSON)/i.test(KR.run('измени расход 500', { source: 'test' }).response));
+    ok('A276 неподдержанный период не превращается молча в «за месяц»',
+      parseCode('покажи расходы за вчера') === 'FINANCE_PERIOD_UNSUPPORTED' &&
+      parseCode('покажи расходы за год') === 'FINANCE_PERIOD_UNSUPPORTED' &&
+      parseCode('покажи расходы за сентябрь') === 'FINANCE_PERIOD_UNSUPPORTED' &&
+      parseCode('покажи расходы 12.05') === 'FINANCE_PERIOD_UNSUPPORTED');
+    ok('A277 ответ про период честно называет поддерживаемые варианты',
+      /за сегодня/.test(KR.run('покажи расходы за вчера', { source: 'test' }).response) &&
+      /недел/.test(KR.run('покажи расходы за вчера', { source: 'test' }).response));
+    ok('A278 поддерживаемые периоды по-прежнему работают',
+      KR.parse('покажи расходы за сегодня').params.period === 'today' &&
+      KR.parse('покажи расходы за неделю').params.period === 'week' &&
+      KR.parse('покажи расходы за месяц').params.period === 'month' &&
+      KR.parse('покажи расходы').params.period === 'month');
+    ok('A279 несколько чисел в сумме — честный отказ, а не «первое число»',
+      parseCode('запиши расход 12 34 на продукты') === 'AMOUNT_AMBIGUOUS' &&
+      /одну сумму/i.test(KR.run('запиши расход 12 34 на продукты', { source: 'test' }).response));
+    ok('A280 разделитель тысяч по-прежнему считается одной суммой',
+      KR.parse('запиши расход 1 250 на продукты').params.amountMinor === 125000 &&
+      KR.parse('запиши расход 1 250,50 на продукты').params.amountMinor === 125050);
+    ok('A281 вежливый хвост после запятой не попадает в название категории',
+      KR.parse('запиши расход 850 ₽ на продукты, пожалуйста').params.catQuery === 'продукты');
+    ok('A282 «доход» как существующая категория расхода не выдаёт ложное «доходы не умею»',
+      KR.parse('запиши расход 850 на доход').action === 'finance.expense.create' &&
+      KR.parse('покажи расходы на доход').action === 'finance.list');
+    ok('A283 настоящие вопросы о доходах честно отклоняются',
+      parseCode('покажи доходы') === 'UNSUPPORTED_FINANCE_INCOME' &&
+      parseCode('сколько я заработал') === 'UNSUPPORTED_FINANCE_INCOME' &&
+      parseCode('запиши доход 500 на авто') === 'UNSUPPORTED_FINANCE_INCOME');
+    {
+      const before = JSON.stringify(envR.state);
+      ['удали расход 500', 'измени расход 500', 'покажи расходы за вчера',
+        'запиши расход 12 34 на продукты', 'покажи доходы'].forEach((t) => KR.run(t, { source: 'test' }));
+      ok('A284 все эти отказы не меняют данные и не пишут историю',
+        JSON.stringify(envR.state) === before && envR.state.history.length === 0);
+    }
+
     /* Чистота разбора. */
     const envL = finSandbox();
     const beforeL = JSON.stringify(envL.state);

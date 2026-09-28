@@ -228,7 +228,10 @@ window.AvenCommand = (function () {
     AMOUNT_UNSUPPORTED: 'Такую запись суммы я пока не понимаю: сокращения вроде «5к» или «1,2к» и пересчёт валют не поддерживаются. Напишите сумму полностью цифрами — например «5000», «500,50» или «1 250,50 ₽».',
     AMOUNT_INVALID: 'Сумма расхода должна быть больше нуля и записана цифрами — например «850» или «1 250,50 ₽».',
     CURRENCY_UNSUPPORTED: 'Я записываю расходы только в валюте вашего профиля и не пересчитываю курсы. Напишите сумму в рублях — например «850 ₽».',
-    UNSUPPORTED_FINANCE_INCOME: 'Записывать доходы текстовой командой я пока не умею — умею только расходы. Доход можно добавить в разделе «Финансы».',
+    UNSUPPORTED_FINANCE_INCOME: 'Работать с доходами текстовой командой я пока не умею — умею только расходы. Доход можно добавить и посмотреть в разделе «Финансы».',
+    UNSUPPORTED_FINANCE_UPDATE: 'Изменять уже записанную финансовую операцию текстовой командой я пока не умею. Откройте «Финансы» — там операцию можно отредактировать, и изменение попадёт в «Историю».',
+    FINANCE_PERIOD_UNSUPPORTED: 'Показывать расходы за такой период я пока не умею. Могу за сегодня, за неделю или за месяц — например: «Покажи расходы за неделю». Остальные периоды есть в разделе «Финансы» с фильтрами.',
+    AMOUNT_AMBIGUOUS: 'Не поняла, какая именно сумма расхода — в команде несколько чисел. Напишите одну сумму: «Запиши расход 850 ₽ на продукты».',
     REMINDER_DATE_REQUIRED: 'Не поняла, на какую дату напомнить — у напоминания обязательно должна быть дата. Напишите так: «Напомни купить масло на завтра» или «Напомни завтра в 10 позвонить Сергею».'
   };
   function intent(action, kind, params, rule, extra) {
@@ -419,10 +422,9 @@ window.AvenCommand = (function () {
        такой текст должен достаться read-only правилу ниже, а не получить
        ошибку «не поняла сумму». */
     const withVerb = new RegExp('^(?:' + CREATE_VERB + '\\s|' + SPEND_VERB + NOT_AFTER + ')', 'i').test(n);
-    if (INCOME_WORD.test(n)) {
-      if (!withVerb) return null;
-      return fail('UNSUPPORTED_FINANCE_INCOME', 'finance.expense.create');
-    }
+    /* Слово «доход» внутри такой фразы — это уже НЕ попытка записать доход: команда
+       явно начата словом «расход» или глаголом траты, поэтому «доход» может быть только
+       названием существующей категории. Отвечать здесь «доходы не умею» было бы неправдой. */
     const m = rx.exec(n);
     let rest = String(m[1] || '');
     const amount = findAmount(rest);
@@ -449,7 +451,12 @@ window.AvenCommand = (function () {
     const when = extractWhen(rest, context);
     if (when.error) return fail(when.error, 'finance.expense.create');
     rest = tidy(when.rest || '');
-    const catQuery = tidy(String(rest).replace(new RegExp('^(?:на|по|за)\\s+(?:категори[а-яе]*\\s+)?', 'i'), ''));
+    /* Если между суммой и первым предлогом осталось ещё одно число («расход 12 34 на
+       продукты»), сумма неоднозначна — брать первое число молча нельзя. */
+    const headTail = String(rest).split(new RegExp(NOT_BEFORE + '(?:на|по)' + NOT_AFTER))[0];
+    if (/\d/.test(headTail)) return fail('AMOUNT_AMBIGUOUS', 'finance.expense.create');
+    /* Хвост после запятой («…на продукты, пожалуйста») в название категории не входит. */
+    const catQuery = tidy(String(rest).replace(new RegExp('^(?:на|по|за)\\s+(?:категори[а-яе]*\\s+)?', 'i'), '').split(',')[0]);
     const out = intent('finance.expense.create', 'mutation',
       { amountMinor: amount.minor, catQuery, accountQuery, dateISO: when.dateISO || '' },
       'finance.expense.create');
@@ -465,14 +472,19 @@ window.AvenCommand = (function () {
     const rx = new RegExp('^(?:' + SHOW_VERB + '\\s+(?:мои\\s+)?|как[а-яе]*\\s+(?:у\\s+меня\\s+)?)?' +
       EXPENSE_WORD + NOT_AFTER + '\\s*(.*)$', 'i');
     if (!rx.test(n)) return null;
-    if (INCOME_WORD.test(n)) return fail('UNSUPPORTED_FINANCE_INCOME', 'finance.list');
     const m = rx.exec(n);
     let rest = tidy(m[1] || '');
     let period = 'month';
     if (new RegExp(NOT_BEFORE + '(?:за\\s+)?сегодня' + NOT_AFTER).test(rest)) { period = 'today'; rest = tidy(rest.replace(/(?:за\s+)?сегодня/, ' ')); }
     else if (new RegExp(NOT_BEFORE + '(?:за\\s+)?(?:эту\\s+)?недел[юяи][а-яе]*' + NOT_AFTER).test(rest)) { period = 'week'; rest = tidy(rest.replace(/(?:за\s+)?(?:эту\s+)?недел[юяи][а-яе]*/, ' ')); }
     else if (new RegExp(NOT_BEFORE + '(?:за\\s+)?(?:этот\\s+)?месяц' + NOT_AFTER).test(rest)) { period = 'month'; rest = tidy(rest.replace(/(?:за\s+)?(?:этот\s+)?месяц/, ' ')); }
-    const catQuery = tidy(String(rest).replace(new RegExp('^(?:на|по|за)\\s+(?:категори[а-яе]*\\s+)?', 'i'), ''));
+    /* Периоды, которых существующий Common Query не поддерживает («за вчера», «за год»,
+       «за сентябрь», конкретная дата), не должны молча превращаться в «за месяц» —
+       это был бы неверный ответ на заданный вопрос. Честно объясняем, что умеем. */
+    const unsupportedPeriod = /(год[а-яе]*|прошл[а-яе]*|позапрошл[а-яе]*|январ|феврал|март|апрел|ма[йея]|июн|июл|август|сентябр|октябр|ноябр|декабр|квартал[а-яе]*)/.test(rest) ||
+      findDate(rest, context).found;
+    if (unsupportedPeriod) return fail('FINANCE_PERIOD_UNSUPPORTED', 'finance.list');
+    const catQuery = tidy(String(rest).replace(new RegExp('^(?:на|по|за)\\s+(?:категори[а-яе]*\\s+)?', 'i'), '').split(',')[0]);
     return intent('finance.list', 'query', { period, catQuery }, 'finance.list');
   }
 
@@ -480,8 +492,9 @@ window.AvenCommand = (function () {
      Честный отказ должен сработать раньше общих правил вроде «какой пробег»,
      иначе «Запиши доход 500 на авто» попало бы в другой домен. */
   function parseIncomeUnsupported(n) {
-    if (!INCOME_WORD.test(n)) return null;
-    if (!/(запиши|запишите|добавь|добавить|созда|внеси|внести|получил|получила|заработал|заработала)/.test(n)) return null;
+    const aboutIncome = INCOME_WORD.test(n) || /(заработал[аи]?|заработок)/.test(n);
+    if (!aboutIncome) return null;
+    if (!/(запиши|запишите|добавь|добавить|созда|внеси|внести|получил|получила|заработал|заработала|заработок|покажи|показать|найди|сколько|каки[ем]|какой)/.test(n)) return null;
     return fail('UNSUPPORTED_FINANCE_INCOME', 'guard.finance.income');
   }
 
@@ -538,6 +551,11 @@ window.AvenCommand = (function () {
   function parseFinanceQuery(n) {
     if (!/(потрат|расход|трат)/.test(n)) return null;
     if (/(запиши|добавь|созда|внеси)/.test(n)) return null; /* это уже попытка записи — см. guard ниже */
+    /* Попытка удалить или изменить уже записанную операцию — это НЕ вопрос «сколько
+       я потратил»: отвечать на неё сводкой расходов было бы неправдой (ADR-010).
+       Такие фразы уходят к честным отказам guard-ов ниже. */
+    if (hasWord(n, 'удали|удалить|сотри|стереть|убери|очисти|очистить')) return null;
+    if (hasWord(n, 'измени|изменить|исправь|исправить|отредактируй|отредактировать|обнови|обновить|перенеси|перенести')) return null;
     return intent('finance.summary', 'query', {}, 'finance.summary');
   }
   function parseAutoQuery(n) {
@@ -592,6 +610,12 @@ window.AvenCommand = (function () {
     /* Расходы текстом уже разобраны правилами выше (parseExpenseCreate/parseExpenseList).
        Здесь остаются только доходы и прочие финансовые записи, которых в этой итерации нет. */
     if (/(запиши|добавь|созда|внеси|получил|получила)/.test(n) && INCOME_WORD.test(n)) return fail('UNSUPPORTED_FINANCE_INCOME', 'guard.finance.income');
+    /* Изменение уже записанной операции текстом — честный отдельный отказ, а не общее
+       «не поняла» и тем более не сводка расходов. Удаление остаётся под UNSUPPORTED_DELETE выше. */
+    if (/(расход|доход|операци|трат)/.test(n) &&
+      hasWord(n, 'измени|изменить|исправь|исправить|отредактируй|отредактировать|обнови|обновить|перенеси|перенести')) {
+      return fail('UNSUPPORTED_FINANCE_UPDATE', 'guard.finance.update');
+    }
     if (/(запиши|добавь|созда|внеси|потратил|заплатил|оплатил)/.test(n) && (/(рубл|₽|расход|доход|трат)/.test(n) || hasWord(n, 'р'))) return fail('UNSUPPORTED_FINANCE', 'guard.finance');
     /* Создание заметки уже разобрано отдельным правилом выше (см. parseNoteCreate) —
        если разбор дошёл сюда со словом «заметк*», это изменение/архив уже существующей
