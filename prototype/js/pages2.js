@@ -667,13 +667,25 @@
   function renderChat() {
     const box = document.getElementById('chat');
     if (!box) return;
+    /* Кнопки выбора/подтверждения показываются только пока незавершённый шаг
+       действительно существует. После ухода с экрана помощника session сбрасывается
+       (app.js), поэтому старые кнопки не должны выглядеть активными — иначе финансовое
+       подтверждение казалось бы всё ещё активным после возврата. */
+    if (!(A._commandSession && A._commandSession.pending())) {
+      A._chat.forEach((m) => { if (m.flow) delete m.flow; });
+    }
     const ava = window.AvenChar && !window.AvenChar.isOff() ? window.AvenChar.avatar('s24') : '';
     box.innerHTML = A._chat.map((m, i) => {
       if (m.who === 'user') return `<div class="msg user">${A.esc(m.text)}</div>`;
       let controls = '';
       if (m.flow && m.flow.status === 'clarification_required') {
-        controls = `<div class="command-choices" role="group" aria-label="Выберите задачу">${(m.flow.candidates || []).map((c, n) =>
-          `<button type="button" class="command-choice" data-action="command-choice" data-index="${n}"><b>${n + 1}. ${A.esc(c.title)}</b><span>${A.esc([c.dateISO ? window.AvenActions.dates.dateLabel(c.dateISO) : '', c.time ? window.AvenActions.format.time(c.time) : '', c.status === 'completed' ? 'Выполнена' : 'Открыта'].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>`;
+        /* Варианты бывают двух видов: задача (дата/время/статус) и значение
+           справочника «Финансов» — счёт или категория (только название и подпись). */
+        const slot = (m.flow.pending && m.flow.pending.slot) || '';
+        controls = `<div class="command-choices" role="group" aria-label="${slot === 'account' ? 'Выберите счёт' : slot === 'cat' ? 'Выберите категорию' : 'Выберите задачу'}">${(m.flow.candidates || []).map((c, n) =>
+          `<button type="button" class="command-choice" data-action="command-choice" data-index="${n}"><b>${n + 1}. ${A.esc(c.title)}</b><span>${A.esc(slot
+            ? (c.hint || '')
+            : [c.dateISO ? window.AvenActions.dates.dateLabel(c.dateISO) : '', c.time ? window.AvenActions.format.time(c.time) : '', c.status === 'completed' ? 'Выполнена' : 'Открыта'].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>`;
       } else if (m.flow && m.flow.status === 'confirmation_required') {
         controls = `<div class="command-confirm" role="group" aria-label="Подтверждение действия">
           <button type="button" class="btn primary" data-action="command-confirm">Подтвердить</button>

@@ -312,6 +312,116 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
       noDate.ok === false && e2.session.pending() === null && e2.state.reminders.length === 0 &&
       e2.state.history.length === 0);
   }
+  {
+    /* Финансы (итерация 5): уточнение → подтверждение → единственное общее действие.
+       Второй confirmation-системы и второго pending-хранилища не появилось. */
+    const money = (e) => e.state.finAccounts[0].balance;
+    {
+      const e = sandbox(); clearHistory(e);
+      const r = e.session.submit('Запиши расход 850 ₽ на продукты со счета карта');
+      ok('S100 точная финансовая команда всегда требует подтверждения (решение владельца)',
+        r.status === 'confirmation_required' && e.session.pending().type === 'confirmation');
+      ok('S101 до подтверждения нет операции, баланса и History',
+        e.state.ops.length === 0 && money(e) === 1000 && e.state.history.length === 0);
+      ok('S102 pending финансового шага сериализуем и не содержит функций',
+        JSON.parse(JSON.stringify(e.session.pending())).type === 'confirmation');
+      const done = e.session.confirm();
+      ok('S103 подтверждение создаёт ровно одну операцию через общий слой',
+        done.ok && e.state.ops.length === 1 && e.state.ops[0].cat === 'Продукты' &&
+        e.C.money.minor(e.state.ops[0].amount) === 85000);
+      ok('S104 ровно одна запись History и обновлённый баланс',
+        e.state.history.length === 1 && e.state.history[0].action === 'finance.expense.create' && money(e) === 150);
+      ok('S105 повторное подтверждение не создаёт вторую операцию',
+        e.session.confirm().status === 'no_pending' && e.state.ops.length === 1 && e.state.history.length === 1);
+      ok('S106 pending очищен после успеха', e.session.pending() === null);
+    }
+    {
+      const e = sandbox(); clearHistory(e);
+      e.session.submit('Запиши расход 850 ₽ на продукты со счета карта');
+      const cancelled = e.session.cancel();
+      ok('S107 отмена финансового подтверждения не создаёт операцию и History',
+        cancelled.status === 'cancelled' && e.state.ops.length === 0 && e.state.history.length === 0 &&
+        money(e) === 1000 && e.session.pending() === null);
+      e.session.submit('Запиши расход 850 ₽ на продукты со счета карта');
+      const no = e.session.submit('нет');
+      ok('S108 ответ «нет» тоже отменяет финансовую запись',
+        no.status === 'cancelled' && e.state.ops.length === 0 && e.state.history.length === 0);
+      e.session.submit('Запиши расход 850 ₽ на продукты со счета карта');
+      const otmena = e.session.submit('отмена');
+      ok('S109 ответ «отмена» тоже отменяет финансовую запись',
+        otmena.status === 'cancelled' && e.state.ops.length === 0 && e.state.history.length === 0);
+    }
+    {
+      const e = sandbox(); clearHistory(e);
+      const r = e.session.submit('Запиши расход 300 на продукты');
+      ok('S110 недостающий счёт → уточнение, а не подстановка по умолчанию',
+        r.status === 'clarification_required' && e.session.pending().slot === 'account' &&
+        e.state.ops.length === 0);
+      ok('S111 в тексте уточнения показаны названия счетов, а не id',
+        /Карта/.test(r.response) && !/\bcard\b/.test(r.response), r.response);
+      const afterChoice = e.session.choose(0);
+      ok('S112 после выбора счёта обязательно идёт подтверждение, мутации ещё нет',
+        afterChoice.status === 'confirmation_required' && e.state.ops.length === 0 && e.state.history.length === 0);
+      const done = e.session.confirm();
+      ok('S113 только подтверждение выполняет операцию (ровно одну)',
+        done.ok && e.state.ops.length === 1 && e.state.history.length === 1 &&
+        e.state.ops[0].account === 'card');
+    }
+    {
+      const e = sandbox(); clearHistory(e);
+      e.session.submit('Запиши расход 300 на продукты');
+      const cancelled = e.session.cancel();
+      ok('S114 отмена на этапе уточнения счёта тоже не меняет ничего',
+        cancelled.status === 'cancelled' && e.state.ops.length === 0 && e.state.history.length === 0);
+    }
+    {
+      /* Исчезнувший между уточнением и подтверждением счёт — безопасный отказ. */
+      const e = sandbox(); clearHistory(e);
+      e.session.submit('Запиши расход 300 на продукты');
+      e.session.choose(0);
+      e.state.finAccounts.length = 0;
+      const stale = e.session.confirm();
+      ok('S115 исчезнувший счёт останавливает подтверждение без фиктивного успеха',
+        stale.ok === false && stale.status === 'stale' && e.state.ops.length === 0 && e.state.history.length === 0);
+    }
+    {
+      /* Новая независимая команда сбрасывает финансовый pending. */
+      const e = sandbox(); clearHistory(e);
+      e.session.submit('Запиши расход 850 ₽ на продукты со счета карта');
+      const other = e.session.submit('Создай задачу купить фильтр');
+      ok('S116 новая команда сбрасывает финансовое подтверждение, расход не записан',
+        other.ok && other.result.action === 'task.create' && e.state.ops.length === 0 &&
+        e.session.pending() === null);
+      /* И наоборот: финансовая команда сбрасывает pending другого домена. */
+      const e2 = sandbox(); task(e2, 'Купить масло', '2026-09-29'); task(e2, 'Купить масло', '2026-09-30'); clearHistory(e2);
+      e2.session.submit('Отметь купить масло выполненной');
+      const fin = e2.session.submit('Запиши расход 100 на продукты со счета карта');
+      ok('S117 финансовая команда сбрасывает pending выбора задачи, не выполняя его',
+        fin.status === 'confirmation_required' && e2.state.history.length === 0 &&
+        e2.session.pending().type === 'confirmation');
+    }
+    {
+      /* Read-only просмотр расходов не создаёт pending и не пишет History. */
+      const e = sandbox(); clearHistory(e);
+      e.C.finance.createOperation({ type: 'expense', amount: 100, cat: 'Продукты', account: 'card', dateISO: '2026-09-28' }, { source: 'fixture' });
+      clearHistory(e);
+      const r = e.session.submit('Покажи расходы за сегодня');
+      ok('S118 просмотр расходов выполняется сразу, без подтверждения и без History',
+        r.ok && r.status === 'info' && e.session.pending() === null && e.state.history.length === 0);
+    }
+    {
+      /* Неподдержанная сумма и неизвестная категория не создают pending. */
+      const e = sandbox(); clearHistory(e);
+      const sh = e.session.submit('Запиши расход 5к на продукты');
+      ok('S119 «5к» не создаёт pending и не мутирует',
+        sh.ok === false && e.session.pending() === null && e.state.ops.length === 0 && e.state.history.length === 0);
+      const unknown = e.session.submit('Запиши расход 100 на еду со счета карта');
+      ok('S120 неизвестная категория не создаёт pending и не создаёт категорию',
+        unknown.ok === false && e.session.pending() === null && e.state.finCategories.length === 2 &&
+        e.state.ops.length === 0);
+    }
+  }
+
   ['первую', 'вторая', 'вторую', 'отмена', 'нет', 'подтвердить'].forEach((word, i) => {
     const e = sandbox(); const a = task(e, 'Тест один'), b = task(e, 'Тест два'); clearHistory(e);
     e.session.submit('Отметь тест выполненным');

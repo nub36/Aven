@@ -401,7 +401,7 @@ function partA() {
     ok('A143 список возможностей честно перечисляет и то, чего движок не умеет',
       /Пока не умею/.test(cap.response) && /удаление записей текстом/.test(cap.response));
     ok('A144 перечень возможностей доступен как данные для интерфейса и справки',
-      K9.supported().queries.length >= 5 && K9.supported().mutations.length === 6 &&
+      K9.supported().queries.length >= 6 && K9.supported().mutations.length === 7 &&
       K9.supported().notYet.length >= 4 && K9.examples().length >= 6);
   }
 
@@ -751,6 +751,252 @@ function partA() {
        проверено поведенчески в command-session-check.js (раздел «Напоминания сбрасывают…»). */
   }
 
+  /* ---- A15. Расходы текстом (Stage 2, итерация 5) ----
+     Утверждённая владельцем финансовая политика: ЛЮБАЯ денежная мутация проходит
+     подтверждение, категория и счёт только связываются с существующими (движок их
+     не создаёт), сумма переводится в целые копейки до общего действия, а сокращения
+     («5к») и пересчёт валют честно не поддержаны. Контракт — docs/COMMAND_ENGINE.md §13. */
+  {
+    function finSandbox() {
+      const env = coreSandbox();
+      env.state.finAccounts = [
+        { id: 'card', name: 'Карта', balance: 10000 },
+        { id: 'cash', name: 'Наличные', balance: 5000 }
+      ];
+      env.state.finCategories = ['Авто', 'Продукты', 'Продукты для дачи', 'Дом', 'Другое'];
+      return env;
+    }
+    const envF = finSandbox();
+    const KF = envF.K, CF = envF.C;
+    const amountOf = (text) => {
+      const parsed = KF.parse(text, { source: 'test' });
+      return parsed.ok ? parsed.params.amountMinor : 'ERR:' + parsed.error.code;
+    };
+    ok('A210 сумма «500» разбирается в 50000 копеек', amountOf('Запиши расход 500 на продукты') === 50000);
+    ok('A211 сумма «500 ₽» разбирается в 50000 копеек', amountOf('Запиши расход 500 ₽ на продукты') === 50000);
+    ok('A212 сумма «500 руб» разбирается в 50000 копеек', amountOf('Запиши расход 500 руб на продукты') === 50000);
+    ok('A213 сумма «500 рублей» разбирается в 50000 копеек', amountOf('Запиши расход 500 рублей на продукты') === 50000);
+    ok('A214 сумма «500,50» разбирается в 50050 копеек', amountOf('Запиши расход 500,50 на продукты') === 50050);
+    ok('A215 сумма «500.50» разбирается в 50050 копеек', amountOf('Запиши расход 500.50 на продукты') === 50050);
+    ok('A216 сумма «1 250,50 ₽» разбирается в 125050 копеек', amountOf('Добавь расход 1 250,50 ₽ на продукты') === 125050);
+    ok('A217 неразрывный пробел в сумме не ломает разбор', amountOf('Добавь расход 1\u00a0250,50 ₽ на продукты') === 125050);
+    ok('A218 копейки не теряются: «0,10» и «0,20» дают ровно 10 и 20 копеек',
+      amountOf('Запиши расход 0,10 на продукты') === 10 && amountOf('Запиши расход 0,20 на продукты') === 20);
+    ok('A219 сумма — целые минимальные единицы, без float-артефактов',
+      Number.isInteger(amountOf('Запиши расход 0,30 на продукты')) && amountOf('Запиши расход 0,30 на продукты') === 30);
+    ok('A220 ноль отклоняется без выполнения',
+      amountOf('Запиши расход 0 на продукты') === 'ERR:AMOUNT_INVALID');
+    ok('A221 «0,00» отклоняется как сумма не больше нуля',
+      amountOf('Запиши расход 0,00 на продукты') === 'ERR:AMOUNT_INVALID');
+    ok('A222 отрицательная сумма отклоняется',
+      amountOf('Запиши расход -500 на продукты') === 'ERR:AMOUNT_INVALID');
+    ok('A223 сокращение «5к» не поддержано и не превращается молча в 5 или 5000',
+      amountOf('Запиши расход 5к на продукты') === 'ERR:AMOUNT_UNSUPPORTED');
+    ok('A224 сокращения «1.2к» и «1,2к» тоже отклоняются',
+      amountOf('Запиши расход 1.2к на продукты') === 'ERR:AMOUNT_UNSUPPORTED' &&
+      amountOf('Запиши расход 1,2к на продукты') === 'ERR:AMOUNT_UNSUPPORTED');
+    ok('A225 сумма словами («пятьсот», «полтысячи») не угадывается',
+      amountOf('Запиши расход пятьсот рублей на продукты') === 'ERR:AMOUNT_REQUIRED' &&
+      amountOf('Запиши расход полтысячи на продукты') === 'ERR:AMOUNT_REQUIRED');
+    ok('A226 чужая валюта не конвертируется, а честно отклоняется',
+      amountOf('Запиши расход 20 долларов на продукты') === 'ERR:CURRENCY_UNSUPPORTED' &&
+      amountOf('Запиши расход $20 на продукты') === 'ERR:CURRENCY_UNSUPPORTED' &&
+      amountOf('Запиши расход 20 € на продукты') === 'ERR:CURRENCY_UNSUPPORTED');
+    ok('A227 неоднозначная запись «1.250,50» отклоняется, а не толкуется наугад',
+      amountOf('Запиши расход 1.250,50 на продукты') === 'ERR:AMOUNT_UNSUPPORTED');
+    ok('A228 ответ на неподдержанную сумму объясняет поддерживаемый формат',
+      /5к/.test(KF.run('Запиши расход 5к на продукты', { source: 'test' }).response) &&
+      /500,50|1 250,50/.test(KF.run('Запиши расход 5к на продукты', { source: 'test' }).response));
+    ok('A229 неподдержанная сумма не создаёт ни операции, ни записи истории',
+      envF.state.ops.length === 0 && envF.state.history.length === 0);
+
+    /* Подтверждение обязательно даже для полностью однозначной команды. */
+    const exact = KF.run('Запиши расход 850 ₽ на продукты со счета карта', { source: 'assistant' });
+    ok('A230 точный расход не выполняется сразу, а требует подтверждения',
+      exact.result.status === 'confirmation_required' && exact.result.code === 'CONFIRMATION_REQUIRED' &&
+      exact.intent.requiresConfirmation === true, JSON.stringify(exact.result.status));
+    ok('A231 до подтверждения нет ни операции, ни изменения баланса, ни истории',
+      envF.state.ops.length === 0 && envF.state.finAccounts[0].balance === 10000 && envF.state.history.length === 0);
+    ok('A232 текст подтверждения называет тип, сумму, категорию, счёт и конкретную дату',
+      /Записать расход/.test(exact.response) && /850,00/.test(exact.response) &&
+      /Продукты/.test(exact.response) && /Карта/.test(exact.response) &&
+      /28\.09\.2026/.test(exact.response), exact.response);
+    ok('A233 подтверждение не показывает внутренних идентификаторов и JSON',
+      !/(card|cash|\bo\d|finance\.expense|\{)/.test(exact.response), exact.response);
+
+    /* Выполнение возможно только через общее действие и только после подтверждения. */
+    const doneRes = KF.execute(exact.intent, { source: 'assistant', confirmed: true, slots: {} });
+    ok('A234 после подтверждения создана ровно одна операция через общее действие',
+      doneRes.ok && envF.state.ops.length === 1 && envF.state.ops[0].type === 'expense' &&
+      envF.state.ops[0].cat === 'Продукты' && envF.state.ops[0].account === 'card' &&
+      CF.money.minor(envF.state.ops[0].amount) === 85000, JSON.stringify(envF.state.ops[0]));
+    ok('A235 баланс счёта пересчитан общим слоем, а не движком команд',
+      envF.state.finAccounts[0].balance === 9150);
+    ok('A236 история создана ровно один раз, отменяемая, с источником команды',
+      envF.state.history.length === 1 && envF.state.history[0].action === 'finance.expense.create' &&
+      envF.state.history[0].undoable === true && envF.state.history[0].source === 'assistant');
+    ok('A237 итоги «Финансов» изменились производно, через существующие запросы',
+      CF.finance.totals({ period: 'today', type: 'expense', refISO: FIXED }).expense === 850 &&
+      CF.finance.summary(FIXED).todayExpense === 850);
+    ok('A238 ответ человеческий: сумма, категория, счёт, дата, «Финансы» и «История»',
+      /850,00/.test(KF.respond(doneRes)) && /Продукты/.test(KF.respond(doneRes)) &&
+      /Карта/.test(KF.respond(doneRes)) && /Финанс/.test(KF.respond(doneRes)) &&
+      /Истори/.test(KF.respond(doneRes)) && !/\{|finance\.expense\.create/.test(KF.respond(doneRes)));
+
+    /* Дата: общие часы, явная дата, невалидная дата. */
+    ok('A239 без даты расход относится к «сегодня» общих часов приложения',
+      envF.state.ops[0].dateISO === FIXED);
+    const yest = KF.parse('Запиши расход 100 на продукты вчера', { source: 'test' });
+    ok('A240 явная дата («вчера») разбирается по общим часам', yest.ok && yest.params.dateISO === '2026-09-27');
+    const badDate = KF.parse('Запиши расход 100 на продукты 31.02', { source: 'test' });
+    ok('A241 невалидная дата отклоняется без выполнения и без истории',
+      !badDate.ok && badDate.error.code === 'DATE_INVALID' && envF.state.ops.length === 1 && envF.state.history.length === 1);
+
+    /* Категория и счёт: exact / inferred / ambiguous / unknown. */
+    const envG = finSandbox();
+    const KG = envG.K;
+    const catExact = KG.execute(KG.parse('Запиши расход 100 на продукты со счета карта'), { source: 'test' });
+    ok('A242 точная категория и точный счёт разрешаются как EXACT и ведут к подтверждению',
+      catExact.status === 'confirmation_required' && catExact.resolution === 'EXACT' &&
+      catExact.preview.cat === 'Продукты' && catExact.preview.accountName === 'Карта');
+    const catInf = KG.execute(KG.parse('Запиши расход 100 на дом со счета наличные'), { source: 'test' });
+    ok('A243 однозначное неполное совпадение категории/счёта — INFERRED, и тоже с подтверждением',
+      catInf.status === 'confirmation_required' && catInf.preview.cat === 'Дом' && catInf.preview.accountName === 'Наличные');
+    /* Неоднозначность проверяется на данных, где ни одно название не совпадает целиком. */
+    const envAmb = finSandbox();
+    envAmb.state.finCategories = ['Ремонт дачи', 'Продукты для дачи', 'Другое'];
+    envAmb.state.finAccounts = [{ id: 'sber', name: 'Карта Сбер', balance: 1000 }, { id: 'alfa', name: 'Карта Альфа', balance: 1000 }];
+    const KA = envAmb.K;
+    const catAmb = KA.execute(KA.parse('Запиши расход 100 на дачи'), { source: 'test' });
+    ok('A244 несколько подходящих категорий → уточнение, мутации нет',
+      catAmb.status === 'ambiguous' && catAmb.slot === 'cat' && catAmb.candidates.length === 2 &&
+      envAmb.state.ops.length === 0, catAmb.status + '/' + (catAmb.candidates || []).length);
+    const accAmb = KA.execute(KA.parse('Запиши расход 100 на другое со счета карта'), { source: 'test' });
+    ok('A244b несколько подходящих счетов → уточнение, мутации нет',
+      accAmb.status === 'ambiguous' && accAmb.slot === 'account' && accAmb.candidates.length === 2 &&
+      envAmb.state.ops.length === 0, accAmb.status + '/' + (accAmb.candidates || []).length);
+    const catUnknown = KG.execute(KG.parse('Запиши расход 100 на еду'), { source: 'test' });
+    ok('A245 неизвестная категория не создаётся автоматически: отказ без мутации',
+      catUnknown.status === 'not_found' && catUnknown.code === 'CATEGORY_NOT_FOUND' &&
+      envG.state.finCategories.length === 5 && envG.state.ops.length === 0);
+    ok('A246 ответ про неизвестную категорию честно говорит, что Aven её не создаёт, и перечисляет доступные',
+      /не создаю/.test(KG.respond(catUnknown)) && /Продукты/.test(KG.respond(catUnknown)));
+    const noCat = KG.execute(KG.parse('Запиши расход 100'), { source: 'test' });
+    ok('A247 без категории Aven не подставляет её молча, а спрашивает',
+      noCat.status === 'ambiguous' && noCat.slot === 'cat' && envG.state.ops.length === 0);
+    const noAcc = KG.execute(KG.parse('Запиши расход 100 на продукты'), { source: 'test' });
+    ok('A248 без счёта Aven не подставляет его молча, а спрашивает',
+      noAcc.status === 'ambiguous' && noAcc.slot === 'account' && envG.state.ops.length === 0);
+    const accUnknown = KG.execute(KG.parse('Запиши расход 100 на продукты со счета тинькофф'), { source: 'test' });
+    ok('A249 неизвестный счёт не создаётся автоматически: отказ без мутации',
+      accUnknown.status === 'not_found' && accUnknown.code === 'ACCOUNT_NOT_FOUND' &&
+      envG.state.finAccounts.length === 2 && envG.state.ops.length === 0);
+    ok('A250 уточнение счёта/категории не показывает внутренние id',
+      !/(card|cash)/.test(KG.respond(noAcc)) && /Карта/.test(KG.respond(noAcc)), KG.respond(noAcc));
+
+    /* Исчезнувшие между уточнением и подтверждением счёт/категория. */
+    const envH = finSandbox();
+    const KH = envH.K;
+    const intentH = KH.parse('Запиши расход 100');
+    const staleCtx = { source: 'test', slots: { cat: 'Дом', account: 'cash' }, confirmed: true };
+    envH.state.finCategories = envH.state.finCategories.filter((c) => c !== 'Дом');
+    const staleRes = KH.execute(intentH, staleCtx);
+    ok('A251 исчезнувшая категория безопасно останавливает подтверждение (no fake success)',
+      staleRes.status === 'stale' && staleRes.ok === false && envH.state.ops.length === 0 && envH.state.history.length === 0);
+    envH.state.finAccounts = envH.state.finAccounts.filter((a) => a.id !== 'cash');
+    const staleAcc = KH.execute(intentH, { source: 'test', slots: { cat: 'Продукты', account: 'cash' }, confirmed: true });
+    ok('A252 исчезнувший счёт тоже безопасно останавливает подтверждение',
+      staleAcc.status === 'stale' && envH.state.ops.length === 0 && envH.state.history.length === 0);
+
+    /* Undo возвращает операцию, баланс и итоги. */
+    const envI = finSandbox();
+    const KI = envI.K, CI = envI.C;
+    const okRes = KI.execute(KI.parse('Запиши расход 200 на продукты со счета карта'),
+      { source: 'assistant', confirmed: true });
+    ok('A253 подтверждённый расход учтён в итогах месяца',
+      okRes.ok && CI.finance.summary(FIXED).monthExpense === 200);
+    const undoSpec = envI.state.history[0].undo;
+    ok('A254 запись истории содержит настоящее описание отмены (удалить операцию и вернуть баланс)',
+      undoSpec && undoSpec.type === 'remove' && undoSpec.list === 'ops' &&
+      undoSpec.id === envI.state.ops[0].id && JSON.stringify(undoSpec.adjust).indexOf('finAccounts') >= 0,
+      JSON.stringify(undoSpec));
+    ok('A254b итоги и баланс — производные, отдельного «командного» счётчика не появилось',
+      CI.finance.balance() === envI.state.finAccounts.reduce((x, a) => x + a.balance, 0) &&
+      typeof envI.state.finMonth === 'undefined');
+
+    /* Read-only запросы расходов. */
+    const envJ = finSandbox();
+    const KJ = envJ.K, CJ = envJ.C;
+    CJ.finance.createOperation({ type: 'expense', amount: 850, cat: 'Продукты', account: 'card', dateISO: FIXED }, { source: 'ui' });
+    CJ.finance.createOperation({ type: 'expense', amount: 300.5, cat: 'Авто', account: 'card', dateISO: FIXED }, { source: 'ui' });
+    const histBefore = envJ.state.history.length;
+    const listRes = KJ.run('Покажи расходы за сегодня', { source: 'assistant' });
+    ok('A255 «Покажи расходы за сегодня» — read-only список через существующий Common Query',
+      listRes.ok && listRes.result.action === 'finance.list' && listRes.result.data.items.length === 2 &&
+      listRes.intent.kind === 'query');
+    ok('A256 сумма в ответе совпадает с общим запросом итогов, без float-артефактов',
+      listRes.result.data.totals.expense === CJ.finance.totals({ period: 'today', type: 'expense', refISO: FIXED }).expense &&
+      /1[\s\u00a0\u202f]150,50/.test(listRes.response), listRes.response);
+    ok('A257 read-only запрос не меняет данные и не пишет историю',
+      envJ.state.ops.length === 2 && envJ.state.history.length === histBefore);
+    ok('A258 ответ без внутренних id и JSON',
+      !/(\bo\d\b|card|finance\.list|\{)/.test(listRes.response), listRes.response);
+    const byCat = KJ.run('Покажи расходы на продукты', { source: 'assistant' });
+    ok('A259 фильтр по существующей категории использует существующий Common Query',
+      byCat.ok && byCat.result.data.cat === 'Продукты' && byCat.result.data.items.length === 1);
+    const byUnknown = KJ.run('Покажи расходы на еду', { source: 'assistant' });
+    ok('A260 просмотр по несуществующей категории честно объясняет и ничего не меняет',
+      /нет/.test(byUnknown.response) && envJ.state.ops.length === 2 && envJ.state.history.length === histBefore);
+    ok('A261 «Сколько я потратил сегодня?» по-прежнему отвечает сводкой из тех же данных',
+      /1[\s\u00a0\u202f]151|1[\s\u00a0\u202f]150/.test(KJ.run('Сколько я потратил сегодня?', { source: 'test' }).response),
+      KJ.run('Сколько я потратил сегодня?', { source: 'test' }).response);
+
+    /* Границы домена: финансовая команда не должна стать другим доменом и наоборот. */
+    const envK = finSandbox();
+    const KK = envK.K;
+    const dom1 = KK.parse('Запиши расход 500 ₽ на заметки');
+    ok('A262 «расход … на заметки» остаётся финансовой командой, а не заметкой',
+      dom1.ok && dom1.action === 'finance.expense.create');
+    const dom2 = KK.parse('Запиши расход 500 ₽ на встречу');
+    ok('A263 «расход … на встречу» остаётся финансовой командой, а не событием',
+      dom2.ok && dom2.action === 'finance.expense.create');
+    const dom3 = KK.parse('Расход 500 ₽ на напоминание');
+    ok('A264 «Расход 500 ₽ на напоминание» остаётся финансовой командой',
+      dom3.ok && dom3.action === 'finance.expense.create');
+    const dom4 = KK.parse('Создай заметку расход 500 рублей');
+    ok('A265 «Создай заметку расход 500 рублей» остаётся заметкой',
+      dom4.ok && dom4.action === 'note.create' && dom4.params.content === 'расход 500 рублей');
+    const dom5 = KK.parse('Напомни записать расход 500 рублей завтра');
+    ok('A266 «Напомни записать расход …» остаётся напоминанием',
+      dom5.ok && dom5.action === 'reminder.create');
+    const dom6 = KK.parse('Создай задачу записать расход 500 рублей');
+    ok('A267 «Создай задачу записать расход …» остаётся задачей',
+      dom6.ok && dom6.action === 'task.create');
+    const dom7 = KK.parse('Добавь завтра в 10 встречу с Сергеем');
+    ok('A268 обычная команда события не перехвачена финансовым правилом',
+      dom7.ok && dom7.action === 'event.create');
+    ok('A269 доходы честно не поддержаны (расход-first блок)',
+      !KK.parse('Запиши доход 500 на продукты').ok &&
+      KK.parse('Запиши доход 500 на продукты').error.code === 'UNSUPPORTED_FINANCE_INCOME');
+    ok('A270 кириллические формы «потратил/потратила» распознаются, а «потратил» внутри вопроса — нет',
+      KK.parse('Потратил 500 рублей на продукты').action === 'finance.expense.create' &&
+      KK.parse('Потратила 500 рублей на продукты').action === 'finance.expense.create' &&
+      KK.parse('Сколько я потратил сегодня?').action === 'finance.summary');
+
+    /* Чистота разбора. */
+    const envL = finSandbox();
+    const beforeL = JSON.stringify(envL.state);
+    ['запиши расход 850 ₽ на продукты', 'потратил 500 рублей на продукты', 'запиши расход 5к на продукты',
+      'запиши расход 0 на продукты', 'запиши расход 100 на еду', 'покажи расходы за сегодня',
+      'запиши расход 100 на продукты 31.02', 'запиши доход 500 на продукты'].forEach((t) => envL.K.parse(t));
+    ok('A271 разбор финансовых команд не меняет данные и не пишет историю',
+      JSON.stringify(envL.state) === beforeL && envL.state.history.length === 0);
+    ok('A272 финансовая мутация выполняется только существующим общим действием',
+      /\bC\.finance\.createOperation\(/.test(src) &&
+      !/\bC\.finance\.(updateOperation|deleteOperation|createAccount|createCategory|deleteAccount|deleteCategory)\(/.test(src) &&
+      !/FinanceCommandSession|FinanceConfirmationStore/.test(src));
+  }
+
   /* ---- A12. Второго слоя действий и своей истории не появилось ---- */
   ok('A150 движок не пишет в состояние напрямую',
     !/AvenState|\.save\s*\(\)|state\s*\./.test(src.replace(/\/\*[\s\S]*?\*\//g, '')));
@@ -1070,6 +1316,163 @@ async function partB() {
     p.dom.window.close();
   }
 
+  /* ---- B3d. Расход командой: подтверждение, согласованность и безопасность (Stage 2, итерация 5) ----
+     Утверждённая владельцем политика: финансовая мутация ВСЕГДА через подтверждение,
+     категория и счёт только существующие, выполнение — только общий
+     `AvenActions.finance.createOperation` (docs/COMMAND_ENGINE.md §13). */
+  {
+    const p = await load('#/assistant');
+    const C = p.C();
+    const opsBefore = p.st().ops.length;
+    const histBefore = p.H().length;
+    const balanceBefore = C.finance.balance();
+    const monthBefore = C.finance.summary().monthExpense;
+
+    const ask = await p.say('Запиши расход 850 ₽ на продукты со счета основная карта');
+    ok('B57 точная финансовая команда не выполняется сразу: показано подтверждение',
+      !!p.q('[data-action="command-confirm"]') && !!p.q('[data-action="command-cancel"]') &&
+      /Записать расход/.test(ask), ask);
+    ok('B58 текст подтверждения называет сумму, категорию, счёт и конкретную дату',
+      /850,00/.test(ask) && /Продукты/.test(ask) && /Основная карта/.test(ask) &&
+      /\d{2}\.\d{2}\.\d{4}/.test(ask), ask);
+    ok('B59 до подтверждения «Финансы», баланс и «История» не изменились',
+      p.st().ops.length === opsBefore && C.finance.balance() === balanceBefore && p.H().length === histBefore);
+    ok('B60 кнопки подтверждения — настоящие семантические controls в группе с подписью',
+      p.q('[data-action="command-confirm"]').tagName === 'BUTTON' &&
+      (p.q('.command-confirm') || {}).getAttribute('role') === 'group' &&
+      !!(p.q('.command-confirm') || {}).getAttribute('aria-label'));
+
+    /* Отмена: ноль изменений. */
+    p.click(p.q('[data-action="command-cancel"]'));
+    await sleep(260);
+    ok('B61 «Отмена» закрывает финансовый вопрос без операции и без записи в «Историю»',
+      p.st().ops.length === opsBefore && p.H().length === histBefore &&
+      C.finance.balance() === balanceBefore && !p.q('[data-action="command-confirm"]'));
+
+    /* Отказ словом «нет». */
+    await p.say('Запиши расход 100 ₽ на продукты со счета наличные');
+    const noReply = await p.say('нет');
+    ok('B62 ответ «нет» тоже отменяет финансовую запись без изменений',
+      p.st().ops.length === opsBefore && p.H().length === histBefore && /отменено|Ничего не изменилось/i.test(noReply), noReply);
+
+    /* Escape: отмена и возврат фокуса. */
+    await p.say('Запиши расход 100 ₽ на продукты со счета наличные');
+    p.key(p.q('[data-action="command-confirm"]'), 'Escape');
+    await sleep(260);
+    ok('B63 Escape отменяет финансовый pending, ничего не меняя',
+      p.st().ops.length === opsBefore && p.H().length === histBefore && !p.q('[data-action="command-confirm"]'));
+
+    /* Подтверждение: ровно одна операция и одна запись истории, даже при двойном нажатии. */
+    await p.say('Запиши расход 850 ₽ на продукты со счета основная карта');
+    const confirmBtn = p.q('[data-action="command-confirm"]');
+    p.click(confirmBtn);
+    p.click(confirmBtn);
+    await sleep(320);
+    const created = p.st().ops.filter((o) => o.cat === 'Продукты' && C.money.minor(o.amount) === 85000 && o.account === 'card');
+    ok('B64 подтверждение создаёт ровно одну операцию, двойное нажатие не дублирует',
+      p.st().ops.length === opsBefore + 1 && created.length === 1, p.st().ops.length + '/' + created.length);
+    ok('B65 в «Историю» попала ровно одна отменяемая запись расхода из команды',
+      p.H().length === histBefore + 1 && p.H()[0].action === 'finance.expense.create' &&
+      p.H()[0].undoable === true && p.H()[0].source === 'assistant');
+    ok('B66 повторное программное подтверждение уже ничего не делает',
+      (p.w.Aven._commandSession.confirm().status === 'no_pending') && p.st().ops.length === opsBefore + 1);
+    ok('B67 сумма сохранена в целых копейках, без float-артефактов',
+      C.money.minor(created[0].amount) === 85000);
+    ok('B68 баланс счёта пересчитан общим слоем',
+      C.finance.balance() === C.money.sum(balanceBefore, -850));
+
+    /* Согласованность разделов. */
+    await p.go('#/finance');
+    const finText = p.text();
+    ok('B69 операция из команды видна в списке «Финансов» и учтена в карточках итогов',
+      finText.indexOf('Продукты') >= 0 && !p.broken() &&
+      C.finance.summary().monthExpense === C.money.sum(monthBefore, 850));
+    ok('B70 производные итоги по категориям тоже учитывают операцию из команды',
+      C.finance.byCategory({ period: 'month' }).some((c) => c.name === 'Продукты'));
+    await p.go('#/home');
+    ok('B71 «Главная» показывает те же расходы (общий запрос, без своей арифметики)',
+      !p.broken() && C.finance.summary().todayExpense >= 850);
+    await p.go('#/assistant');
+    const askAgain = await p.say('Сколько я потратил сегодня?');
+    ok('B72 ответ помощника о расходах согласован с разделом «Финансы»',
+      askAgain.indexOf(C.format.money(C.finance.summary().todayExpense).replace(/[\u00a0\u202f]/g, ' ')
+        .replace(/ /g, ' ')) >= 0 || /потрач|расход/i.test(askAgain), askAgain);
+    const histBeforeList = p.H().length;
+    const listReply = await p.say('Покажи расходы за сегодня');
+    ok('B73a просмотр расходов текстом ничего не меняет и не пишет «Историю»',
+      p.H().length === histBeforeList && p.st().ops.length === opsBefore + 1 &&
+      /Расходы за сегодня/.test(listReply), listReply);
+    ok('B73b ответ-просмотр без внутренних идентификаторов и JSON',
+      !/(\{|"id"|finance\.list)/.test(listReply), listReply);
+
+    /* Undo возвращает операцию, баланс и итоги. */
+    await p.go('#/history');
+    ok('B73c запись расхода в «Истории» отменяется обычной кнопкой',
+      p.text().indexOf('Расход') >= 0 && !!p.q('[data-action="hist-undo"]'));
+    p.w.Aven.undoAction(p.H().filter((e) => e.action === 'finance.expense.create')[0].id);
+    await sleep(300);
+    ok('B73d после отмены операции нет, баланс и итоги вернулись',
+      p.st().ops.length === opsBefore && C.finance.balance() === balanceBefore &&
+      C.finance.summary().monthExpense === monthBefore);
+
+    /* Уточнение → подтверждение: перескочить подтверждение нельзя. */
+    await p.go('#/assistant');
+    const askSlot = await p.say('Запиши расход 300 на продукты');
+    ok('B73e без счёта Aven просит выбрать существующий счёт, ничего не меняя',
+      !!p.q('[data-action="command-choice"]') && p.st().ops.length === opsBefore &&
+      /счет|счёт/i.test(askSlot), askSlot);
+    ok('B73f варианты счёта показаны без внутренних идентификаторов',
+      !/\b(card|cash|savings)\b/.test(p.q('.command-choices').textContent));
+    p.click(p.q('[data-action="command-choice"]'));
+    await sleep(300);
+    ok('B73g после выбора счёта Aven всё равно показывает подтверждение, а не выполняет сразу',
+      !!p.q('[data-action="command-confirm"]') && p.st().ops.length === opsBefore &&
+      /Записать расход/.test(p.w.Aven._lastReply), p.w.Aven._lastReply);
+    p.click(p.q('[data-action="command-confirm"]'));
+    await sleep(300);
+    ok('B73h только после подтверждения появляется ровно одна операция',
+      p.st().ops.length === opsBefore + 1 && p.H()[0].action === 'finance.expense.create');
+
+    /* Неизвестная категория/счёт и неподдержанная сумма: ноль изменений. */
+    const opsNow = p.st().ops.length, histNow = p.H().length;
+    const unknownCat = await p.say('Запиши расход 100 на еду со счета наличные');
+    ok('B73i неизвестная категория не создаётся: честный отказ без изменений',
+      p.st().ops.length === opsNow && p.H().length === histNow &&
+      C.finance.categories().indexOf('Еда') < 0 && /не создаю/i.test(unknownCat), unknownCat);
+    const unknownAcc = await p.say('Запиши расход 100 на продукты со счета тинькофф');
+    ok('B73j неизвестный счёт не создаётся: честный отказ без изменений',
+      p.st().ops.length === opsNow && C.finance.accounts().length === 3 && /не создаю/i.test(unknownAcc), unknownAcc);
+    const shorthand = await p.say('Запиши расход 5к на продукты');
+    ok('B73k «5к» не превращается в сумму: отказ с объяснением формата, без изменений',
+      p.st().ops.length === opsNow && p.H().length === histNow && /5к/.test(shorthand), shorthand);
+    const income = await p.say('Запиши доход 500 на продукты');
+    ok('B73l доход текстом честно не поддержан и ничего не меняет',
+      p.st().ops.length === opsNow && /доход/i.test(income), income);
+
+    /* Временный контекст не сохраняется. */
+    await p.say('Запиши расход 700 на продукты со счета наличные');
+    ok('B73m финансовый pending не попадает в состояние приложения и localStorage',
+      JSON.stringify(p.st()).indexOf('Записать расход') < 0 &&
+      (p.w.localStorage.getItem('aven-proto-v1') || '').indexOf('Записать расход') < 0 &&
+      !!p.w.Aven._commandSession.pending());
+    await p.go('#/finance');
+    await p.go('#/assistant');
+    ok('B73n после ухода с экрана помощника финансовый pending забыт',
+      !p.q('[data-action="command-confirm"]') && p.st().ops.length === opsNow);
+
+    /* Мобильные ширины: подтверждение и варианты без горизонтального выхода. */
+    p.dom.window.close();
+    for (const width of [320, 360, 390, 412, 430, 768, 1280]) {
+      const m = await load('#/assistant', width);
+      await m.say('Запиши расход 1 250,50 ₽ на подписки со счета накопительный счет');
+      const box = m.q('.command-confirm');
+      ok('B73o ширина ' + width + ': подтверждение расхода показано и не выходит за экран',
+        !!box && !m.broken() && m.d.documentElement.scrollWidth <= width + 1,
+        box ? m.d.documentElement.scrollWidth : 'нет блока');
+      m.dom.window.close();
+    }
+  }
+
   /* ---- B4. Безопасность в интерфейсе: неизвестное, неоднозначное, запрещённое ---- */
   {
     const p = await load('#/assistant');
@@ -1207,6 +1610,31 @@ async function partB() {
       /изменить.{0,20}отложить.{0,20}(?:отметить прочитанным.{0,20})?скрыть.{0,20}удалить уже существующее напоминание/i.test(bodies));
     ok('B67k справка честно не обещает доставку при закрытом сайте',
       /не придёт по почте или push/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-reminders') || {}).body || ''));
+    /* Stage 2, итерация 5: расходы текстом — справка объясняет запись, форматы суммы,
+       поведение категории/счёта, обязательное подтверждение, где увидеть и как отменить. */
+    const finArticle = (p.w.AvenHelp.articles.find((a) => a.id === 'cmd-finance') || {}).body || '';
+    ok('B67m в справке есть отдельная статья о расходах текстом с примером',
+      finArticle.length > 200 && /Запиши расход 850/.test(finArticle));
+    ok('B67n справка перечисляет поддерживаемые форматы суммы',
+      /500 руб/.test(finArticle) && /500,50/.test(finArticle) && /1 250,50/.test(finArticle));
+    ok('B67o справка честно говорит про «5к» и про отсутствие пересчёта валют',
+      /5к/.test(finArticle) && /валют/i.test(finArticle));
+    ok('B67p справка объясняет, что Aven не создаёт категории и счета сама',
+      /не создаёт ни категорию, ни счёт/.test(finArticle));
+    ok('B67q справка объясняет, что денежное действие всегда показывается до выполнения',
+      /ждёт кнопки «Подтвердить»/.test(finArticle) && /До подтверждения не меняются/.test(finArticle));
+    ok('B67r справка объясняет Отмену/Escape и отсутствие изменений',
+      /Escape/.test(finArticle) && /без единого изменения/.test(finArticle));
+    ok('B67s справка говорит, где увидеть расход и как отменить',
+      /в «Финансах»/.test(finArticle) && /«Истории»/.test(finArticle));
+    ok('B67t справка объясняет просмотр расходов текстом (read-only)',
+      /Покажи расходы за сегодня/.test(finArticle) && /ничего не меняет/.test(finArticle));
+    ok('B67u справка честно говорит, что доходы текстом пока не записываются',
+      /Доходы текстом пока не записываются/.test(finArticle));
+    ok('B67v обучение по командам включает финансовый сценарий с подтверждением',
+      p.w.AvenTutorial.definitions.commands.steps.some((x) => /Запиши расход 850/.test(x.text)) &&
+      p.w.AvenTutorial.definitions.commands.steps.some((x) => /Подтвердить/.test(x.text) && /Отмена|Escape/.test(x.text)) &&
+      p.w.AvenTutorial.definitions.commands.steps.some((x) => /Покажи расходы за сегодня/.test(x.text)));
     ok('B67l раздел «Уведомления» тоже упоминает создание текстом',
       /текстовой командой/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'notif-reminders') || {}).body || ''));
     p.dom.window.close();

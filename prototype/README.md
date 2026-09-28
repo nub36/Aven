@@ -173,6 +173,24 @@ read-only, ничего не мутирует и не пишет «Истори�
 заправки и покупки текстом остаются следующими блоками. Ответ помощника не обещает фоновую доставку
 (push/email) — прототип этого не делает. Контракт — [docs/COMMAND_ENGINE.md §12](../docs/COMMAND_ENGINE.md).
 
+**Пятая итерация** добавляет финансовый домен — **расходы**. «Запиши расход 850 ₽ на продукты»,
+«Добавь расход 1 250,50 ₽ на авто со счёта наличные», «Потратил 500 рублей на продукты» готовят
+операцию, но **никогда не выполняют её сразу**: по утверждённой владельцем политике любая денежная
+мутация сначала показывается целиком — тип «Расход», сумма, категория, счёт и конкретная дата — и ждёт
+кнопки «Подтвердить». До подтверждения не меняются ни операции, ни баланс счёта, ни «История»; «Отмена»,
+«нет» и Escape закрывают вопрос без единого изменения; повторное подтверждение не создаёт вторую
+операцию. Категория и счёт только **существующие**: командный слой не создаёт ни категорию, ни счёт —
+несколько совпадений дают уточнение, неизвестное название — честный отказ со списком существующих, а
+при отсутствии указания Aven спрашивает (документированного default в модели нет). Сумма понимается
+только в явных форматах (`500`, `500 ₽`, `500 руб`, `500 рублей`, `500,50`, `500.50`, `1 250,50 ₽`) и
+переводится в целые копейки до вызова единственного существующего `AvenActions.finance.createOperation`;
+`5к`, `1,2к`, суммы словами, чужая валюта и пересчёт курсов честно не поддержаны. «Покажи расходы за
+сегодня/за неделю/на продукты» — read-only просмотр через существующие `finance.getOperations`/
+`finance.totals`: ничего не мутирует, «Историю» не пишет, суммы не пересчитываются отдельно. Доходы,
+изменение/удаление уже записанной операции, создание счетов и категорий, заправки и покупки текстом в
+эту итерацию **не входят**. Контракт — [docs/COMMAND_ENGINE.md §13](../docs/COMMAND_ENGINE.md), политика —
+[docs/DECISIONS.md](../docs/DECISIONS.md) «Product Decision — Finance text commands policy».
+
 ## Заметки, Финансы, Авто, Покупки, Напоминания (Stage 1.3, 2026-09-28)
 
 Эти разделы больше не меняют данные сами. Страницы собирают то, что ввёл человек, и вызывают общий слой
@@ -485,7 +503,7 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 **Проверка:** `node prototype/tests/actions-core-check.js` — **18 проверок Common Actions без DOM**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/help-tutorial-check.js` — **33 проверки Help/Tutorial/responsive/TTS narration**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js`
-(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage13-entities-check.js` — **115 проверок заметок, финансов, авто, покупок и напоминаний** (контракт слоя без DOM на часах приложения, производные итоги «Финансов», сценарии через интерфейс, история и Undo, согласованность Главной/Истории/помощника/уведомлений, справка и обучение, темы и ширины, запрет записи в обход слоя). `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` — **275 проверок текстовых команд, заметок, напоминаний и Assistant UI** (включая ревью-фикс honesty-бага `guard.reminder`, см. WORK_LOG/CHANGELOG); `node prototype/tests/command-session-check.js` — **84 проверки transient clarification/confirmation flow** (включая сброс pending новой командой о заметке/напоминании). Полный набор из четырнадцати suite — **1280 проверок, 0 провалов**.
+(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage13-entities-check.js` — **115 проверок заметок, финансов, авто, покупок и напоминаний** (контракт слоя без DOM на часах приложения, производные итоги «Финансов», сценарии через интерфейс, история и Undo, согласованность Главной/Истории/помощника/уведомлений, справка и обучение, темы и ширины, запрет записи в обход слоя). `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` — **387 проверок текстовых команд, заметок, напоминаний, расходов и Assistant UI** (включая обязательное подтверждение финансовой мутации, отмену/Escape/double confirm, уточнение счёта и категории, stale-защиту, форматы суммы и отказ от `5к`/валют); `node prototype/tests/command-session-check.js` — **105 проверок transient clarification/confirmation flow** (включая финансовые slots и сброс pending в обе стороны). Полный набор из четырнадцати suite — **1413 проверок, 0 провалов**.
 `stage1-proto-check.js` покрывает: меню и метки этапов, история с
 Undo/фильтрами/экспортом, все 8 разделов админки с подтверждениями и аудитом, тема, экраны аккаунта,
 роут-гард, сквозная история и настоящий Undo в задачах/заметках/финансах/авто/покупках/автоматизациях,

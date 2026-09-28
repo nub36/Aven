@@ -27,9 +27,14 @@ window.AvenCommandSession = (function () {
     bits.push(c.status === 'completed' ? 'выполнена' : 'открыта');
     return bits.join(' · ');
   }
-  function clarificationResponse(candidates) {
-    return 'Нашла несколько подходящих задач. Уточните выбор: ' +
-      candidates.map((c, i) => (i + 1) + '. ' + candidateLabel(c)).join('; ') + '. Пока ничего не изменилось.';
+  /* Кандидаты бывают двух видов: задачи (у них есть дата/время/статус) и значения
+     справочника финансов — счёт или категория (у них только название). Второй
+     session для этого не создавался: различается лишь подпись варианта. */
+  function slotLabel(c) { return c.title; }
+  function clarificationResponse(candidates, question, slot) {
+    const label = slot ? slotLabel : candidateLabel;
+    return (question || 'Нашла несколько подходящих задач. Уточните выбор:') + ' ' +
+      candidates.map((c, i) => (i + 1) + '. ' + label(c)).join('; ') + '. Пока ничего не изменилось.';
   }
 
   function create(defaultContext) {
@@ -43,15 +48,18 @@ window.AvenCommandSession = (function () {
       clear();
       return { ok: false, status: 'cancelled', response: reason || 'Действие отменено. Ничего не изменилось.', pending: null };
     }
-    function setFromResult(intent, result, context) {
+    function setFromResult(intent, result, context, slots) {
+      const carried = clone(slots || {});
       if (result.status === 'ambiguous') {
         pending = {
           type: 'clarification', intent: clone(intent), context: clone(context),
-          candidates: clone(result.candidates || [])
+          candidates: clone(result.candidates || []),
+          slot: result.slot || '', question: result.question || '', slots: carried
         };
         return {
           ok: false, status: 'clarification_required', intent, result,
-          response: clarificationResponse(pending.candidates), candidates: clone(pending.candidates), pending: snapshot()
+          response: clarificationResponse(pending.candidates, pending.question, pending.slot),
+          candidates: clone(pending.candidates), pending: snapshot()
         };
       }
       if (result.status === 'confirmation_required') {
@@ -59,6 +67,7 @@ window.AvenCommandSession = (function () {
           type: 'confirmation', intent: clone(intent), context: clone(context),
           targetId: result.target && result.target.id,
           targetTitle: result.target && result.target.title,
+          slots: carried,
           summary: result.summary
         };
         return {
@@ -74,7 +83,7 @@ window.AvenCommandSession = (function () {
       const parsed = Engine().parse(text, context);
       if (!parsed.ok) return { ok: false, status: 'unsupported', intent: parsed, result: null, response: Engine().respondToParseError(parsed), pending: null };
       const result = Engine().execute(parsed, context);
-      return setFromResult(parsed, result, context);
+      return setFromResult(parsed, result, context, {});
     }
     function findChoice(text, candidates) {
       const n = Engine().normalize(text);
@@ -96,16 +105,23 @@ window.AvenCommandSession = (function () {
       const flow = pending;
       const candidate = flow.candidates[index];
       if (!candidate) return {
-        ok: false, status: 'invalid_clarification', response: clarificationResponse(flow.candidates),
+        ok: false, status: 'invalid_clarification', response: clarificationResponse(flow.candidates, flow.question, flow.slot),
         candidates: clone(flow.candidates), pending: snapshot()
       };
       /* Очистить ДО execute: повторный click/Enter уже не увидит pending flow. */
       pending = null; busy = true;
-      const result = Engine().execute(flow.intent, Object.assign({}, flow.context, {
-        targetId: candidate.id, expectedTitle: candidate.title, selected: true
-      }));
+      /* Уточнение недостающего параметра (счёт/категория расхода) не выполняет
+         действие: заполненный slot возвращается в тот же intent, и движок сам
+         решает, нужно ли следующее уточнение или подтверждение. */
+      const slots = Object.assign({}, flow.slots || {});
+      if (flow.slot) slots[flow.slot] = candidate.id;
+      const result = Engine().execute(flow.intent, Object.assign({}, flow.context, flow.slot
+        ? { slots }
+        : { targetId: candidate.id, expectedTitle: candidate.title, selected: true }));
       busy = false;
-      if (result.status === 'confirmation_required') return setFromResult(flow.intent, result, flow.context);
+      if (result.status === 'confirmation_required' || result.status === 'ambiguous') {
+        return setFromResult(flow.intent, result, flow.context, slots);
+      }
       return { ok: !!result.ok, status: result.status, intent: flow.intent, result, response: Engine().respond(result), pending: null };
     }
     function confirm() {
@@ -116,7 +132,8 @@ window.AvenCommandSession = (function () {
       const flow = pending;
       pending = null; busy = true;
       const result = Engine().execute(flow.intent, Object.assign({}, flow.context, {
-        targetId: flow.targetId, expectedTitle: flow.targetTitle, confirmed: true
+        targetId: flow.targetId, expectedTitle: flow.targetTitle,
+        slots: Object.assign({}, flow.slots || {}), confirmed: true
       }));
       busy = false;
       return { ok: !!result.ok, status: result.status, intent: flow.intent, result, response: Engine().respond(result), pending: null };
@@ -145,7 +162,7 @@ window.AvenCommandSession = (function () {
         if (index >= 0) return choose(index);
         return {
           ok: false, status: 'invalid_clarification', intent: independent, result: null,
-          response: 'Не поняла, какой вариант вы выбрали. ' + clarificationResponse(pending.candidates),
+          response: 'Не поняла, какой вариант вы выбрали. ' + clarificationResponse(pending.candidates, pending.question, pending.slot),
           candidates: clone(pending.candidates), pending: snapshot()
         };
       }
