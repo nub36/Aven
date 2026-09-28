@@ -206,6 +206,36 @@ function partA() {
     const ev = env3.K.run('перенеси встречу на 12', { source: 'test' });
     ok('A77 перенос события текстом отклоняется и не трогает календарь',
       ev.ok === false && /Календар/.test(ev.response) && env3.state.events.length === 0);
+    /* Кириллица и \w: «создай заметку» должно давать честный отказ про раздел «Заметки»,
+       а не общее «не поняла» — регрессия ревью PR #27. */
+    ['создай заметку список покупок', 'добавь заметку про встречу', 'запиши заметку идея'].forEach((phrase, i) => {
+      const note = env3.K.run(phrase, { source: 'test' });
+      ok('A77' + String.fromCharCode(97 + i) + ' «' + phrase + '» отклоняется с подсказкой про «Заметки»',
+        note.ok === false && note.intent.error.code === 'UNSUPPORTED_NOTE' &&
+        /Заметк/.test(note.response) && env3.state.notes.length === 0, note.response);
+    });
+    /* Слово «встреча» в середине чужой фразы не должно создавать событие:
+       регрессия ревью PR #27 («добавь заметку про встречу» создавало событие
+       «Событие заметку про встречу»). Не поняли — не угадываем. */
+    const evBefore = env3.state.events.length;
+    ['добавь заметку про встречу', 'добавь важную встречу'].forEach((phrase, i) => {
+      const r = env3.K.run(phrase, { source: 'test' });
+      ok('A77e' + i + ' «' + phrase + '» не создаёт случайное событие',
+        r.ok === false && env3.state.events.length === evBefore, r.response);
+    });
+    /* Нормальные формулировки события при этом продолжают работать. */
+    [['создай событие день рождения мамы', 'День рождения мамы'],
+     ['добавь встречу с врачом на пятницу', 'Встреча с врачом'],
+     ['назначь созвон с командой на завтра', 'Созвон с командой']].forEach((pair, i) => {
+      const r = env3.K.parse(pair[0]);
+      ok('A77f' + i + ' «' + pair[0] + '» разбирается как событие «' + pair[1] + '»',
+        r.ok === true && r.action === 'event.create' && r.params.title === pair[1],
+        r.ok ? r.params : r.error);
+    });
+    /* Дни недели в других падежах тоже должны читаться (тот же урок про \w). */
+    const wd = env3.K.parse('перенеси задачу тест на среду');
+    ok('A77d день недели разбирается и даёт будущую дату',
+      wd.ok === true && wd.params.dateISO > FIXED, wd.ok ? wd.params : wd.error);
     const empty = env3.K.run('   ', { source: 'test' });
     ok('A78 пустой ввод не выполняется и объясняется',
       empty.ok === false && empty.intent.error.code === 'EMPTY' && env3.state.history.length === 0);

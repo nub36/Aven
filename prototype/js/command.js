@@ -65,13 +65,13 @@ window.AvenCommand = (function () {
 
   /* ======================= 3. Разбор дат и времени ======================= */
   const WEEKDAYS = [
-    { rx: /понедельник\w*/, index: 1 },
-    { rx: /вторник\w*/, index: 2 },
-    { rx: /сред[ауые]\w*/, index: 3 },
-    { rx: /четверг\w*/, index: 4 },
-    { rx: /пятниц[ауые]\w*/, index: 5 },
-    { rx: /суббот[ауые]\w*/, index: 6 },
-    { rx: /воскресень[еяю]\w*/, index: 0 }
+    { rx: /понедельник[а-яе]*/, index: 1 },
+    { rx: /вторник[а-яе]*/, index: 2 },
+    { rx: /сред[ауые][а-яе]*/, index: 3 },
+    { rx: /четверг[а-яе]*/, index: 4 },
+    { rx: /пятниц[ауые][а-яе]*/, index: 5 },
+    { rx: /суббот[ауые][а-яе]*/, index: 6 },
+    { rx: /воскресень[еяю][а-яе]*/, index: 0 }
   ];
   const RELATIVE = [
     { rx: /послезавтра/, offset: 2 },
@@ -240,7 +240,7 @@ window.AvenCommand = (function () {
     { rx: startRx('звонок', 'i'), label: 'Звонок' },
     { rx: startRx('при[её]м', 'i'), label: 'Приём' },
     { rx: startRx('визит', 'i'), label: 'Визит' },
-    { rx: startRx('события?', 'i'), label: '' }
+    { rx: startRx('событи[а-яе]*', 'i'), label: '' }
   ];
 
   function parseTaskCreate(n, raw, context) {
@@ -264,11 +264,15 @@ window.AvenCommand = (function () {
     const when = extractWhen(m[1] || '', context);
     if (when.error) return fail(when.error, 'event.create');
     let rest = tidy(String(when.rest || '').replace(/^(?:нов(?:ую|ое|ый)\s+)/i, ''));
-    let label = 'Событие', tail = rest;
+    let label = null, tail = rest;
     for (let i = 0; i < EVENT_LABEL.length; i++) {
       const e = EVENT_LABEL[i];
       if (e.rx.test(rest)) { label = e.label; tail = tidy(rest.replace(e.rx, ' ')); break; }
     }
+    /* Слово «встреча/созвон/событие» должно быть тем, что создают, а не случайно
+       встретиться в середине фразы: иначе «добавь заметку про встречу» превращалось
+       бы в событие «Событие заметку про встречу». Не поняли — не угадываем. */
+    if (label === null) return null;
     const title = label ? tidy(label + ' ' + tail) : capitalize(tail);
     if (!title || /^событие$/i.test(title)) return fail('EVENT_TITLE_REQUIRED', 'event.create');
     return intent('event.create', 'mutation',
@@ -336,7 +340,9 @@ window.AvenCommand = (function () {
     if (new RegExp(NOT_BEFORE + 'напомн').test(n)) return fail('UNSUPPORTED_REMINDER', 'guard.reminder');
     if (/(заправ|залил|бензин|топлив)/.test(n)) return fail('UNSUPPORTED_AUTO', 'guard.auto');
     if (/(запиши|добавь|созда|внеси|потратил|заплатил|оплатил)/.test(n) && (/(рубл|₽|расход|доход|трат)/.test(n) || hasWord(n, 'р'))) return fail('UNSUPPORTED_FINANCE', 'guard.finance');
-    if (/(созда|добав|запиши)\w*\s+заметк/.test(n)) return fail('UNSUPPORTED_NOTE', 'guard.note');
+    /* Здесь тоже нельзя опираться на \w: он не знает кириллицы, поэтому «создай заметку»
+       проходил бы мимо честного отказа и попадал в «не поняла». */
+    if (/(?:созда|добав|запиши|запис)[а-яе]*\s+заметк/.test(n)) return fail('UNSUPPORTED_NOTE', 'guard.note');
     if (new RegExp('^(?:' + MOVE_VERB + ')').test(n) && EVENT_WORD.test(n)) return fail('UNSUPPORTED_EVENT_UPDATE', 'guard.event.update');
     return null;
   }
