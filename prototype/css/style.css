@@ -1214,3 +1214,12 @@ body.nav-open .nav-backdrop { opacity: 1; animation: backdrop-in .22s ease both;
   }
   .btn:hover, .icon-btn:hover, .card:hover { transform: none; }
 }
+
+/* Stage 2 — текстовые команды: подпись поля, примеры, скрытая метка для скринридера.
+   Отдельного дизайна помощник не получает: используются те же переменные темы. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.sugg .dc-label { flex: 0 0 100%; text-align: center; color: var(--muted); font-size: .78rem; }
+.sugg .btn { max-width: 100%; white-space: normal; text-align: left; }

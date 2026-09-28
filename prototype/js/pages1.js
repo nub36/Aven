@@ -198,10 +198,10 @@
           <button class="btn primary go" data-action="home-cmd-send" title="Отправить">→</button>
         </div>
         <div class="hero-sugg" id="hero-sugg" hidden>
-          <button class="btn small" data-action="home-sugg" data-q="Что сегодня?">Что сегодня?</button>
-          <button class="btn small" data-action="home-sugg" data-q="Заправился">⚡ Заправился</button>
-          <button class="btn small" data-action="home-sugg" data-q="Важное событие">⚡ Важное событие</button>
-          <button class="btn small" data-action="home-sugg" data-q="Мои расходы">Мои расходы</button>
+          <button class="btn small" data-action="home-sugg" data-q="Что у меня сегодня?">Что у меня сегодня?</button>
+          <button class="btn small" data-action="home-sugg" data-q="Покажи просроченные задачи">Просроченные задачи</button>
+          <button class="btn small" data-action="home-sugg" data-q="Создай задачу купить масло на завтра">Создать задачу</button>
+          <button class="btn small" data-action="home-sugg" data-q="Сколько я потратил?">Мои расходы</button>
         </div>
         <div class="hero-last" id="hero-last">${last}</div>
         <div class="hero-next">

@@ -31,9 +31,9 @@ Aven может иметь **вымышленный визуальный обр�
 | Файл | Роль |
 |---|---|
 | `prototype/js/character.js` | реестр персонажей, конфигурация, аватар с честным fallback, плавающий Aven |
-| `prototype/css/character.css` | стили персонажа, плавающего виджета, демо-команд |
+| `prototype/css/character.css` | стили персонажа и плавающего виджета (правила `.demo-cmds` остались от удалённых демо-команд и не используются) |
 | `prototype/js/voice.js` | TTS (speechSynthesis) + экспериментальный STT (SpeechRecognition) |
-| `prototype/js/flows.js` | демо state machine: многошаговая заправка, важное событие, демо-команды |
+| `prototype/js/command.js` | движок текстовых команд (заменил демо state machine `flows.js`, удалённую 2026-09-28) |
 | `prototype/assets/*.png` | изображения персонажей (512×512, оптимизированы) |
 | настройки `settings.character` | включение, выбор образа, своё имя, плавающий, приветствие, голосовой профиль |
 
