@@ -568,16 +568,31 @@ async function partB() {
     ok('B47 Escape отменяет pending, возвращает focus и не мутирует',
       p.H().length === beforeConfirm && p.d.activeElement === p.q('#chat-input') && !p.w.Aven._commandSession.pending());
 
+    await p.say('создай задачу подготовить годовой отчёт');
+    const beforeButtonCancel = p.H().length;
+    await p.say('отметь годовой отчёт выполненным');
+    p.click(p.q('[data-action="command-cancel"]')); await sleep(120);
+    ok('B47a кнопка Cancel очищает pending, возвращает focus и не мутирует',
+      p.H().length === beforeButtonCancel && p.d.activeElement === p.q('#chat-input') &&
+      !p.w.Aven._commandSession.pending() && p.st().tasks.some((t) => /годовой отчёт/i.test(t.title) && !t.completed));
+
     await p.say('отметь квартальный отчёт выполненным');
     const button = p.q('[data-action="command-confirm"]');
-    p.click(button); await sleep(200);
+    p.click(button); p.click(button); await sleep(200); // реальный double click по прежней DOM-ссылке
     const afterConfirm = p.H().length;
-    p.w.Aven.actions['command-confirm'](); await sleep(80);
-    ok('B48 Confirm выполняет ровно одну mutation даже при втором вызове',
-      afterConfirm === beforeConfirm + 1 && p.H().length === afterConfirm &&
+    p.w.Aven.actions['command-confirm'](); await sleep(80); // повторный programmatic confirm
+    ok('B48 double click и повторный confirm дают ровно одну mutation',
+      afterConfirm === beforeButtonCancel + 1 && p.H().length === afterConfirm &&
       p.st().tasks.some((t) => /квартальный отчёт/i.test(t.title) && t.completed));
     ok('B49 controls используют существующие кнопки и aria group',
       !p.q('[data-action="command-confirm"]') && p.q('#chat').getAttribute('aria-live') === 'polite');
+    const confirmedTask = p.st().tasks.filter((t) => /квартальный отчёт/i.test(t.title))[0];
+    const confirmedEntry = p.H().filter((h) => h.action === 'task.complete' && /квартальный отчёт/i.test(h.object || ''))[0];
+    p.w.Aven.undoAction(confirmedEntry.id); await sleep(180);
+    ok('B49a общий Undo восстанавливает confirmed Task, session-копии нет',
+      confirmedTask && !p.C().tasks.isCompleted(p.C().tasks.getTask(confirmedTask.id).entity));
+    await p.go('#/tasks');
+    ok('B49b восстановленная Task видна в обычном разделе «Задачи»', /Подготовить квартальный отчёт/i.test(p.text()) && !p.broken());
     p.dom.window.close();
   }
 

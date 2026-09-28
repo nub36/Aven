@@ -414,7 +414,13 @@ window.AvenCommand = (function () {
     const exact = list.filter((t) => normalize(t.title) === q);
     if (exact.length === 1) return { ok: true, status: 'resolved', resolution: 'EXACT', entity: taskCandidate(exact[0]) };
     if (exact.length > 1) return { ok: false, status: 'ambiguous', resolution: 'AMBIGUOUS', code: 'AMBIGUOUS', candidates: exact.map(taskCandidate) };
-    const partial = list.filter((t) => normalize(t.title).indexOf(q) >= 0);
+    /* INFERRED допускается только для целых слов/фраз с хотя бы одним содержательным
+       словом (3+ символа). Иначе «а», «от» или кусок слова «чет» могли бы выбрать
+       единственную Task только потому, что других задач сейчас нет. */
+    const meaningful = q.split(/\s+/).some((part) => part.length >= 3);
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const partialRx = meaningful ? wordRx(escaped) : null;
+    const partial = partialRx ? list.filter((t) => partialRx.test(normalize(t.title))) : [];
     if (partial.length === 1) return { ok: true, status: 'resolved', resolution: 'INFERRED', entity: taskCandidate(partial[0]) };
     if (partial.length > 1) return { ok: false, status: 'ambiguous', resolution: 'AMBIGUOUS', code: 'AMBIGUOUS', candidates: partial.map(taskCandidate) };
     return { ok: false, status: 'not_found', resolution: 'UNSUPPORTED', code: 'NOT_FOUND', candidates: [] };

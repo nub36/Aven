@@ -364,8 +364,10 @@ supported() / examples()     → перечень возможностей дл�
 
 `AvenCommand.resolve(intent, context)` возвращает `resolved | ambiguous | not_found` и один из уровней
 `EXACT | INFERRED | AMBIGUOUS | UNSUPPORTED`. Для Task полное нормализованное название — `EXACT`,
-единственное вхождение части названия — честное детерминированное `INFERRED`; fuzzy matching нет.
-Кандидат содержит id только для внутреннего продолжения, а UI показывает title/date/time/status.
+единственное совпадение по целому слову/фразе с хотя бы одним содержательным словом длиной 3+ символа —
+детерминированное `INFERRED`; произвольные внутрисловные и слишком короткие подстроки не матчятся,
+fuzzy matching нет. Кандидат содержит id только для внутреннего продолжения, а UI показывает
+title/date/time/status.
 
 `AvenCommandSession` (`prototype/js/command-session.js`) — DOM-free transient orchestrator:
 
@@ -394,5 +396,5 @@ Assistant показывает semantic buttons кандидатов и наст
 работают тем же session. Escape отменяет flow и возвращает focus в поле. Home передаёт команду в тот же
 Assistant/session, отдельного home-state нет.
 
-Проверка второй итерации: `command-session-check.js` — **55/55**, расширенный
-`command-engine-check.js` — **158/158**; полный regression — **14 suite, 1134/1134**.
+Проверка второй итерации: `command-session-check.js` — **73/73**, расширенный
+`command-engine-check.js` — **161/161**; полный regression — **14 suite, 1155/1155**.

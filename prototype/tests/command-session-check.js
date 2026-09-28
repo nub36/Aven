@@ -25,7 +25,11 @@ function sandbox() {
   } };
   vm.createContext(box);
   ['actions.js', 'command.js', 'command-session.js'].forEach((f) => vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', f), 'utf8'), box, { filename: f }));
-  return { state, C: box.window.AvenActions, K: box.window.AvenCommand, session: box.window.AvenCommandSession.create({ source: 'test' }) };
+  return {
+    state, C: box.window.AvenActions, K: box.window.AvenCommand,
+    session: box.window.AvenCommandSession.create({ source: 'test' }),
+    createSession: () => box.window.AvenCommandSession.create({ source: 'test' })
+  };
 }
 function task(env, title, date) { return env.C.tasks.createTask({ title, date: date || '2026-09-29', deadline: date || '2026-09-29' }, { source: 'fixture' }).entity; }
 function clearHistory(env) { env.state.history.length = 0; }
@@ -67,9 +71,23 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
     ok('S22 неверный ordinal ничего не выполняет', bad.status === 'invalid_clarification' && !isDone(e, a.id) && !isDone(e, b.id));
     ok('S23 неверный выбор сохраняет уточнение', e.session.pending() && e.session.pending().type === 'clarification');
     ok('S24 неверный выбор не пишет History', e.state.history.length === 0);
+    const bad99 = e.session.submit('99');
+    ok('S24a «99» не выбирает первую Task и сохраняет flow', bad99.status === 'invalid_clarification' && !isDone(e, a.id) && !isDone(e, b.id) && !!e.session.pending());
     const cancel = e.session.submit('отмена');
     ok('S25 «отмена» закрывает ambiguity', cancel.status === 'cancelled' && e.session.pending() === null);
     ok('S26 cancel ambiguity = 0 mutations/History', !isDone(e, a.id) && !isDone(e, b.id) && e.state.history.length === 0);
+  }
+  {
+    const e = sandbox(); const a = task(e, 'Отчёт за август'), b = task(e, 'Отчёт для Сергея'); clearHistory(e);
+    e.session.submit('Отметь отчёт выполненным');
+    const byTitle = e.session.submit('Отчёт для Сергея');
+    ok('S27 точное повторение title выбирает именно эту Task', byTitle.ok && !isDone(e, a.id) && isDone(e, b.id) && e.state.history.length === 1);
+  }
+  {
+    const e = sandbox(); const a = task(e, 'Отчёт за август'), b = task(e, 'Отчёт для Сергея'); clearHistory(e);
+    e.session.submit('Отметь отчёт выполненным');
+    const no = e.session.submit('нет');
+    ok('S28 «нет» отменяет ambiguity без mutation/History', no.status === 'cancelled' && !isDone(e, a.id) && !isDone(e, b.id) && e.state.history.length === 0 && !e.session.pending());
   }
   {
     const e = sandbox(); task(e, 'Отчёт за август'); task(e, 'Отчёт для Сергея'); clearHistory(e);
@@ -88,6 +106,46 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
     const no = e.session.submit('нет');
     ok('S44 «нет» отменяет confirmation', no.status === 'cancelled' && !isDone(e, t.id));
     ok('S45 cancel confirmation = 0 History', e.state.history.length === 0);
+  }
+  ['отмена', 'нет'].forEach((answer, i) => {
+    const e = sandbox(); const t = task(e, 'Подготовить квартальный отчёт'); clearHistory(e);
+    e.session.submit('Отметь отчёт выполненным');
+    const r = e.session.submit(answer);
+    ok('S45.' + i + ' текст «' + answer + '» очищает confirmation без mutation/History',
+      r.status === 'cancelled' && !isDone(e, t.id) && e.state.history.length === 0 && !e.session.pending());
+  });
+  {
+    const e = sandbox(); const t = task(e, 'Подготовить квартальный отчёт'); clearHistory(e);
+    e.session.submit('Отметь отчёт выполненным');
+    const r = e.session.cancel();
+    ok('S45.2 API Cancel очищает confirmation без mutation/History',
+      r.status === 'cancelled' && !isDone(e, t.id) && e.state.history.length === 0 && !e.session.pending());
+  }
+  {
+    const unsafeQueries = ['а', 'от', 'чет', 'ерге'];
+    unsafeQueries.forEach((query, i) => {
+      const e = sandbox(); const t = task(e, 'Отчёт для Сергея'); clearHistory(e);
+      const r = e.session.submit('Отметь ' + query + ' выполненным');
+      ok('S46.' + i + ' короткая/внутрисловная подстрока «' + query + '» не становится INFERRED target',
+        r.status === 'not_found' && !isDone(e, t.id) && e.state.history.length === 0 && !e.session.pending());
+    });
+  }
+  {
+    const e = sandbox(); const t = task(e, 'Сверить: отчёт, срочно'); clearHistory(e);
+    const r = e.session.submit('Отметь отчёт выполненным');
+    ok('S46.4 границы с кириллической пунктуацией дают один INFERRED target',
+      r.status === 'confirmation_required' && r.result.target.id === t.id && !isDone(e, t.id));
+  }
+  {
+    const e = sandbox(); const t = task(e, 'Проверить ёлку'); clearHistory(e);
+    const r = e.session.submit('Отметь елку выполненным');
+    ok('S46.5 ё/е нормализуются и не ломают boundary-aware resolution',
+      r.status === 'confirmation_required' && r.result.target.id === t.id && !isDone(e, t.id));
+  }
+  {
+    const e = sandbox(); const a = task(e, 'Отчёт за август'), b = task(e, 'Отчёт для Сергея'); clearHistory(e);
+    const r = e.session.submit('Отметь отчёт выполненным');
+    ok('S47 несколько whole-word partial matches остаются AMBIGUOUS', r.status === 'clarification_required' && r.candidates.length === 2 && !isDone(e, a.id) && !isDone(e, b.id));
   }
   {
     const e = sandbox(); const t = task(e, 'Подготовить квартальный отчёт'); clearHistory(e);
@@ -118,6 +176,13 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
     ok('S57 изменившийся target перед confirm безопасно отклонён', stale.status === 'stale' && !isDone(e, t.id) && e.state.history.length === 0);
   }
   {
+    const e = sandbox(); const t = task(e, 'Подготовить квартальный отчёт'); clearHistory(e);
+    e.session.submit('Отметь отчёт выполненным');
+    t.completed = true; t.done = true; t.status = 'completed'; // external completion between turns
+    const stale = e.session.confirm();
+    ok('S58 уже completed target не выполняется повторно', stale.status === 'stale' && e.state.history.length === 0 && !e.session.pending());
+  }
+  {
     const e = sandbox(); const t = task(e, 'Купить моторное масло'); clearHistory(e);
     const exact = e.session.submit('Отметь купить моторное масло выполненной');
     ok('S60 EXACT safe mutation выполняется сразу', exact.ok && exact.result.resolution === 'EXACT' && isDone(e, t.id));
@@ -140,6 +205,10 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
     const unknown = e.session.submit('абракадабра');
     ok('S70 unknown при confirmation не выполняет pending', unknown.status === 'confirmation_required' && !isDone(e, t.id));
     ok('S71 unknown при confirmation сохраняет безопасный pending', e.session.pending() && e.state.history.length === 0);
+    const serialized = JSON.stringify(e.session.pending());
+    ok('S71a реальный pending context сериализуем и не содержит функций/DOM', !!serialized && serialized.indexOf('confirmation') >= 0);
+    const reloaded = e.createSession();
+    ok('S71b новая/reloaded session не наследует pending context', reloaded.pending() === null && !isDone(e, t.id) && e.state.history.length === 0);
     e.session.reset();
     ok('S72 reset/reload model очищает transient context', e.session.pending() === null);
   }
@@ -160,6 +229,20 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
     const e = sandbox(); task(e, 'Отчёт за август'); task(e, 'Отчёт для Сергея'); clearHistory(e);
     e.session.submit('Отметь отчёт выполненным');
     ok('S75 «первая» распознаётся целиком', e.session.submit('первая').ok);
+  }
+  {
+    const e = sandbox(); task(e, 'Отчёт один'); task(e, 'Отчёт два'); clearHistory(e);
+    const ambiguous = e.session.submit('Отметь отчёт выполненным');
+    const selectedId = ambiguous.candidates[1].id;
+    const otherId = ambiguous.candidates[0].id;
+    const picked = e.session.submit('вторую!');
+    ok('S76 завершающая пунктуация не ломает кириллический ordinal', picked.ok && !isDone(e, otherId) && isDone(e, selectedId));
+  }
+  {
+    const e = sandbox(); const t = task(e, 'Подготовить отчёт'); clearHistory(e);
+    e.session.submit('Отметь отчёт выполненным');
+    const confirmed = e.session.submit('подтвердить!');
+    ok('S77 пунктуация не ломает текстовое confirmation', confirmed.ok && isDone(e, t.id) && e.state.history.length === 1);
   }
   ['первую', 'вторая', 'вторую', 'отмена', 'нет', 'подтвердить'].forEach((word, i) => {
     const e = sandbox(); const a = task(e, 'Тест один'), b = task(e, 'Тест два'); clearHistory(e);
