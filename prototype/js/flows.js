@@ -54,13 +54,16 @@ window.AvenFlows = (function () {
         { key: 'confirm', ask: 'Записать заправку: {liters} л на {sum} ₽, пробег {km} км? (да/нет)', parse: yesno, err: 'Ответьте «да» или «нет».' }
       ],
       finish(data) {
-        const st = s();
-        st.car.fuel.unshift({ id: S.id('f'), liters: data.liters, sum: data.sum, km: data.km, date: 'сегодня' });
-        st.car.mileage = data.km || st.car.mileage;
-        st.ops.unshift({ id: S.id('o'), type: 'expense', cat: 'Авто', title: 'АЗС (демо-заправка)', amount: data.sum, date: 'сегодня', comment: data.liters + ' л' });
-        st.finMonth.expense += data.sum;
-        S.save();
-        return 'Заправка записана: ' + data.liters + ' л, ' + fmtMoney(data.sum) + ', пробег ' + (data.km || st.car.mileage).toLocaleString('ru-RU') + ' км. Данные в «Авто → Заправки» и «Финансы».';
+        /* Демо-сценарий не пишет в состояние сам: он вызывает то же общее действие,
+           что и раздел «Авто», поэтому запись, расход, баланс и отмена одинаковы. */
+        const C = window.AvenActions;
+        const res = C.auto.createRecord('fuel', {
+          liters: data.liters, sum: data.sum, km: data.km || C.auto.car().mileage,
+          dateISO: C.dates.todayISO(), note: 'АЗС (демо-заправка)', linkFinance: true
+        }, { source: 'flow' });
+        if (!res.ok) return res.message || 'Не удалось записать заправку.';
+        return 'Заправка записана: ' + res.entity.liters + ' л, ' + fmtMoney(res.entity.sum) + ', пробег ' +
+          (res.entity.km || 0).toLocaleString('ru-RU') + ' км. Данные в «Авто → Заправки» и «Финансы».';
       }
     },
     event: {

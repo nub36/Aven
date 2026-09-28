@@ -44,16 +44,12 @@ window.Aven = (function () {
     const d = iso ? new Date(iso + 'T12:00:00') : new Date();
     return new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(d);
   };
-  api.warrantyStatus = function (untilStr) {
-    const m = /(\d{2})\.(\d{2})\.(\d{4})/.exec(untilStr || '');
-    if (!m) return { cls: '', label: untilStr || '—' };
-    const until = new Date(+m[3], +m[2] - 1, +m[1]);
-    const iso = window.AvenDemo && window.AvenDemo.todayISO ? window.AvenDemo.todayISO() : null;
-    const now = iso ? new Date(iso + 'T12:00:00') : new Date();
-    const days = Math.ceil((until - now) / 86400000);
-    if (days < 0) return { cls: 'danger', label: 'Гарантия истекла', until: untilStr };
-    if (days < 90) return { cls: 'warn', label: 'Гарантия до ' + untilStr, until: untilStr };
-    return { cls: 'ok', label: 'Гарантия до ' + untilStr, until: untilStr };
+  /* Состояние гарантии считает общий слой действий (раздел «Покупки»): один порог,
+     одна дата «сегодня», один текст — и на карточках, и в уведомлениях. */
+  api.warrantyStatus = function (until) {
+    const C = Core();
+    if (C && C.shopping && C.shopping.warrantyState) return C.shopping.warrantyState(until);
+    return { kind: 'none', cls: '', label: '—', days: null };
   };
 
   /* ---------- тосты ---------- */

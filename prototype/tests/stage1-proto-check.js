@@ -69,6 +69,7 @@ async function load(hash) {
     q: (sel) => d.querySelector(sel),
     qa: (sel) => Array.from(d.querySelectorAll(sel)),
     st: () => w.AvenState.s(),
+    C: () => w.AvenActions, /* общий слой действий: запросы и действия одним контрактом */
     click: (el) => el && el.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true })),
     set: (el, v) => { el.value = v; el.dispatchEvent(new w.Event('input', { bubbles: true })); },
     change: (el) => el.dispatchEvent(new w.Event('change', { bubbles: true })),
@@ -510,19 +511,22 @@ async function load(hash) {
   {
     const p = await load('#/finance');
     const H = () => p.st().history;
-    const expBefore = p.w.Aven.minor(p.st().finMonth.expense);
-    const balBefore = p.w.Aven.minor(p.st().finMonth.balance);
+    /* Итоги больше не хранятся отдельным числом: и экран, и проверка спрашивают их
+       у общего слоя действий, поэтому расхождение между карточкой и операциями
+       физически невозможно (Stage 1.3). */
+    const expNow = () => p.w.Aven.minor(p.C().finance.summary().monthExpense);
+    const balNow = () => p.w.Aven.minor(p.C().finance.summary().balance);
+    const expBefore = expNow();
+    const balBefore = balNow();
     for (const amt of ['0.1', '0.2']) {
       p.click(p.q('[data-action="fin-add"]')); await sleep(150);
       p.set(p.q('#modal-root input[name="amount"]'), amt);
       p.click(p.modalSubmit()); await sleep(230);
     }
     ok('G17 итоги месяца считаются целыми копейками: +0.1 и +0.2 = ровно +30 мин. ед.',
-      p.w.Aven.minor(p.st().finMonth.expense) === expBefore + 30,
-      p.w.Aven.minor(p.st().finMonth.expense) - expBefore);
+      expNow() === expBefore + 30, expNow() - expBefore);
     ok('G18 баланс пересчитан на те же 30 мин. ед.',
-      p.w.Aven.minor(p.st().finMonth.balance) === balBefore - 30,
-      p.w.Aven.minor(p.st().finMonth.balance) - balBefore);
+      balNow() === balBefore - 30, balNow() - balBefore);
     ok('G19 0.1 + 0.2 = ровно 0.3 (float дал бы артефакт)',
       p.w.Aven.sumMoney(0.1, 0.2) === 0.3 && String(0.1 + 0.2) !== '0.3', String(p.w.Aven.sumMoney(0.1, 0.2)));
     ok('G20 на странице финансов виден расчёт точности денег', /в копейках/.test(p.q('#page').textContent));
@@ -534,15 +538,14 @@ async function load(hash) {
       /пересчитаются/.test(p.modalText()), p.modalText().slice(0, 70));
     p.click(p.modalSubmit()); await sleep(260);
     ok('G23 после удаления итоги пересчитаны (осталось +10 мин. ед.)',
-      p.w.Aven.minor(p.st().finMonth.expense) === expBefore + 10, p.w.Aven.minor(p.st().finMonth.expense) - expBefore);
+      expNow() === expBefore + 10, expNow() - expBefore);
     const eDel = H()[0];
     ok('G24 удаление операции — опасное и отменяемое, баланс в изменениях',
       eDel.action === 'finance.expense.delete' && eDel.danger === true && eDel.undoable === true &&
       (eDel.changes || []).some((c) => c.field === 'Баланс'), JSON.stringify(eDel.changes));
     p.w.Aven.undoAction(eDel.id); await sleep(240);
     ok('G25 Undo возвращает операцию и пересчитывает итоги обратно',
-      p.st().ops.some((o) => o.id === opId) && p.w.Aven.minor(p.st().finMonth.expense) === expBefore + 30 &&
-      p.w.Aven.minor(p.st().finMonth.balance) === balBefore - 30);
+      p.st().ops.some((o) => o.id === opId) && expNow() === expBefore + 30 && balNow() === balBefore - 30);
 
     const typeSel = p.q('[data-action="fin-filter-type"]');
     typeSel.value = 'income'; p.change(typeSel); await sleep(220);
@@ -559,27 +562,26 @@ async function load(hash) {
       eEdit.action === 'finance.expense.update' && (eEdit.changes || []).some((c) => c.field === 'Сумма') &&
       JSON.stringify(eEdit.undo || {}).indexOf('finAccounts') >= 0, JSON.stringify(eEdit.changes));
     ok('G25c редактирование операции пересчитало итоги и баланс счёта',
-      p.w.Aven.minor(p.st().finMonth.expense) === expBefore + 130 &&
-      p.w.Aven.minor((p.st().finAccounts || [])[0].balance) === cardBefore - 100,
-      p.w.Aven.minor(p.st().finMonth.expense) - expBefore);
+      expNow() === expBefore + 130 &&
+      p.w.Aven.minor((p.st().finAccounts || [])[0].balance) === cardBefore - 100, expNow() - expBefore);
     p.w.Aven.undoAction(eEdit.id); await sleep(260);
     ok('G25d Undo редактирования операции возвращает сумму, итоги и счёт',
       p.st().ops.some((o) => o.id === opId && p.w.Aven.minor(o.amount) === 20) &&
-      p.w.Aven.minor(p.st().finMonth.expense) === expBefore + 30 &&
+      expNow() === expBefore + 30 &&
       p.w.Aven.minor((p.st().finAccounts || [])[0].balance) === cardBefore);
 
-    const bal0 = p.w.Aven.minor(p.st().finMonth.balance);
+    const bal0 = balNow();
     p.click(p.q('[data-action="fin-account-add"]')); await sleep(160);
     p.set(p.q('#modal-root input[name="name"]'), 'Тестовый счёт');
     p.set(p.q('#modal-root input[name="balance"]'), '123.45');
     p.click(p.modalSubmit()); await sleep(260);
     const accId = p.st().finAccounts[0].id;
     ok('G25e создание счёта добавляет баланс и запись истории',
-      p.st().finAccounts[0].name === 'Тестовый счёт' && p.w.Aven.minor(p.st().finMonth.balance) === bal0 + 12345 &&
+      p.st().finAccounts[0].name === 'Тестовый счёт' && balNow() === bal0 + 12345 &&
       H()[0].action === 'finance.account.create');
     p.w.Aven.undoAction(H()[0].id); await sleep(260);
     ok('G25f Undo создания счёта удаляет счёт и возвращает общий баланс',
-      !p.st().finAccounts.some((a) => a.id === accId) && p.w.Aven.minor(p.st().finMonth.balance) === bal0);
+      !p.st().finAccounts.some((a) => a.id === accId) && balNow() === bal0);
 
     p.click(p.q('[data-action="fin-cat-add"]')); await sleep(160);
     p.set(p.q('#modal-root input[name="name"]'), 'Здоровье тест');
@@ -621,8 +623,11 @@ async function load(hash) {
     ok('G30a авто показывает связь с финансами и вычисляемые показатели', /Финансовая связь/.test(p.q('#page').textContent) && /Затраты по авто/.test(p.q('#page').textContent));
     const fuelLen0 = p.st().car.fuel.length;
     const opsAuto0 = p.st().ops.length;
-    const expAuto0 = p.w.Aven.minor(p.st().finMonth.expense);
-    const balAuto0 = p.w.Aven.minor(p.st().finMonth.balance);
+    /* Итоги спрашиваем у общего слоя: хранимых чисел месяца больше нет. */
+    const expNow = () => p.w.Aven.minor(p.C().finance.summary().monthExpense);
+    const balNow = () => p.w.Aven.minor(p.C().finance.summary().balance);
+    const expAuto0 = expNow();
+    const balAuto0 = balNow();
     p.click(p.q('[data-action="fuel-add"]')); await sleep(180);
     p.set(p.q('#modal-root input[name="liters"]'), '10.5');
     p.set(p.q('#modal-root input[name="sum"]'), '1234.50');
@@ -635,16 +640,16 @@ async function load(hash) {
       p.st().ops.length === opsAuto0 + 1 && eFuel.action === 'car.fuel.create' && eFuel.undo.type === 'batch',
       JSON.stringify(eFuel.undo));
     ok('G30c заправка пересчитывает финансы и пробег',
-      p.w.Aven.minor(p.st().finMonth.expense) === expAuto0 + 123450 &&
-      p.w.Aven.minor(p.st().finMonth.balance) === balAuto0 - 123450 && p.st().car.mileage === km0 + 111,
-      p.w.Aven.minor(p.st().finMonth.expense) - expAuto0);
+      expNow() === expAuto0 + 123450 &&
+      balNow() === balAuto0 - 123450 && p.st().car.mileage === km0 + 111,
+      expNow() - expAuto0);
     p.w.Aven.undoAction(eFuel.id); await sleep(280);
     ok('G30d Undo заправки удаляет расход, возвращает баланс и пробег',
       !p.st().car.fuel.some((f) => f.id === newFuelId) && p.st().ops.length === opsAuto0 &&
-      p.w.Aven.minor(p.st().finMonth.expense) === expAuto0 && p.w.Aven.minor(p.st().finMonth.balance) === balAuto0 &&
+      expNow() === expAuto0 && balNow() === balAuto0 &&
       p.st().car.mileage === km0);
 
-    const expAuto1 = p.w.Aven.minor(p.st().finMonth.expense);
+    const expAuto1 = expNow();
     const opsAuto1 = p.st().ops.length;
     p.click(p.q('[data-action="auto-expense"]')); await sleep(160);
     p.set(p.q('#modal-root input[name="title"]'), 'Тестовый авторасход');
@@ -655,7 +660,7 @@ async function load(hash) {
     const linkedOpId = p.st().car.expenses[0].financeOpId;
     ok('G30e расход авто создаёт финоперацию и пересчитывает расходы',
       eAutoExpCreate.action === 'car.expense.create' && !!linkedOpId && p.st().ops.length === opsAuto1 + 1 &&
-      p.w.Aven.minor(p.st().finMonth.expense) === expAuto1 + 50000);
+      expNow() === expAuto1 + 50000);
     p.click(p.q('#auto-tabs [data-tab="expenses"]')); await sleep(220);
     p.click(p.q('[data-action="auto-expense-edit"][data-id="' + autoExpId + '"]')); await sleep(180);
     p.set(p.q('#modal-root input[name="amount"]'), '700');
@@ -665,17 +670,17 @@ async function load(hash) {
       eAutoExpEdit.action === 'car.expense.update' && eAutoExpEdit.undo.type === 'batch' &&
       p.w.Aven.minor(p.st().car.expenses[0].amount) === 70000 &&
       p.w.Aven.minor(p.st().ops.filter((o) => o.id === linkedOpId)[0].amount) === 70000 &&
-      p.w.Aven.minor(p.st().finMonth.expense) === expAuto1 + 70000,
+      expNow() === expAuto1 + 70000,
       JSON.stringify(eAutoExpEdit.undo));
     p.w.Aven.undoAction(eAutoExpEdit.id); await sleep(280);
     ok('G30g Undo редактирования авторасхода возвращает запись, финоперацию и итог',
       p.w.Aven.minor(p.st().car.expenses[0].amount) === 50000 &&
       p.w.Aven.minor(p.st().ops.filter((o) => o.id === linkedOpId)[0].amount) === 50000 &&
-      p.w.Aven.minor(p.st().finMonth.expense) === expAuto1 + 50000);
+      expNow() === expAuto1 + 50000);
     p.w.Aven.undoAction(eAutoExpCreate.id); await sleep(280);
     ok('G30h Undo создания авторасхода удаляет обе записи и возвращает финансы',
       !p.st().car.expenses.some((x) => x.id === autoExpId) && p.st().ops.length === opsAuto1 &&
-      p.w.Aven.minor(p.st().finMonth.expense) === expAuto1);
+      expNow() === expAuto1);
 
     p.click(p.q('[data-action="auto-doc"]')); await sleep(160);
     p.set(p.q('#modal-root input[name="title"]'), 'Тестовый полис');
@@ -740,8 +745,8 @@ async function load(hash) {
     p.w.Aven.undoAction(eShopService.id); await sleep(240);
     ok('G31g Undo сервиса удаляет ремонт из покупки', (p.st().purchases[0].repairs || []).length === 0);
 
-    const expShop0 = p.w.Aven.minor(p.st().finMonth.expense);
-    const balShop0 = p.w.Aven.minor(p.st().finMonth.balance);
+    const expShop0 = expNow();
+    const balShop0 = balNow();
     const opsShop0 = p.st().ops.length;
     p.click(p.q('[data-action="shop-fin-link"][data-id="' + purId + '"]')); await sleep(160);
     ok('G31h связь покупки с финансами требует подтверждения', /баланс|расход/.test(p.modalText()), p.modalText());
@@ -750,14 +755,14 @@ async function load(hash) {
     ok('G31i связь с финансами создаёт расход и пересчитывает итоги',
       eShopFin.action === 'purchase.finance.link' && eShopFin.undo.type === 'batch' &&
       !!p.st().purchases[0].financeOpId && p.st().ops.length === opsShop0 + 1 &&
-      p.w.Aven.minor(p.st().finMonth.expense) === expShop0 + 199999 &&
-      p.w.Aven.minor(p.st().finMonth.balance) === balShop0 - 199999,
+      expNow() === expShop0 + 199999 &&
+      balNow() === balShop0 - 199999,
       JSON.stringify(eShopFin.undo));
     p.w.Aven.undoAction(eShopFin.id); await sleep(280);
     ok('G31j Undo связи с финансами удаляет расход и возвращает баланс',
       !p.st().purchases[0].financeOpId && p.st().ops.length === opsShop0 &&
-      p.w.Aven.minor(p.st().finMonth.expense) === expShop0 &&
-      p.w.Aven.minor(p.st().finMonth.balance) === balShop0);
+      expNow() === expShop0 &&
+      balNow() === balShop0);
 
     p.click(p.q('[data-action="shop-export-csv"]')); await sleep(160);
     ok('G31k экспорт покупок подтверждается как приватные данные', /приватные данные/.test(p.modalText()), p.modalText());
@@ -969,19 +974,21 @@ async function load(hash) {
     };
     const iso = (offset) => p.w.AvenActions.dates.todayISO(offset);
 
-    ok('J1 «Расходы» на Главной считаются из данных: сегодня 4 650 ₽, месяц 47 850 ₽, крупнейшая — АЗС Лукойл',
-      /4 650 ₽/.test(txt()) && /47 850 ₽/.test(txt()) && /Крупнейшая в месяце: АЗС Лукойл/.test(txt()) && /3 200 ₽/.test(txt()),
+    /* Месяц теперь всегда равен сумме операций месяца (6 000 ₽ в демо-данных):
+       отдельного хранимого итога, который мог разойтись с операциями, больше нет. */
+    ok('J1 «Расходы» на Главной считаются из данных: сегодня 4 650 ₽, месяц 6 000 ₽, крупнейшая — АЗС Лукойл',
+      /4 650 ₽/.test(txt()) && /6 000 ₽/.test(txt()) && /Крупнейшая в месяце: АЗС Лукойл/.test(txt()) && /3 200 ₽/.test(txt()),
       txt().slice(0, 120));
 
     p.click(p.q('[data-action="quick-expense"]')); await sleep(180);
     p.set(p.q('#modal-root input[name="amount"]'), '500');
     p.set(p.q('#modal-root input[name="title"]'), 'Проверочный расход');
     p.click(p.modalSubmit()); await sleep(300);
-    ok('J2 новый расход меняет агрегаты Главной: сегодня 5 150 ₽, месяц 48 350 ₽',
-      /5 150 ₽/.test(txt()) && /48 350 ₽/.test(txt()) && /Проверочный расход/.test(txt()), txt().slice(0, 120));
+    ok('J2 новый расход меняет агрегаты Главной: сегодня 5 150 ₽, месяц 6 500 ₽',
+      /5 150 ₽/.test(txt()) && /6 500 ₽/.test(txt()) && /Проверочный расход/.test(txt()), txt().slice(0, 120));
     p.w.Aven.undoAction(H()[0].id); await sleep(280);
-    ok('J3 Undo расхода возвращает агрегаты Главной (4 650 ₽ / 47 850 ₽, операция удалена)',
-      /4 650 ₽/.test(txt()) && /47 850 ₽/.test(txt()) && p.st().ops.length === 5, 'ops: ' + p.st().ops.length);
+    ok('J3 Undo расхода возвращает агрегаты Главной (4 650 ₽ / 6 000 ₽, операция удалена)',
+      /4 650 ₽/.test(txt()) && /6 000 ₽/.test(txt()) && p.st().ops.length === 5, 'ops: ' + p.st().ops.length);
 
     const tasksCard = () => (p.q('[data-card="tasks"]') || {}).textContent || '';
     ok('J4 карточка «Задачи» считает статусы из данных, а не из константы',

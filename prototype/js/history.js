@@ -40,9 +40,17 @@
   };
 
   /* Деньги: целые в минимальных единицах валюты (SECURITY §5, MVP_SCOPE §5.6 приёмка 1:
-     0.1 + 0.2 должно давать ровно 0.3, без float-артефактов). */
-  A.minor = function (v) { return Math.round((Number(v) || 0) * 100); };
+     0.1 + 0.2 должно давать ровно 0.3, без float-артефактов).
+     Правила живут в общем слое действий — здесь только ссылка на них, чтобы
+     не появилось второй арифметики денег. */
+  const Money = () => (window.AvenActions && window.AvenActions.money) || null;
+  A.minor = function (v) {
+    const M = Money();
+    return M ? M.minor(v) : Math.round((Number(v) || 0) * 100);
+  };
   A.sumMoney = function () {
+    const M = Money();
+    if (M) return M.sum.apply(null, arguments);
     let m = 0;
     for (let i = 0; i < arguments.length; i++) m += A.minor(arguments[i]);
     return m / 100;
@@ -109,7 +117,8 @@
        { type: 'fields',  list: 'tasks', id: 't101', fields: {...} } — вернуть прежние значения полей
        { type: 'value',   path: 'car.mileage', value: 152300 }        — вернуть значение вне списка
        { type: 'batch',   steps: [{...}, {...}], adjust: [...] }       — атомарно описать несколько обратных операций
-       дополнительно: adjust: [{ path: 'finMonth.expense', delta: -850 }] — поправить числовые итоги.
+       дополнительно: adjust: [{ path: 'car.mileage', delta: -120 }] — поправить числовой показатель
+       (применяется только если по пути действительно лежит число).
        Список может быть вложенным: list: 'car.fuel' или 'purchases.0.repairs'.
      Если payload нет (демо-записи из data.js), отмена помечает запись, но данные не меняются —
      и прототип говорит об этом прямо, а не делает вид, что вернул состояние (ADR-010). */
