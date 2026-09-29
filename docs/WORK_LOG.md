@@ -2476,3 +2476,128 @@ engine — `settings.voice.engine`, голос — `settings.voice.natural.voice
   `prototype/tests/stage13-entities-check.js`
 - `docs/CHANGELOG.md`, `docs/MVP_SCOPE.md`, `docs/COMMAND_ENGINE.md`, `docs/DECISIONS.md`,
   `docs/WORK_LOG.md` (этот файл), `prototype/README.md`
+
+## 2026-09-29 — Stage 2 / Iteration 8: перенос события текстом (event update text commands)
+
+- **Дата и база:** 2026-09-29. Проверено самостоятельно, без доверия к handoff: `origin/main =
+  017f871fc1aa640f7ad5d524d467f289197cba4c`, PR #33 (итерация 7, Shopping) — MERGED, его merge commit =
+  этот же SHA, workflow «Prototype Pages» на нём success. Рабочая ветка сессии
+  `arena/01a0ed48-aven` от этого коммита. Открытые PR #8 (Natural Voice) и #15 (Female Aven 3D) не
+  трогались; TTS/VPS/`deploy-vps.sh` не трогались.
+- **Baseline до работы:** 14 suites, **1582/1582**, 0 провалов (перепроверено прогоном, не со слов
+  предыдущей сессии). jsdom@30 установлен только во временный `/tmp/lab`; зависимости проекта не менялись.
+- **Scope:** ровно один блок — **перенос уже существующего события** (`event.reschedule`) плюс один
+  разрешённый микро-фикс Shopping («истекшей/истёкшей гарантией»). Следующий блок не начинался.
+- **Owner decision (получен в этой сессии, до кода):** при переносе **времени** сохраняется
+  длительность (10:00–10:45 → 12:00–12:45), при переносе только **даты** время не меняется.
+  Зафиксировано в `DECISIONS.md` («Product Decision — Event update text commands») вместе с
+  «подтверждение ВСЕГДА» и списком того, что вне scope. Причина вопроса: буквальный контракт
+  `updateEvent` (patch-merge) дал бы 12:00–10:45, валидации `end >= start` в модели нет.
+- **Сделано в коде:**
+  - `prototype/js/command.js`: правило `parseEventReschedule` (те же слова события, что у
+    `event.create`; название через существующую таблицу `EVENT_LABEL`, без морфологии; «куда» — общий
+    `extractWhen` + документированная форма «на 12» = 12:00; непонятый хвост → `EVENT_WHEN_REQUIRED`),
+    `resolveEvent`/`eventCandidate` (те же дискретные уровни, что у задач), ветка `execute`
+    `event.reschedule` (подтверждение ВСЕГДА, сводка «было → станет», re-resolve цели и сверка
+    ожидаемого слепка → `stale`, честные отказы `UNSUPPORTED_EVENT_REPEAT`/
+    `UNSUPPORTED_EVENT_ALLDAY_TIME`/`EVENT_TIME_OVERFLOW`/`EVENT_RANGE_INVALID`, no-op без History,
+    одна мутация через существующий `AvenActions.events.updateEvent`), человеческие ответы,
+    `UNSUPPORTED_EVENT_FIELD`, переформулированный `UNSUPPORTED_EVENT_UPDATE`, обновлённый
+    `supported()`/`examples()`; Shopping F1 — одна словоформа `истек(?:л|ш)[а-яе]*`.
+  - `prototype/js/command-session.js`: в pending добавлен минимальный `expected`-слепок цели (для
+    stale-проверки), подпись кандидатов-событий (дата + интервал) и текст уточнения для событий.
+    Второй session/parser/Event-store не создавался.
+  - `prototype/js/pages2.js`: рендер вариантов выбора для событий (дата/время вместо «Открыта/
+    Выполнена») и `aria-label="Выберите событие"`; Drawer и AvenDaily не трогались.
+  - `help.js` (новые статьи `cmd-events` и `calendar-move-command`, обновлены `cmd-supported`,
+    `cmd-confirm`, `cmd-ambiguity`, `cmd-limits`, `assistant-current`), `tutorial.js` (+4 шага в туре
+    «Текстовые команды» через существующий движок и обязательное подтверждение, +1 шаг в туре
+    «Календарь», обновлён шаг об ограничениях).
+- **Тесты:** `command-engine-check.js` 527 → **613** (+86): блок A17 (грамматика, доменные приоритеты в
+  обе стороны, чистота `parse`, невалидные дата/время, обязательное подтверждение даже при EXACT,
+  сохранение длительности, перенос даты, событие без окончания, INFERRED/AMBIGUOUS, «не нашла» не
+  создаёт событие, повторяющиеся, «весь день», no-op, overflow, stale-изменение и stale-удаление,
+  только существующие Common Actions, общие часы) + Shopping F1 (A489–A493); блоки B3g/B3h/B3i
+  (сквозной путь через настоящий Assistant: подтверждение, Cancel/Escape/новая команда, double
+  confirm = один перенос и одна History, «Календарь»/«День»/«Главная», Undo, уточнение с aria-label,
+  ширина 320) и B100a–B100l (Help/Tutorial). `command-session-check.js` 125 → **140** (+15: S141–S155).
+  A144 приведён в соответствие с новым составом `supported()` (11 mutations) — проверка не ослаблена.
+- **Full regression:** 14 suites, **1683/1683**, 0 провалов.
+- **Static checks:** `node --check` по всем изменённым JS/тестам — чисто; `git diff --check` — чисто.
+  В диффе нет `console.*`/`debugger`, прямых записей в `AvenState`/`logAction`, `new Date()`/`Date.now()`,
+  ASCII `\b`/`\w` в русских шаблонах, изменений зависимостей и второго Event-движка.
+- **Не проверено честно:** реальный браузер (Chromium/Playwright в окружении нет) — jsdom за него не
+  выдаётся; ручной тест на Android не выполнялся.
+- **Документация:** `COMMAND_ENGINE.md` (новый §16), `DECISIONS.md` (Product Decision), `MVP_SCOPE.md`
+  (Stage 2 / Iteration 8), `PROJECT_PLAN.md`, `FEATURES.md`, `CHANGELOG.md`, `prototype/README.md`,
+  `WORK_LOG.md` (эта запись). `ARCHITECTURE.md`/`DATA_MODEL.md` не менялись: слои и схема события
+  структурно те же.
+- **Дальше (не начато):** классификация следующего блока — за владельцем. Кандидаты: изменение
+  остальных полей события текстом, перенос повторяющихся событий (нужно owner-решение «одно
+  повторение vs серия»), настройки текстом, доходы текстом. Event delete остаётся честно
+  неподдержанным. Открытый вопрос timezone-семантики события не решался.
+- **Не тронуто:** Voice/STT/TTS/Natural Voice/VPS/nginx и PR #8; Female Aven/3D и PR #15;
+  StorageProvider/files; Admin/Auth; morphology/fuzzy/custom dictionary; зависимости проекта.
+
+### Какие файлы изменены (Iteration 8)
+
+- `prototype/js/command.js`, `prototype/js/command-session.js`, `prototype/js/pages2.js`,
+  `prototype/js/help.js`, `prototype/js/tutorial.js`
+- `prototype/tests/command-engine-check.js`, `prototype/tests/command-session-check.js`
+- `docs/COMMAND_ENGINE.md`, `docs/DECISIONS.md`, `docs/MVP_SCOPE.md`, `docs/PROJECT_PLAN.md`,
+  `docs/FEATURES.md`, `docs/CHANGELOG.md`, `docs/WORK_LOG.md`, `prototype/README.md`
+
+## 2026-09-29 — Review-сессия PR #34 (Stage 2 / Iteration 8) + фиксация следующего этапа
+
+- **Что проверялось:** независимая review-проверка всего PR #34 перед merge. Состояние определено
+  самостоятельно: `origin/main = 017f871fc1aa640f7ad5d524d467f289197cba4c`, PR #33 — MERGED, его
+  merge commit = этот же SHA, Shopping-код итерации 7 фактически присутствует в main; PR #34 —
+  OPEN / MERGEABLE / `mergeStateStatus = CLEAN`, base `main`, HEAD `fb4dbc621f6e5a44fc293e1c510b933d33cff9d9`,
+  1 коммит, 15 файлов, +1075/−35, без review-комментариев. `merge-base(main, PR HEAD)` равен tip main —
+  base НЕ устарел, rebase/update не требовался. Последний deployment github-pages — `017f871f…` (success).
+- **Независимая проверка поведения (не тестами из PR):** отдельная песочница `AvenCommand` +
+  `AvenCommandSession` + `AvenActions` (64 проверки) и отдельный jsdom-прогон настоящего прототипа
+  (57 проверок) — **121 проверка, 0 провалов**. Покрыто: confirmation ALWAYS при EXACT; ноль мутаций и
+  History до Confirm; сохранение длительности (10:00–10:45 → 12:00–12:45) и обратный Undo; перенос
+  только даты (время неизменно); дата+время (10:00–10:45 → пт 15:30–16:15, одна History entry);
+  midnight overflow (отказ, без обрезки до 23:59 и без переноса на следующий день); all-day (дата — да,
+  время — нет, all-day сохраняется); невалидные `31.02`/`30.02`/`32.01`/`25:00`/`10:75`; same-value
+  no-op без фиктивной History; cancel кнопкой/«нет»/«отмена»/Escape; double confirm = один update;
+  stale (удалён / переименован / изменены дата-время извне) — safe failure, свежие данные не
+  перетираются; not found не создаёт событие; ambiguity → кандидаты (title+date+time, без внутренних
+  id) → выбор ≠ Confirm; доменные приоритеты (create события, перенос задачи, заметка, напоминание,
+  покупка, расход, заправка, запросы); delete и остальные поля события — честные отказы; общие часы
+  вместо системных; Shopping F1 в обеих формах + сохранность `soon`/`present`/`item` и read-only;
+  Calendar/Day/Home/AvenDaily/History/Undo-согласованность; Home-строка использует тот же движок;
+  Assistant a11y (кнопки, `aria-live`, `aria-label` «Выберите событие», возврат фокуса); ширины
+  320/360/390/412/430/768/1280, тёмная тема, reduced-motion; Tutorial (шаги, next/prev/Escape).
+- **Полный regression на фактическом PR HEAD:** 14 suites, **1683/1683**, 0 провалов (совпало с
+  заявленным). `node --check` по всем изменённым JS — чисто; `git diff --check` — чисто; в диффе нет
+  `console.*`/`debugger`/`Date.now()`/`new Date()`/прямых записей в `AvenState`/`logAction`, изменений
+  зависимостей, временных файлов и изменений Voice/TTS/VPS/3D. `actions.js` и `data.js` не менялись —
+  Event schema и Common Actions те же.
+- **Честно не проверено:** реальный браузер (Chromium/Playwright в окружении нет) и ручной прогон на
+  Android; jsdom не проверяет настоящий layout, поэтому «нет горизонтального переполнения» на узких
+  ширинах подтверждено только структурно (кнопки/разметка/отсутствие `nowrap`), а не измерением.
+- **Итог review:** замечаний, блокирующих merge, не найдено. PR #34 одобрен и вмержен.
+
+### Зафиксированные системные дефекты для следующего этапа — DATA INTEGRITY HARDENING
+
+Оба дефекта **существовали до PR #34** и воспроизведены одинаково и на `origin/main`, и на PR HEAD
+(PR их не вносит и не обязан чинить; Event-команда сама невозможные даты отклоняет на разборе):
+
+- **A) Невозможные ISO-даты проходят общий слой.** Воспроизведение (DOM-free песочница с
+  `actions.js`): `AvenActions.events.updateEvent(id, { date: '2026-02-30' })` → `ok = true`, в состоянии
+  сохраняется `2026-02-30`; `AvenActions.tasks.createTask({ date: '2026-02-30', deadline: '2026-02-30' })`
+  → `ok = true`. Ожидание после hardening: честный отказ с понятным сообщением, без записи в состояние
+  и «Историю».
+- **B) Слишком большая сумма ломает арифметику баланса.** Воспроизведение:
+  `AvenActions.finance.createOperation({ type: 'expense', amount: '99999999999999999999', cat: 'Продукты', account: 'card' })`
+  → `ok = true`, баланс счёта становится `-99999999999999900000`, `Number.isSafeInteger(balance) === false`.
+  Ожидание после hardening: граница допустимой суммы, честный отказ, отсутствие порчи баланса.
+
+**Следующий этап (обязательный, не начат в этой сессии): DATA INTEGRITY HARDENING.** Перед
+исправлением следующий агент обязан заново воспроизвести оба дефекта на свежем `main` (рецепты выше),
+и только потом чинить — с тестами на уровне общего слоя и без изменения UI-поведения там, где оно
+корректно. В этой сессии Data Integrity, Tutorial 2.0, UI/Mobile redesign и следующий Command Engine
+блок НЕ начинались.

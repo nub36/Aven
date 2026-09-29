@@ -682,10 +682,21 @@
         /* Варианты бывают двух видов: задача (дата/время/статус) и значение
            справочника «Финансов» — счёт или категория (только название и подпись). */
         const slot = (m.flow.pending && m.flow.pending.slot) || '';
-        controls = `<div class="command-choices" role="group" aria-label="${slot === 'account' ? 'Выберите счёт' : slot === 'cat' ? 'Выберите категорию' : 'Выберите задачу'}">${(m.flow.candidates || []).map((c, n) =>
-          `<button type="button" class="command-choice" data-action="command-choice" data-index="${n}"><b>${n + 1}. ${A.esc(c.title)}</b><span>${A.esc(slot
-            ? (c.hint || '')
-            : [c.dateISO ? window.AvenActions.dates.dateLabel(c.dateISO) : '', c.time ? window.AvenActions.format.time(c.time) : '', c.status === 'completed' ? 'Выполнена' : 'Открыта'].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>`;
+        const isEvent = !slot && (m.flow.candidates || []).some((c) => c && c.kind === 'event');
+        /* Подпись варианта: у события — дата и интервал времени, у задачи —
+           дата, время и статус, у справочника «Финансов» — подсказка вида. */
+        const choiceHint = (c) => {
+          if (slot) return c.hint || '';
+          const date = c.dateISO ? window.AvenActions.dates.dateLabel(c.dateISO) : '';
+          if (c.kind === 'event') {
+            const when = c.allDay ? 'Весь день'
+              : (c.time ? window.AvenActions.format.time(c.time) + (c.endTime ? '–' + window.AvenActions.format.time(c.endTime) : '') : 'Без времени');
+            return [date, when].filter(Boolean).join(' · ');
+          }
+          return [date, c.time ? window.AvenActions.format.time(c.time) : '', c.status === 'completed' ? 'Выполнена' : 'Открыта'].filter(Boolean).join(' · ');
+        };
+        controls = `<div class="command-choices" role="group" aria-label="${slot === 'account' ? 'Выберите счёт' : slot === 'cat' ? 'Выберите категорию' : isEvent ? 'Выберите событие' : 'Выберите задачу'}">${(m.flow.candidates || []).map((c, n) =>
+          `<button type="button" class="command-choice" data-action="command-choice" data-index="${n}"><b>${n + 1}. ${A.esc(c.title)}</b><span>${A.esc(choiceHint(c))}</span></button>`).join('')}</div>`;
       } else if (m.flow && m.flow.status === 'confirmation_required') {
         controls = `<div class="command-confirm" role="group" aria-label="Подтверждение действия">
           <button type="button" class="btn primary" data-action="command-confirm">Подтвердить</button>

@@ -23,6 +23,13 @@ window.AvenCommandSession = (function () {
     const C = window.AvenActions;
     const bits = [c.title];
     if (c.dateISO || c.due) bits.push(C.dates.dateLabel(c.dateISO || c.due));
+    /* Событие описывается датой и интервалом времени, задача — датой и статусом.
+       Второй session для событий не создавался: отличается только подпись. */
+    if (c.kind === 'event') {
+      if (c.allDay) bits.push('весь день');
+      else if (c.time) bits.push(C.format.time(c.time) + (c.endTime ? '–' + C.format.time(c.endTime) : ''));
+      return bits.join(' · ');
+    }
     if (c.time) bits.push(C.format.time(c.time));
     bits.push(c.status === 'completed' ? 'выполнена' : 'открыта');
     return bits.join(' · ');
@@ -33,7 +40,10 @@ window.AvenCommandSession = (function () {
   function slotLabel(c) { return c.title; }
   function clarificationResponse(candidates, question, slot) {
     const label = slot ? slotLabel : candidateLabel;
-    return (question || 'Нашла несколько подходящих задач. Уточните выбор:') + ' ' +
+    const isEvent = !slot && (candidates || []).some((c) => c && c.kind === 'event');
+    return (question || (isEvent
+      ? 'Нашла несколько подходящих событий. Уточните выбор:'
+      : 'Нашла несколько подходящих задач. Уточните выбор:')) + ' ' +
       candidates.map((c, i) => (i + 1) + '. ' + label(c)).join('; ') + '. Пока ничего не изменилось.';
   }
 
@@ -67,6 +77,13 @@ window.AvenCommandSession = (function () {
           type: 'confirmation', intent: clone(intent), context: clone(context),
           targetId: result.target && result.target.id,
           targetTitle: result.target && result.target.title,
+          /* Минимальный слепок ожидаемого состояния цели — только для повторной
+             проверки перед выполнением (stale detection), не копия сущности. */
+          expected: result.target ? {
+            title: result.target.title || '', dateISO: result.target.dateISO || '',
+            time: result.target.time || '', endTime: result.target.endTime || '',
+            allDay: result.target.allDay === true
+          } : null,
           slots: carried,
           summary: result.summary
         };
@@ -133,6 +150,7 @@ window.AvenCommandSession = (function () {
       pending = null; busy = true;
       const result = Engine().execute(flow.intent, Object.assign({}, flow.context, {
         targetId: flow.targetId, expectedTitle: flow.targetTitle,
+        expected: flow.expected || null,
         slots: Object.assign({}, flow.slots || {}), confirmed: true
       }));
       busy = false;

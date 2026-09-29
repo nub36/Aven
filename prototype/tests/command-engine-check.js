@@ -401,7 +401,7 @@ function partA() {
     ok('A143 список возможностей честно перечисляет и то, чего движок не умеет',
       /Пока не умею/.test(cap.response) && /удаление записей текстом/.test(cap.response));
     ok('A144 перечень возможностей доступен как данные для интерфейса и справки',
-      K9.supported().queries.length >= 6 && K9.supported().mutations.length === 10 &&
+      K9.supported().queries.length >= 6 && K9.supported().mutations.length === 11 &&
       K9.supported().notYet.length >= 4 && K9.examples().length >= 6);
   }
 
@@ -1231,6 +1231,206 @@ function partA() {
   }
 
 
+  /* ---- A17. Перенос уже существующего события текстом (Stage 2, итерация 8) ----
+     Политика владельца: UPDATE EXISTING EVENT — подтверждение ВСЕГДА, даже при
+     EXACT. До Confirm ноль мутаций события и ноль записей «Истории».
+     Решение владельца 2026-09-29 (Product Decision «Event update text commands», DECISIONS.md, 2026-09-29): при переносе времени длительность
+     сохраняется, обе границы видны в сводке подтверждения. */
+  {
+    const env = coreSandbox();
+    const K = env.K, C = env.C;
+    const mk = (fields) => C.events.createEvent(fields, { source: 'test' }).entity;
+    const meeting = mk({ title: 'Встреча с Сергеем', date: FIXED, startTime: '15:00', endTime: '16:00' });
+    const dentist = mk({ title: 'Стоматолог', date: FIXED, startTime: '10:00', endTime: '10:45' });
+    const gym = mk({ title: 'Спортзал', date: '2026-09-30', startTime: '18:30', endTime: '' });
+    const weekly = mk({ title: 'Планёрка', date: '2026-09-29', startTime: '10:00', endTime: '10:45', repeat: 'weekly' });
+    const birthday = mk({ title: 'День рождения Сергея', date: '2026-10-01', allDay: true });
+    const baseHistory = env.state.history.length;
+
+    const i1 = K.parse('Перенеси встречу с Сергеем на 12', { source: 'test' });
+    ok('A450 «Перенеси встречу … на 12» → перенос существующего события, время 12:00',
+      i1.ok && i1.action === 'event.reschedule' && i1.kind === 'mutation' &&
+      i1.params.query === 'Встреча с Сергеем' && i1.params.time === '12:00' && !i1.params.dateISO);
+    const i2 = K.parse('Перенеси событие стоматолог на завтра', { source: 'test' });
+    ok('A451 «Перенеси событие … на завтра» → только дата по общим часам',
+      i2.ok && i2.action === 'event.reschedule' && i2.params.dateISO === '2026-09-29' && !i2.params.time);
+    const i3 = K.parse('Перенеси встречу с Сергеем на пятницу в 15:30', { source: 'test' });
+    ok('A452 дата и время в одной команде дают ОДНО намерение',
+      i3.ok && i3.action === 'event.reschedule' && i3.params.dateISO === '2026-10-02' && i3.params.time === '15:30');
+    ok('A453 «Измени встречу … на …» — тот же домен, второго парсера нет',
+      K.parse('Измени встречу с Сергеем на пятницу в 15:30').action === 'event.reschedule');
+    ok('A454 «Перенеси событие … на 12:00» понимается так же, как «на 12»',
+      K.parse('Перенеси событие стоматолог на 12:00').params.time === '12:00');
+
+    const pureBefore = JSON.stringify(env.state);
+    ['Перенеси встречу с Сергеем на 12', 'Перенеси событие несуществующее на завтра',
+      'Перенеси встречу на 12', 'Перенеси событие стоматолог на 31.02',
+      'Перенеси событие планёрка на завтра'].forEach((x) => K.parse(x, { source: 'test' }));
+    ok('A455 parse переноса события остаётся чистым: ноль изменений событий и «Истории»',
+      JSON.stringify(env.state) === pureBefore);
+
+    ok('A456 «Перенеси задачу … на завтра» остаётся задачей',
+      K.parse('Перенеси задачу купить масло на завтра').action === 'task.reschedule');
+    ok('A457 «Добавь завтра в 10 встречу с Сергеем» остаётся созданием события',
+      K.parse('Добавь завтра в 10 встречу с Сергеем').action === 'event.create');
+    ok('A458 доменный приоритет: заметка/напоминание/покупка не перехватываются переносом события',
+      K.parse('Создай заметку перенести встречу').action === 'note.create' &&
+      K.parse('Напомни перенести встречу завтра').action === 'reminder.create' &&
+      K.parse('Добавь покупку календарь').action === 'shopping.purchase.create');
+    ok('A459 удаление события текстом по-прежнему честно не поддержано',
+      K.parse('Удали встречу с Сергеем').error.code === 'UNSUPPORTED_DELETE');
+    ok('A460 изменение других полей события — честный отказ, а не догадка',
+      K.parse('Переименуй встречу с Сергеем в планёрку').error.code === 'UNSUPPORTED_EVENT_FIELD' &&
+      K.parse('Измени место встречи с Сергеем на офис').error.code === 'UNSUPPORTED_EVENT_FIELD');
+    ok('A461 невалидные дата и время отклоняются без мутаций',
+      K.parse('Перенеси встречу с Сергеем на 31.02').error.code === 'DATE_INVALID' &&
+      K.parse('Перенеси встречу с Сергеем на 25:00').error.code === 'TIME_INVALID' &&
+      K.parse('Перенеси встречу с Сергеем на 10:75').error.code === 'TIME_INVALID');
+    ok('A462 непонятый «куда» не отбрасывается молча',
+      K.parse('Перенеси встречу с Сергеем на кухню').error.code === 'EVENT_WHEN_REQUIRED');
+    ok('A463 фраза без «на …» получает честное объяснение формы, а не случайный разбор',
+      K.parse('Перенеси встречу с Сергеем').error.code === 'UNSUPPORTED_EVENT_UPDATE');
+    ok('A464 кириллические границы: слово «встреча» внутри текста другой команды не включает перенос',
+      K.parse('Создай задачу подготовить встречу').action === 'task.create' &&
+      K.parse('Что у меня завтра').action === 'day.plan');
+
+    /* --- подтверждение обязательно даже при EXACT --- */
+    const snapshotBefore = JSON.stringify(env.state.events);
+    const ask = K.run('Перенеси встречу с Сергеем на 12', { source: 'assistant' });
+    ok('A465 EXACT перенос НЕ выполняется сразу — требуется подтверждение',
+      ask.result.status === 'confirmation_required' && ask.result.resolution === 'EXACT');
+    ok('A466 до Confirm событие не изменилось ни в одном поле и «История» не выросла',
+      JSON.stringify(env.state.events) === snapshotBefore && env.state.history.length === baseHistory);
+    ok('A467 сводка показывает событие, было → станет, без id/JSON/имён действий',
+      /Встреча с Сергеем/.test(ask.response) && /15:00–16:00/.test(ask.response) &&
+      /12:00–13:00/.test(ask.response) && !/(event\.|intent|JSON|"id")/i.test(ask.response), ask.response);
+
+    const doneMove = K.execute(ask.intent, { source: 'assistant', confirmed: true });
+    const movedMeeting = C.events.getEvent(meeting.id).entity;
+    ok('A468 Confirm выполняет перенос через существующий Common Action',
+      doneMove.ok && doneMove.action === 'event.reschedule' && movedMeeting.startTime === '12:00');
+    ok('A469 длительность сохраняется: окончание сдвигается на ту же величину (Product Decision «Event update text commands», DECISIONS.md, 2026-09-29)',
+      movedMeeting.endTime === '13:00' && movedMeeting.date === FIXED);
+    ok('A470 перенос пишет ровно одну запись «Истории» общего слоя с Undo прежних полей',
+      env.state.history.length === baseHistory + 1 && env.state.history[0].action === 'event.update' &&
+      env.state.history[0].undo.type === 'fields' && env.state.history[0].undo.fields.startTime === '15:00');
+    ok('A471 ответ человеческий: было → станет, без служебных терминов',
+      /Встреча с Сергеем/.test(doneMove && K.respond(doneMove)) && /12:00–13:00/.test(K.respond(doneMove)));
+
+    /* --- перенос только даты не трогает время --- */
+    const askDate = K.run('Перенеси событие стоматолог на завтра', { source: 'assistant' });
+    ok('A472 перенос даты тоже требует подтверждения', askDate.result.status === 'confirmation_required');
+    K.execute(askDate.intent, { source: 'assistant', confirmed: true });
+    const movedDentist = C.events.getEvent(dentist.id).entity;
+    ok('A473 при переносе даты время начала и окончания сохраняется полностью',
+      movedDentist.date === '2026-09-29' && movedDentist.startTime === '10:00' && movedDentist.endTime === '10:45');
+
+    /* --- событие без окончания --- */
+    const askGym = K.run('Перенеси событие спортзал на 19:00', { source: 'assistant' });
+    K.execute(askGym.intent, { source: 'assistant', confirmed: true });
+    const movedGym = C.events.getEvent(gym.id).entity;
+    ok('A474 у события без окончания меняется только начало', movedGym.startTime === '19:00' && movedGym.endTime === '');
+
+    /* --- INFERRED и AMBIGUOUS --- */
+    const inferred = K.run('Перенеси встречу на 9:00', { source: 'assistant' });
+    ok('A475 единственное частичное совпадение — INFERRED, и тоже с подтверждением',
+      inferred.result.status === 'confirmation_required' && inferred.result.resolution === 'INFERRED' &&
+      inferred.result.target.id === meeting.id);
+    const second = mk({ title: 'Встреча с врачом', date: FIXED, startTime: '09:00', endTime: '09:30' });
+    const histBeforeAmb = env.state.history.length;
+    const amb = K.run('Перенеси встречу на 14:00', { source: 'assistant' });
+    ok('A476 несколько подходящих событий — уточнение без мутации',
+      amb.result.status === 'ambiguous' && amb.result.code === 'AMBIGUOUS_EVENT' &&
+      amb.result.candidates.length === 2 && env.state.history.length === histBeforeAmb);
+    ok('A477 кандидаты показывают название, дату и время (то, что помогает выбрать)',
+      amb.result.candidates.every((c) => c.title && c.dateISO && c.kind === 'event') &&
+      /Встреча с врачом/.test(amb.response) && !/"id"/.test(amb.response));
+
+    /* --- событие не найдено: НЕ создавать новое --- */
+    const eventsBeforeMiss = env.state.events.length;
+    const miss = K.run('Перенеси встречу с бухгалтером на завтра', { source: 'assistant' });
+    ok('A478 несуществующее событие: честный отказ, нового события не создаётся',
+      miss.result.status === 'not_found' && miss.result.code === 'EVENT_NOT_FOUND' &&
+      env.state.events.length === eventsBeforeMiss && env.state.history.length === histBeforeAmb &&
+      /не создаю/i.test(miss.response));
+
+    /* --- повторяющиеся события и «весь день» --- */
+    const rep = K.run('Перенеси событие планёрка на завтра', { source: 'assistant' });
+    ok('A479 повторяющееся событие честно не переносится текстом',
+      rep.result.code === 'UNSUPPORTED_EVENT_REPEAT' && C.events.getEvent(weekly.id).entity.date === '2026-09-29' &&
+      env.state.history.length === histBeforeAmb);
+    const allDayTime = K.run('Перенеси событие день рождения сергея на 12:00', { source: 'assistant' });
+    ok('A480 событию «весь день» нельзя молча выдумать время',
+      allDayTime.result.code === 'UNSUPPORTED_EVENT_ALLDAY_TIME' && env.state.history.length === histBeforeAmb);
+    const allDayDate = K.run('Перенеси событие день рождения сергея на пятницу', { source: 'assistant' });
+    ok('A481 дату события «весь день» перенести можно — с подтверждением',
+      allDayDate.result.status === 'confirmation_required' && /весь день/.test(allDayDate.response));
+    K.execute(allDayDate.intent, { source: 'assistant', confirmed: true });
+    ok('A482 после подтверждения событие «весь день» осталось «весь день»',
+      C.events.getEvent(birthday.id).entity.allDay === true && C.events.getEvent(birthday.id).entity.date === '2026-10-02');
+
+    /* --- перенос «в то же самое» и выход за полночь --- */
+    const histBeforeNoop = env.state.history.length;
+    const noop = K.run('Перенеси событие стоматолог на 10:00', { source: 'assistant' });
+    ok('A483 перенос на уже стоящее время не создаёт ни мутации, ни записи «Истории»',
+      noop.ok && noop.result.status === 'info' && noop.result.data.noop === true &&
+      env.state.history.length === histBeforeNoop);
+    const late = mk({ title: 'Ночная смена', date: FIXED, startTime: '22:00', endTime: '23:30' });
+    const histBeforeOverflow = env.state.history.length;
+    const overflow = K.run('Перенеси событие ночная смена на 23:00', { source: 'assistant' });
+    ok('A484 перенос, при котором окончание ушло бы за полночь, честно отклоняется',
+      overflow.result.code === 'EVENT_TIME_OVERFLOW' && C.events.getEvent(late.id).entity.startTime === '22:00' &&
+      env.state.history.length === histBeforeOverflow);
+
+    /* --- stale: цель изменилась между подтверждением и Confirm --- */
+    const staleAsk = K.run('Перенеси встречу с врачом на 16:00', { source: 'assistant' });
+    const expected = {
+      title: staleAsk.result.target.title, dateISO: staleAsk.result.target.dateISO,
+      time: staleAsk.result.target.time, endTime: staleAsk.result.target.endTime, allDay: staleAsk.result.target.allDay
+    };
+    C.events.updateEvent(second.id, { startTime: '08:00', endTime: '08:30' }, { source: 'test' });
+    const histBeforeStale = env.state.history.length;
+    const staleRes = K.execute(staleAsk.intent, {
+      source: 'assistant', confirmed: true, targetId: second.id, expectedTitle: expected.title, expected
+    });
+    ok('A485 изменённое снаружи событие не переносится вслепую: безопасный отказ',
+      staleRes.status === 'stale' && C.events.getEvent(second.id).entity.startTime === '08:00' &&
+      env.state.history.length === histBeforeStale);
+    C.events.deleteEvent(second.id, { source: 'test' });
+    const histBeforeGone = env.state.history.length;
+    const goneRes = K.execute(staleAsk.intent, {
+      source: 'assistant', confirmed: true, targetId: second.id, expectedTitle: expected.title, expected
+    });
+    ok('A486 удалённое до Confirm событие даёт безопасный отказ без мутаций',
+      goneRes.status === 'stale' && env.state.history.length === histBeforeGone);
+
+    ok('A487 перенос события использует только существующие Common Actions/Queries',
+      /C\.events\.updateEvent\(/.test(src) && /C\.events\.getEvent\(/.test(src) &&
+      !/C\.events\.deleteEvent\(/.test(src.replace(/\/\*[\s\S]*?\*\//g, '')) &&
+      !/EventCommandSession|EventResolutionEngine|EventPendingStore/.test(src.replace(/\/\*[\s\S]*?\*\//g, '')));
+    ok('A488 относительные даты переноса берутся из общих часов, а не из системного времени',
+      K.parse('Перенеси событие стоматолог на завтра', { todayISO: '2026-12-31' }).params.dateISO === '2027-01-01');
+
+    /* --- Shopping F1: падежная форма «истекшей/истёкшей» (регресс после PR #33) --- */
+    const warrantyBefore = JSON.stringify(env.state);
+    const w1 = K.parse('Покажи покупки с истекшей гарантией');
+    const w2 = K.parse('Покажи покупки с истёкшей гарантией');
+    ok('A489 «покупки с истекшей гарантией» попадает в запрос об истёкшей гарантии',
+      w1.ok && w1.action === 'shopping.purchase.warranty' && w1.params.mode === 'expired');
+    ok('A490 форма с «ё» («истёкшей») понимается так же',
+      w2.ok && w2.action === 'shopping.purchase.warranty' && w2.params.mode === 'expired');
+    ok('A491 прежние формы «истекла» и «просроченные» продолжают работать',
+      K.parse('Покажи покупки у которых истекла гарантия').params.mode === 'expired' &&
+      K.parse('Покажи покупки с просроченной гарантией').params.mode === 'expired');
+    ok('A492 «скоро закончится» и «с гарантией» не сломаны этой правкой',
+      K.parse('Какие гарантии скоро закончатся?').params.mode === 'soon' &&
+      K.parse('Покажи покупки с истекающей гарантией').params.mode === 'soon' &&
+      K.parse('Покажи покупки с гарантией').params.mode === 'present');
+    K.run('Покажи покупки с истекшей гарантией', { source: 'assistant' });
+    ok('A493 гарантийный вопрос остаётся read-only: ноль мутаций и ноль «Истории»',
+      JSON.stringify(env.state) === warrantyBefore);
+  }
+
   /* ---- A12. Второго слоя действий и своей истории не появилось ---- */
   ok('A150 движок не пишет в состояние напрямую',
     !/AvenState|\.save\s*\(\)|state\s*\./.test(src.replace(/\/\*[\s\S]*?\*\//g, '')));
@@ -1935,6 +2135,168 @@ async function partB() {
     }
   }
 
+  /* ---- B3g. Перенос события командой: подтверждение, согласованность, Undo (Stage 2, итерация 8) ----
+     Владелец: изменение уже существующего Event — подтверждение ВСЕГДА. Здесь это
+     проверяется через настоящий Assistant adapter и настоящие разделы. */
+  {
+    const p = await load('#/assistant');
+    const C = p.C();
+    const today = C.dates.todayISO();
+    const target = () => p.st().events.filter((e) => e.title === 'Стоматолог')[0];
+    const before = JSON.parse(JSON.stringify(target()));
+    const histBefore = p.H().length;
+
+    const ask = await p.say('Перенеси событие стоматолог на 12:00');
+    ok('B120 перенос события спрашивает подтверждение прямо в помощнике',
+      !!p.q('[data-action="command-confirm"]') && !!p.q('[data-action="command-cancel"]'), ask);
+    ok('B121 сводка показывает событие и «было → станет» без служебных терминов',
+      /Стоматолог/.test(ask) && /10:00–11:00/.test(ask) && /12:00–13:00/.test(ask) &&
+      !/(event\.|intent|JSON)/i.test(ask), ask);
+    ok('B122 до подтверждения событие и «История» не изменились',
+      JSON.stringify(target()) === JSON.stringify(before) && p.H().length === histBefore);
+
+    /* Отмена кнопкой: ноль изменений */
+    p.click(p.q('[data-action="command-cancel"]'));
+    await sleep(200);
+    ok('B123 «Отмена» закрывает перенос без единого изменения',
+      JSON.stringify(target()) === JSON.stringify(before) && p.H().length === histBefore &&
+      !p.w.Aven._commandSession.pending());
+    ok('B124 после отмены фокус возвращается в поле ввода',
+      p.d.activeElement && p.d.activeElement.id === 'chat-input');
+
+    /* Отмена клавишей Escape */
+    await p.say('Перенеси событие стоматолог на 12:00');
+    p.key(p.q('#chat-input'), 'Escape');
+    await sleep(200);
+    ok('B125 Escape тоже отменяет перенос: ноль мутаций, ноль «Истории»',
+      JSON.stringify(target()) === JSON.stringify(before) && p.H().length === histBefore &&
+      !p.w.Aven._commandSession.pending());
+
+    /* Новая независимая команда сбрасывает незавершённый перенос */
+    await p.say('Перенеси событие стоматолог на 12:00');
+    const other = await p.say('Что у меня завтра?');
+    ok('B126 новая независимая команда сбрасывает незавершённый перенос, событие не тронуто',
+      /завтра/i.test(other) && JSON.stringify(target()) === JSON.stringify(before) &&
+      p.H().length === histBefore && !p.w.Aven._commandSession.pending());
+
+    /* Подтверждение: двойной клик выполняет ровно один перенос */
+    await p.say('Перенеси событие стоматолог на 12:00');
+    const confirmBtn = p.q('[data-action="command-confirm"]');
+    p.click(confirmBtn);
+    p.click(confirmBtn);
+    await sleep(300);
+    const moved = target();
+    ok('B127 Confirm переносит событие через общий слой (длительность сохранена)',
+      moved.date === today && C.events.start(moved) === '12:00' && C.events.end(moved) === '13:00');
+    ok('B128 двойное подтверждение даёт ровно один перенос и одну запись «Истории»',
+      p.H().length === histBefore + 1 && p.H()[0].action === 'event.update' &&
+      p.st().events.filter((e) => e.title === 'Стоматолог').length === 1);
+    ok('B129 повторное подтверждение уже нечего выполнять — pending пуст',
+      !p.w.Aven._commandSession.pending());
+
+    await p.go('#/calendar');
+    ok('B130 «Календарь» показывает событие на новом времени',
+      p.text().indexOf('Стоматолог') >= 0 && p.text().indexOf('12:00') >= 0 && !p.broken());
+    await p.go('#/day');
+    ok('B131 «День» показывает событие на выбранной дате в новом времени',
+      p.text().indexOf('Стоматолог') >= 0 && p.text().indexOf('12:00') >= 0 && !p.broken());
+    await p.go('#/home');
+    ok('B132 «Главная» и общий запрос видят то же событие',
+      C.events.getEventsForDate(today).items.some((e) => e.id === moved.id && C.events.start(e) === '12:00'));
+    await p.go('#/history');
+    ok('B133 перенос попал в общую «Историю» с кнопкой отмены и полями «было → стало»',
+      p.text().indexOf('Стоматолог') >= 0 && !!p.q('[data-action="hist-undo"]') &&
+      p.H()[0].changes.some((c) => /10:00/.test(String(c.from)) && /12:00/.test(String(c.to))));
+
+    p.w.Aven.undoAction(p.H().filter((e) => e.action === 'event.update')[0].id);
+    await sleep(300);
+    const restored = target();
+    ok('B134 Undo возвращает прежние дату и время события',
+      C.events.start(restored) === '10:00' && C.events.end(restored) === '11:00' && restored.date === before.date);
+    await p.go('#/calendar');
+    ok('B135 после Undo «Календарь» снова показывает прежнее время',
+      p.text().indexOf('10:00') >= 0 && !p.broken());
+    p.dom.window.close();
+  }
+
+  /* ---- B3h. Перенос события: перенос между датами, уточнение, честные отказы ---- */
+  {
+    const p = await load('#/assistant');
+    const C = p.C();
+    const today = C.dates.todayISO(), tomorrow = C.dates.todayISO(1);
+    const dentist = () => p.st().events.filter((e) => e.title === 'Стоматолог')[0];
+    const histBefore = p.H().length;
+
+    await p.say('Перенеси событие стоматолог на завтра');
+    p.click(p.q('[data-action="command-confirm"]'));
+    await sleep(300);
+    ok('B136 перенос на другую дату сохраняет время события',
+      dentist().date === tomorrow && C.events.start(dentist()) === '10:00' && C.events.end(dentist()) === '11:00');
+    ok('B137 на старой дате события больше нет, на новой — есть',
+      !C.events.getEventsForDate(today).items.some((e) => e.id === dentist().id) &&
+      C.events.getEventsForDate(tomorrow).items.some((e) => e.id === dentist().id));
+    await p.go('#/day');
+    const timeline = () => (p.q('[data-tour="day-timeline"]') || { textContent: '' }).textContent;
+    ok('B138 расписание «Дня» на сегодня больше не показывает перенесённое событие',
+      timeline().indexOf('Стоматолог') < 0 && !p.broken());
+    p.w.Aven.undoAction(p.H().filter((e) => e.action === 'event.update')[0].id);
+    await sleep(300);
+    ok('B139 Undo возвращает событие на прежнюю дату, «День» снова его видит',
+      dentist().date === today && C.events.getEventsForDate(today).items.some((e) => e.id === dentist().id) &&
+      timeline().indexOf('Стоматолог') >= 0);
+
+    await p.go('#/assistant');
+    const eventsBefore = p.st().events.length;
+    const eventsSnapshot = JSON.stringify(p.st().events);
+    const histAfterUndo = p.H().length;
+    const miss = await p.say('Перенеси встречу с бухгалтером на завтра');
+    ok('B140 несуществующее событие: честный ответ, нового события не создано',
+      /не нашла/i.test(miss) && p.st().events.length === eventsBefore && p.H().length === histAfterUndo, miss);
+    const rep = await p.say('Перенеси событие планёрка на завтра');
+    ok('B141 повторяющееся событие честно не переносится текстом',
+      /повторяющ/i.test(rep) && JSON.stringify(p.st().events) === eventsSnapshot && p.H().length === histAfterUndo, rep);
+    const del = await p.say('Удали встречу с Сергеем');
+    ok('B142 удаление события текстом по-прежнему не выполняется',
+      /Удалять/i.test(del) && JSON.stringify(p.st().events) === eventsSnapshot && p.H().length === histAfterUndo, del);
+
+    /* Уточнение: два подходящих события */
+    C.events.createEvent({ title: 'Встреча с Сергеем', date: today, startTime: '15:00', endTime: '16:00' }, { source: 'test' });
+    C.events.createEvent({ title: 'Встреча с врачом', date: today, startTime: '17:00', endTime: '17:30' }, { source: 'test' });
+    await p.go('#/assistant');
+    const histBeforeAmb = p.H().length;
+    const amb = await p.say('Перенеси встречу на 19:00');
+    const choices = p.qa('[data-action="command-choice"]');
+    ok('B143 несколько подходящих событий показываются кнопками выбора, без мутации',
+      choices.length === 2 && p.H().length === histBeforeAmb, amb);
+    ok('B144 варианты подписаны датой и временем события, а не статусом задачи',
+      /19:00|17:00|15:00/.test(choices.map((b) => b.textContent).join(' ')) &&
+      !/Открыта|Выполнена/.test(choices.map((b) => b.textContent).join(' ')));
+    ok('B145 группа вариантов объявлена вспомогательным технологиям как выбор события',
+      (p.q('.command-choices') || {}).getAttribute &&
+      p.q('.command-choices').getAttribute('aria-label') === 'Выберите событие');
+    p.click(choices[0]);
+    await sleep(300);
+    ok('B146 выбор варианта — ещё не перенос: подтверждение показывается всё равно',
+      !!p.q('[data-action="command-confirm"]') && p.H().length === histBeforeAmb);
+    p.click(p.q('[data-action="command-confirm"]'));
+    await sleep(300);
+    ok('B147 только после подтверждения выбранное событие переносится один раз',
+      p.H().length === histBeforeAmb + 1 && p.H()[0].action === 'event.update');
+    p.dom.window.close();
+  }
+
+  /* ---- B3i. Перенос события на узком экране ---- */
+  {
+    const p = await load('#/assistant', 320);
+    await p.say('Перенеси событие стоматолог на 12:00');
+    const wrap = p.q('.command-confirm');
+    ok('B148 на ширине 320 кнопки подтверждения остаются настоящими кнопками',
+      !!wrap && wrap.querySelectorAll('button').length === 2 && !p.broken());
+    ok('B149 сводка переноса доступна как текст (без обрезки разметкой) и объявляется в aria-live',
+      /Стоматолог/.test(p.q('#chat').textContent) && p.q('#chat').getAttribute('aria-live') === 'polite');
+    p.dom.window.close();
+  }
+
   /* ---- B6. Справка и обучение ---- */
   {
     const p = await load('#/help');
@@ -2040,6 +2402,35 @@ async function partB() {
     ok('B99f обучение по командам включает шаг про (не)связь покупки с финансами',
       p.w.AvenTutorial.definitions.commands.steps.some((x) => /Запишите покупку/.test(x.title)) &&
       p.w.AvenTutorial.definitions.commands.steps.some((x) => /не одно и то же/.test(x.title) && /Покупка/.test(x.title)));
+    /* Stage 2, итерация 8: перенос события текстом — справка объясняет форму команды,
+       обязательное подтверждение, сохранение длительности и честные ограничения. */
+    const evArticle = (p.w.AvenHelp.articles.find((a) => a.id === 'cmd-events') || {}).body || '';
+    ok('B100a в справке есть отдельная статья о переносе события текстом',
+      evArticle.length > 200 && /Перенеси встречу с Сергеем на завтра/.test(evArticle));
+    ok('B100b справка объясняет, что подтверждение спрашивается ВСЕГДА и показывает «было → станет»',
+      /всегда спрашивает/i.test(evArticle) && /→/.test(evArticle) && /Подтвердить/.test(evArticle));
+    ok('B100c справка объясняет отмену и отсутствие изменений до подтверждения',
+      /Escape/.test(evArticle) && /не меняется ничего/.test(evArticle));
+    ok('B100d справка объясняет сохранение длительности простыми словами',
+      /длительность сохраняется/i.test(evArticle) && /12:00–12:45/.test(evArticle));
+    ok('B100e справка объясняет уточнение и что «не нашла» не создаёт новое событие',
+      /выбор варианта ещё не перенос/i.test(evArticle) && /НЕ создаст вместо него новое/.test(evArticle));
+    ok('B100f справка объясняет History/Undo для переноса',
+      /«Историю» одной записью/.test(evArticle) && /прежние дату и время/.test(evArticle));
+    ok('B100g справка честно перечисляет, чего перенос текстом не умеет',
+      /повторяющиеся события/i.test(evArticle) && /весь день/.test(evArticle) && /удалять событие/i.test(evArticle));
+    ok('B100h справка простыми словами говорит про часовые пояса',
+      /Часовые пояса прототип не пересчитывает/.test(evArticle) && !/timezone|UTC/i.test(evArticle));
+    ok('B100i раздел «Календарь» в справке тоже упоминает перенос текстом',
+      /текстовой командой|короткой фразой/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'calendar-move-command') || {}).body || ''));
+    ok('B100j статья о переносе события находится поиском',
+      p.w.AvenHelp.search('перенести событие').some((a) => a.id === 'cmd-events'));
+    ok('B100k обучение по командам включает сценарий переноса события с подтверждением',
+      p.w.AvenTutorial.definitions.commands.steps.some((x) => /Найдите событие и попросите перенести/.test(x.title)) &&
+      p.w.AvenTutorial.definitions.commands.steps.some((x) => /было → станет/.test(x.title)) &&
+      p.w.AvenTutorial.definitions.commands.steps.some((x) => /Проверьте «Календарь» и «День»/.test(x.title)));
+    ok('B100l обучение по «Календарю» упоминает перенос текстом, не обещая большего',
+      p.w.AvenTutorial.definitions.calendar.steps.some((x) => /перенести текстом/i.test(x.title) && /подтвержден/i.test(x.text)));
     ok('B67l раздел «Уведомления» тоже упоминает создание текстом',
       /текстовой командой/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'notif-reminders') || {}).body || ''));
     p.dom.window.close();
