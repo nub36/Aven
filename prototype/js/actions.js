@@ -1650,12 +1650,13 @@ window.AvenActions = (function () {
   function autoLinkedOp(item) {
     return item && item.financeOpId ? getById(opsList(), item.financeOpId) : null;
   }
-  function autoFinancePayload(kind, item) {
+  function autoFinancePayload(kind, item, finance) {
+    finance = finance || {};
     const iso = kind === 'doc' ? todayISO() : (autoDateISO(item) || todayISO());
     return {
       type: 'expense',
-      cat: finCategoriesList().indexOf('Авто') >= 0 ? 'Авто' : (finCategoriesList()[0] || 'Другое'),
-      account: ((finAccountsList()[0] || {}).id || 'card'),
+      cat: finance.cat || (finCategoriesList().indexOf('Авто') >= 0 ? 'Авто' : (finCategoriesList()[0] || 'Другое')),
+      account: finance.account || ((finAccountsList()[0] || {}).id || 'card'),
       title: kind === 'fuel' ? autoTitle(kind, item) : 'Авто: ' + autoTitle(kind, item),
       amount: autoCost(kind, item),
       dateISO: iso,
@@ -1664,9 +1665,9 @@ window.AvenActions = (function () {
   }
   /* Связанная финансовая операция — не копия записи авто, а обычная операция
      «Финансов» со ссылкой на источник. Одна сумма, один источник истины. */
-  function autoCreateLinkedFinance(kind, item) {
+  function autoCreateLinkedFinance(kind, item, finance) {
     if (!(autoCost(kind, item) > 0)) return null;
-    const res = createOperation(Object.assign(autoFinancePayload(kind, item), {}), {
+    const res = createOperation(Object.assign(autoFinancePayload(kind, item, finance), {}), {
       silent: true, link: { carKind: kind, carItemId: item.id }
     });
     if (!res.ok) return null;
@@ -1694,12 +1695,27 @@ window.AvenActions = (function () {
     const idPrefix = kind === 'fuel' ? 'f' : kind === 'expense' ? 'ce' : kind === 'service' ? 'cs' : 'cd';
     const item = Object.assign({ id: S.id(idPrefix) }, fields, kind === 'doc' ? {} : { financeOpId: '' });
     delete item.rawLiters; delete item.rawSum; delete item.rawKm; delete item.rawAmount; delete item.rawCost; delete item.rawRemind;
-    list.unshift(item);
     const wasMileage = car.mileage;
-    if (kind === 'fuel' && item.km > (Number(car.mileage) || 0)) car.mileage = item.km;
     const wantLink = kind !== 'doc' && (params || {}).linkFinance !== false && !!(params || {}).linkFinance;
-    const link = wantLink ? autoCreateLinkedFinance(kind, item) : null;
-    save();
+    /* Для связанной команды сначала создаётся обычная Finance operation через тот
+       же Common Action, и только после её успеха запись попадает в Auto. Поэтому
+       ошибка счёта/категории не оставляет половину пользовательского действия. */
+    const link = wantLink ? autoCreateLinkedFinance(kind, item, (params || {}).finance) : null;
+    if (wantLink && !link) return err('car.' + kind + '.create', 'FINANCE_LINK_FAILED', 'Не удалось создать связанный расход — запись авто не создана');
+    /* Finance Common Action уже мог успешно изменить ops и balance. Любой сбой
+       следующего Auto-шага обязан компенсировать эту часть до возврата ошибки:
+       linked action для пользователя атомарен и не оставляет orphan expense. */
+    try {
+      list.unshift(item);
+      if (kind === 'fuel' && item.km > (Number(car.mileage) || 0)) car.mileage = item.km;
+      save();
+    } catch (failure) {
+      const inserted = indexOfId(list, item.id);
+      if (inserted >= 0) list.splice(inserted, 1);
+      car.mileage = wasMileage;
+      if (link) deleteOperation(link.op.id, { silent: true });
+      return err('car.' + kind + '.create', 'AUTO_CREATE_FAILED', 'Не удалось создать запись авто — связанный расход отменён');
+    }
     const steps = [{ type: 'remove', list: AUTO_LIST_PATH[kind], id: item.id }];
     if (link) steps.push({ type: 'remove', list: 'ops', id: link.op.id });
     if (car.mileage !== wasMileage) steps.push({ type: 'value', path: 'car.mileage', value: wasMileage });

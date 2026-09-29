@@ -401,7 +401,7 @@ function partA() {
     ok('A143 список возможностей честно перечисляет и то, чего движок не умеет',
       /Пока не умею/.test(cap.response) && /удаление записей текстом/.test(cap.response));
     ok('A144 перечень возможностей доступен как данные для интерфейса и справки',
-      K9.supported().queries.length >= 6 && K9.supported().mutations.length === 7 &&
+      K9.supported().queries.length >= 6 && K9.supported().mutations.length === 9 &&
       K9.supported().notYet.length >= 4 && K9.examples().length >= 6);
   }
 
@@ -1046,6 +1046,88 @@ function partA() {
       !/FinanceCommandSession|FinanceConfirmationStore/.test(src));
   }
 
+  /* ---- A16. Авто текстом (Stage 2, итерация 6) ---- */
+  {
+    const env = coreSandbox();
+    env.state.finAccounts = [{ id: 'card', name: 'Карта', balance: 10000 }, { id: 'cash', name: 'Наличные', balance: 5000 }];
+    env.state.finCategories = ['Авто', 'Продукты'];
+    const K = env.K, C = env.C;
+    const f = K.parse('Запиши заправку 45 л на 2500 рублей, пробег 104800 сегодня', { source: 'test' });
+    ok('A300 заправка разбирается как Auto create', f.ok && f.action === 'auto.fuel.create' && f.kind === 'mutation');
+    ok('A301 литры отображаются в существующее поле liters', f.params.liters === 45);
+    ok('A302 стоимость переиспользует money parser и остаётся целыми копейками', f.params.amountMinor === 250000);
+    ok('A303 пробег отображается в km', f.params.mileage === 104800);
+    ok('A304 дата берётся из общих часов', f.params.dateISO === FIXED);
+    const beforeParse = JSON.stringify(env.state);
+    ['Запиши заправку 35 л сегодня', 'Запиши обслуживание замена масла на 3500 рублей',
+      'Запиши заправку 0 л', 'Запиши заправку 40 л 31.02'].forEach((x) => K.parse(x, { source: 'test' }));
+    ok('A305 Auto parse чист: не меняет Auto, Finance и History', JSON.stringify(env.state) === beforeParse);
+    const zeroLiters = K.parse('Запиши заправку 0 л'), negativeLiters = K.parse('Запиши заправку -5 л');
+    ok('A306 нулевые/отрицательные литры отклоняются',
+      zeroLiters.ok === false && negativeLiters.ok === false,
+      JSON.stringify({ zero: zeroLiters.error, negative: negativeLiters.error, negParams: negativeLiters.params }));
+    ok('A307 невалидная дата отклоняется', K.parse('Запиши заправку 40 л 31.02').error.code === 'DATE_INVALID');
+    ok('A307a отрицательный mileage и malformed service cost не становятся payload',
+      !K.parse('Запиши заправку 40 л пробег -5 км').ok &&
+      !K.parse('Запиши обслуживание масло пробег -5 км').ok &&
+      !K.parse('Запиши обслуживание масло на 5к рублей').ok);
+
+    const ops0 = env.state.ops.length, hist0 = env.state.history.length;
+    const autoOnly = K.run('Запиши заправку 40 л на 2000 рублей, пробег 105500', { source: 'assistant' });
+    ok('A308 EXACT Auto-only выполняется сразу', autoOnly.ok && autoOnly.result.action === 'auto.fuel.create');
+    ok('A309 стоимость Auto-only НЕ создаёт Finance operation', env.state.ops.length === ops0 && !env.state.car.fuel[0].financeOpId);
+    ok('A310 Auto-only создаёт одну History entry', env.state.history.length === hist0 + 1 && env.state.history[0].action === 'car.fuel.create');
+    ok('A311 большой mileage обновляет car через Common Action', env.state.car.mileage === 105500);
+    ok('A312 ответ честно говорит, что Finance не создавались', /не создавался/.test(autoOnly.response) && /Авто/.test(autoOnly.response));
+
+    const svc = K.run('Запиши обслуживание замена масла на 3500 рублей, пробег 105600 вчера', { source: 'assistant' });
+    ok('A313 service grammar создаёт обслуживание', svc.ok && svc.result.action === 'auto.service.create');
+    ok('A314 service mapping сохраняет title/cost/km/date',
+      env.state.car.service[0].title === 'Замена масла' && C.money.minor(env.state.car.service[0].cost) === 350000 &&
+      env.state.car.service[0].km === 105600 && C.auto.dateISO(env.state.car.service[0]) === '2026-09-27');
+    ok('A315 service cost без explicit link не создаёт расход', env.state.ops.length === ops0 && !env.state.car.service[0].financeOpId);
+
+    const linked = K.run('Запиши заправку 42 л на 2500 рублей, пробег 105700 и добавь в расходы со счета карта', { source: 'assistant' });
+    ok('A316 явный Finance qualifier включает linked flow', linked.result.status === 'confirmation_required' && linked.intent.params.linkFinance);
+    ok('A317 linked Finance подтверждается ALWAYS даже при EXACT', linked.intent.requiresConfirmation && linked.result.code === 'CONFIRMATION_REQUIRED');
+    ok('A318 summary показывает обе сущности, сумму, категорию и счёт',
+      /Записать заправку/.test(linked.response) && /добавить расход/i.test(linked.response) && /Авто/.test(linked.response) && /Карта/.test(linked.response));
+    const fuelBefore = env.state.car.fuel.length, linkedOpsBefore = env.state.ops.length, linkedHistBefore = env.state.history.length;
+    ok('A319 до Confirm нет Auto/Finance/History mutation', fuelBefore === 1 && linkedOpsBefore === 0 && linkedHistBefore === 2);
+    const confirmed = K.execute(linked.intent, { source: 'assistant', confirmed: true });
+    ok('A320 Confirm атомарно создаёт ровно Auto + Finance', confirmed.ok && env.state.car.fuel.length === fuelBefore + 1 && env.state.ops.length === linkedOpsBefore + 1);
+    ok('A321 linked запись имеет двустороннюю ссылку',
+      !!env.state.car.fuel[0].financeOpId && env.state.ops[0].carItemId === env.state.car.fuel[0].id);
+    ok('A322 linked action пишет одну согласованную History entry',
+      env.state.history.length === linkedHistBefore + 1 && env.state.history[0].action === 'car.fuel.create' && env.state.history[0].undo.type === 'batch');
+    ok('A323 linked Undo spec удаляет обе сущности и восстанавливает mileage/balance',
+      env.state.history[0].undo.steps.filter((x) => x.type === 'remove').length === 2 &&
+      env.state.history[0].undo.steps.some((x) => x.path === 'car.mileage') && Array.isArray(env.state.history[0].undo.adjust));
+    ok('A324 linked Finance использует выбранный существующий счёт/категорию',
+      env.state.ops[0].account === 'card' && env.state.ops[0].cat === 'Авто');
+
+    const missing = K.run('Запиши обслуживание фильтры на 1500 рублей и учти в финансах', { source: 'assistant' });
+    ok('A325 linked flow без счёта уточняет, не выбирает молча', missing.result.status === 'ambiguous' && missing.result.slot === 'account');
+    const unknown = K.run('Запиши обслуживание фильтры на 1500 рублей и учти в финансах со счета банк', { source: 'assistant' });
+    ok('A326 unknown account безопасно отклоняется', unknown.result.status === 'not_found');
+    const staleIntent = K.parse('Запиши обслуживание фильтры на 1500 рублей и учти в финансах со счета карта');
+    env.state.finAccounts = env.state.finAccounts.filter((x) => x.id !== 'card');
+    const stale = K.execute(staleIntent, { source: 'assistant', confirmed: true, slots: { account: 'card' } });
+    ok('A327 stale account не оставляет partial Auto/Finance', stale.status === 'stale' && env.state.car.service.length === 1 && env.state.ops.length === 1);
+    const staleCategoryIntent = K.parse('Запиши обслуживание фильтры на 1500 рублей и учти в финансах со счета наличные');
+    env.state.finCategories = env.state.finCategories.filter((x) => x !== 'Авто');
+    const staleCategory = K.execute(staleCategoryIntent, { source: 'assistant', confirmed: true });
+    ok('A327a исчезнувшая Auto category не оставляет partial linked operation',
+      !staleCategory.ok && env.state.car.service.length === 1 && env.state.ops.length === 1);
+
+    ok('A328 domain: настоящая Note command не перехватывается Auto', K.parse('Создай заметку заправить машину').action === 'note.create');
+    ok('A329 domain: настоящая Finance command не перехватывается Auto', K.parse('Запиши расход 2500 на авто').action === 'finance.expense.create');
+    ok('A330 domain: настоящий Reminder не перехватывается Auto', K.parse('Напомни заправиться завтра').action === 'reminder.create');
+    ok('A331 domain: Auto prefix остаётся Auto', K.parse('Запиши заправку 40 л на 2500 рублей').action === 'auto.fuel.create');
+    ok('A332 Auto command использует только общий createRecord, без прямых записей',
+      /C\.auto\.createRecord\(kind, params, opts\)/.test(src) && !/AutoCommandSession|AutoCommandStore/.test(src));
+  }
+
   /* ---- A12. Второго слоя действий и своей истории не появилось ---- */
   ok('A150 движок не пишет в состояние напрямую',
     !/AvenState|\.save\s*\(\)|state\s*\./.test(src.replace(/\/\*[\s\S]*?\*\//g, '')));
@@ -1522,6 +1604,43 @@ async function partB() {
     }
   }
 
+  /* ---- B3a. Auto commands через настоящий Assistant adapter ---- */
+  {
+    const p = await load('#/assistant', 390);
+    const ops0 = p.st().ops.length, hist0 = p.H().length, fuel0 = p.st().car.fuel.length;
+    const reply = await p.say('Запиши заправку 41 л на 2460 рублей, пробег 105900 сегодня');
+    ok('B30 Auto-only команда проходит через Assistant и создаёт одну fuel запись',
+      p.st().car.fuel.length === fuel0 + 1 && p.H().length === hist0 + 1 && /Заправка записана/.test(reply));
+    ok('B31 Auto-only UI path не создаёт Finance', p.st().ops.length === ops0 && /не создавался/.test(reply));
+    await p.go('#/auto');
+    ok('B32 text-created fuel виден на Auto page', /41 л/.test(p.text()) && !p.broken());
+    await p.go('#/home');
+    ok('B33 Home читает обновлённый общий mileage', p.C().auto.car().mileage === 105900 && !p.broken());
+    await p.go('#/assistant');
+    const status = await p.say('Какой пробег?');
+    ok('B34 Assistant auto query видит тот же mileage', /105[\s\u00a0\u202f]?900/.test(status), status);
+
+    const linked = await p.say('Запиши обслуживание замена фильтра на 3000 рублей и учти в финансах со счета карта');
+    ok('B35 linked Auto показывает отдельные Confirm/Cancel и обе части summary',
+      !!p.q('[data-action="command-confirm"]') && !!p.q('[data-action="command-cancel"]') && /Финанс/.test(linked));
+    const service0 = p.st().car.service.length, beforeLinkedHist = p.H().length;
+    p.click(p.q('[data-action="command-cancel"]')); await sleep(150);
+    ok('B36 Cancel linked UI создаёт ничего',
+      p.st().car.service.length === service0 && p.st().ops.length === ops0 && p.H().length === beforeLinkedHist);
+    await p.say('Запиши обслуживание замена фильтра на 3000 рублей и учти в финансах со счета карта');
+    const confirm = p.q('[data-action="command-confirm"]');
+    p.click(confirm); p.click(confirm); await sleep(280);
+    ok('B37 double-click linked Confirm создаёт ровно Auto + Finance + одну History',
+      p.st().car.service.length === service0 + 1 && p.st().ops.length === ops0 + 1 && p.H().length === beforeLinkedHist + 1);
+    await p.go('#/finance');
+    ok('B38 linked расход виден в Finance totals/list', /Замена фильтра|Авто/.test(p.text()) && !p.broken());
+    const entry = p.H().find((x) => x.action === 'car.service.create' && x.undo && x.undo.type === 'batch');
+    p.w.Aven.undoAction(entry.id); await sleep(220);
+    ok('B39 общий Undo удаляет обе linked части',
+      p.st().car.service.length === service0 && p.st().ops.length === ops0);
+    p.dom.window.close();
+  }
+
   /* ---- B4. Безопасность в интерфейсе: неизвестное, неоднозначное, запрещённое ---- */
   {
     const p = await load('#/assistant');
@@ -1684,6 +1803,16 @@ async function partB() {
       p.w.AvenTutorial.definitions.commands.steps.some((x) => /Запиши расход 850/.test(x.text)) &&
       p.w.AvenTutorial.definitions.commands.steps.some((x) => /Подтвердить/.test(x.text) && /Отмена|Escape/.test(x.text)) &&
       p.w.AvenTutorial.definitions.commands.steps.some((x) => /Покажи расходы за сегодня/.test(x.text)));
+    const autoArticle = (p.w.AvenHelp.articles.find((a) => a.id === 'cmd-auto') || {}).body || '';
+    ok('B67w справка объясняет Auto grammar и поля',
+      /Запиши заправку 45 л/.test(autoArticle) && /обслуживание замена масла/.test(autoArticle) && /пробег/.test(autoArticle));
+    ok('B67x справка подчёркивает cost alone ≠ Finance',
+      /НЕ создаёт расход/.test(autoArticle) && /только данные раздела «Авто»/.test(autoArticle));
+    ok('B67y справка объясняет explicit link, confirmation и atomic cancel/Undo',
+      /добавь в расходы/.test(autoArticle) && /Подтвердить/.test(autoArticle) && /ни Auto, ни Finance/.test(autoArticle) && /вместе отменяются/.test(autoArticle));
+    ok('B67z tutorial включает Auto-only и linked confirmation',
+      p.w.AvenTutorial.definitions.commands.steps.some((x) => /Запишите заправку/.test(x.title)) &&
+      p.w.AvenTutorial.definitions.commands.steps.some((x) => /Связанное действие безопасно/.test(x.title)));
     ok('B67l раздел «Уведомления» тоже упоминает создание текстом',
       /текстовой командой/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'notif-reminders') || {}).body || ''));
     p.dom.window.close();

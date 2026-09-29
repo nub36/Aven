@@ -672,3 +672,40 @@ Command Engine нет, суммы не пересчитываются отдел
 чтобы категории с цифрами («Кафе 24») не отклонялись ложно; пробел внутри числа трактуется как
 разделитель тысяч только для групп по три цифры. Хвост категории обрезается по первой запятой.
 Проверки: A273–A284, `command-engine-check.js` — **399/399**, полный regression — **1425/1425**.
+
+## 14. Шестая итерация: Auto text commands (Stage 2, 2026-09-29)
+
+Итерация закрывает только создание **заправки** и **обслуживания** через существующий
+`AvenActions.auto.createRecord`. Документы, страховки, изменение/удаление Auto-записей, Shopping,
+Event update, destructive/bulk, morphology/fuzzy и голос не входят.
+
+Грамматика детерминирована:
+
+```
+auto.fuel.create    — «Запиши заправку <литры> л [на <стоимость> рублей]
+                       [пробег <км> км] [<дата>] [и добавь в расходы [со счёта <счёт>]]»
+auto.service.create — «Запиши обслуживание <работа> [на <стоимость> рублей]
+                       [пробег <км> км] [<дата>] [и учти в финансах [со счёта <счёт>]]»
+```
+
+Литры обязательны и больше нуля; название обслуживания обязательно. Стоимость, пробег и дата
+передаются в существующую Auto-модель (`sum/cost`, `km`, `dateISO`), дата по умолчанию — app today,
+пробег по умолчанию — текущий пробег автомобиля согласно Common Action. Деньги извлекаются тем же
+`findAmount`, что расходы, и передаются в Common Action без второго money engine. Parse чист.
+
+**Стоимость Auto сама по себе не является Finance mutation.** EXACT Auto-only команда выполняется
+сразу по общей policy и создаёт только Auto record. Finance link включается только явной фразой
+«добавь в расходы / учти в финансах». Linked flow разрешает только существующую категорию «Авто» и
+существующий счёт, затем всегда показывает общую сводку Auto + Finance. До Confirm, при Cancel/«нет»/
+Escape — ноль Auto, Finance и History. Confirm один раз вызывает `auto.createRecord(...,
+linkFinance: true)`: Common Action сначала безопасно создаёт связанную обычную Finance operation и
+только после успеха добавляет Auto record; одна History entry содержит batch Undo обеих сущностей,
+баланса и изменившегося mileage. Исчезнувший счёт/категория перед Confirm даёт stale failure.
+
+Проверка итерации 6: `command-engine-check.js` — **448/448** (+49),
+`command-session-check.js` — **116/116** (+11), `stage13-entities-check.js` — **119/119** (+3);
+полный regression — **14 suites, 1489/1489, 0 failures**.
+
+Review hardening: failure Auto insertion после успешного Finance Common Action теперь запускает
+компенсацию Finance operation, account balance и mileage в `AvenActions.auto.createRecord`; R5d
+поведенчески проверяет отсутствие orphan expense и ложной History entry. Полный regression — 1489/1489.

@@ -2401,3 +2401,27 @@ engine — `settings.voice.engine`, голос — `settings.voice.natural.voice
 2. Ответить на ключевые открытые вопросы PROJECT_PLAN.md (раздел 8): состав MVP, Canvas в MVP или нет, стек (ADR-101…108), стратегия конфликтов синхронизации.
 3. Утвердить финальный состав MVP → перевести проект на этап 1 (ADR) / затем этап 2 (реализация вертикального среза).
 4. Не начинать код до фиксации соответствующих решений со статусом «Принято» в DECISIONS.md.
+
+## 2026-09-29 — Stage 2 / Iteration 6: Auto text commands
+
+- **Задача:** добавить один домен Command Engine — заправки и обслуживание автомобиля.
+- **Сделано:** deterministic grammar `auto.fuel.create`/`auto.service.create`; Auto-only EXACT через
+  `AvenActions.auto.createRecord`; явный optional Finance link через существующий atomic Common Action
+  и единый CommandSession; confirmation/cancel/double-confirm/stale; ответы, Help, Tutorial.
+- **Политика:** cost alone ≠ Finance mutation; explicit linked Finance → confirmation ALWAYS. Та же
+  policy зафиксирована для будущего Shopping, без реализации Shopping-команд.
+- **Файлы:** command.js, actions.js, help.js, tutorial.js, command-engine/session/stage13 tests и docs.
+- **Проверено:** behavioral regressions Auto/Finance/History/mileage/domain precedence, полный набор
+  suite, node --check и git diff --check (финальные числа — в PR).
+- **Известное ограничение:** настоящий browser smoke зависит от наличия Chromium; jsdom не заменяет его.
+- **Дальше:** отдельный Shopping text commands block после review/merge Iteration 6; не начат.
+- **Финальная проверка:** command-engine 448/448, command-session 116/116,
+  stage13-entities 119/119; полный regression 14 suites, 1489/1489, 0 failures.
+
+### 2026-09-29 — независимое review PR #32: компенсация linked failure
+
+- Review воспроизвёл контролируемый сбой Auto insertion после успешного silent Finance Common Action.
+- `createAutoRecord` теперь компенсирует созданную Finance operation и баланс, возвращает mileage и
+  не пишет History; orphan expense после post-Finance failure невозможен.
+- Behavioral regression R5d принудительно вызывает этот failure path и проверяет operations, balance,
+  mileage и History. Итоговый полный regression: 14 suites, 1489/1489.

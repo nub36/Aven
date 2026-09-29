@@ -219,7 +219,12 @@ window.AvenCommand = (function () {
     UNSUPPORTED_EVENT_UPDATE: 'Переносить события текстом я пока не умею. Откройте событие в «Календаре» — там можно изменить дату и время.',
     UNSUPPORTED_FINANCE: 'Записывать расходы и доходы текстом я пока не умею. Добавьте операцию в разделе «Финансы».',
     UNSUPPORTED_REMINDER: 'Изменять, откладывать или скрывать уже созданное напоминание текстовой командой я пока не умею. Откройте «Уведомления» — там это можно сделать, и действие попадёт в «Историю». Создать новое напоминание и посмотреть список я уже умею: «Напомни купить масло на завтра», «Покажи напоминания».',
-    UNSUPPORTED_AUTO: 'Записывать заправки и обслуживание текстом я пока не умею. Это делается в разделе «Авто».',
+    UNSUPPORTED_AUTO: 'Эту команду об автомобиле я пока не понимаю. Заправку можно записать так: «Запиши заправку 45 л на 2500 рублей».',
+    FUEL_LITERS_REQUIRED: 'Не поняла количество топлива. Напишите, например: «Запиши заправку 45 л».',
+    FUEL_LITERS_INVALID: 'Количество топлива должно быть больше нуля.',
+    MILEAGE_INVALID: 'Пробег должен быть целым числом не меньше нуля.',
+    AUTO_SERVICE_TITLE_REQUIRED: 'Не поняла, какая работа выполнена. Напишите, например: «Запиши обслуживание замена масла».',
+    AUTO_NUMBER_AMBIGUOUS: 'Не поняла число в команде об автомобиле. Укажите единицу: литры — «45 л», пробег — «104800 км», стоимость — «2500 рублей».',
     NOTE_CONTENT_REQUIRED: 'Не поняла, что записать в заметку. Напишите так: «Создай заметку купить фильтр для машины».',
     UNSUPPORTED_NOTE_UPDATE: 'Изменять текст уже существующей заметки текстовой командой я пока не умею. Откройте заметку в разделе «Заметки» — там можно отредактировать текст.',
     UNSUPPORTED_NOTE_ARCHIVE: 'Отправлять заметку в архив или возвращать её текстом я пока не умею. Это делается в разделе «Заметки».',
@@ -407,6 +412,102 @@ window.AvenCommand = (function () {
     const minor = Math.round(rubles) * 100 + Math.round(kopeks);
     if (!(minor > 0)) return { error: 'AMOUNT_INVALID' };
     return { found: true, minor, source: m[0] };
+  }
+
+  /* ---------- Авто текстом (Stage 2, итерация 6) ----------
+     Стоимость — поле записи Auto, а НЕ команда создать расход. Связь с
+     «Финансами» включается только явной фразой пользователя и тогда всегда
+     проходит через общее подтверждение CommandSession. */
+  const FINANCE_LINK_RX = /(?:,?\s*(?:и\s+)?(?:добавь|добавить|запиши|записать|учти|учесть)\s+(?:это\s+)?(?:в\s+)?(?:расход(?:ы|ах)?|финанс(?:ы|ах)))/i;
+  function decimalField(text, unitBody) {
+    const rx = new RegExp(NOT_BEFORE + '(\\d+(?:[.,]\\d{1,2})?)\\s*(?:' + unitBody + ')' + NOT_AFTER, 'i');
+    const m = rx.exec(normalize(text));
+    if (!m) return { found: false };
+    const value = Number(m[1].replace(',', '.'));
+    return { found: true, value, source: m[0] };
+  }
+  function integerField(text, lead, unitBody) {
+    const rx = new RegExp(NOT_BEFORE + '(?:' + lead + ')\\s*(\\d[\\d ]*)\\s*(?:' + unitBody + ')?' + NOT_AFTER, 'i');
+    const m = rx.exec(normalize(text));
+    if (!m) return { found: false };
+    const value = Number(m[1].replace(/ /g, ''));
+    return { found: true, value, source: m[0] };
+  }
+  function autoFinanceParts(rest) {
+    const linked = FINANCE_LINK_RX.test(rest);
+    rest = tidy(rest.replace(FINANCE_LINK_RX, ' '));
+    let accountQuery = '';
+    const acc = new RegExp(NOT_BEFORE + '(?:со|с)\\s+(?:счет[а-яе]*|карт[а-яе]*)\\s+(.+)$', 'i').exec(rest);
+    if (acc) { accountQuery = tidy(acc[1]); rest = tidy(rest.replace(acc[0], ' ')); }
+    return { linked, accountQuery, rest };
+  }
+  function parseFuelCreate(n, raw, context) {
+    const rx = /^(?:(?:запиши|добавь|создай)\s+(?:новую\s+)?заправк[ауи]?|заправил(?:ся|ась)?|заправка)\s*(.*)$/i;
+    if (!rx.test(n)) return null;
+    const rawRest = (rx.exec(n) || [])[1] || '';
+    if (/-\s*\d+(?:[.,]\d+)?\s*(?:л|литр[а-яе]*)/.test(rawRest)) return fail('FUEL_LITERS_INVALID', 'auto.fuel.create');
+    if (/пробег(?:ом)?\s*-/.test(rawRest)) return fail('MILEAGE_INVALID', 'auto.fuel.create');
+    let parts = autoFinanceParts(rawRest);
+    let rest = parts.rest;
+    const liters = decimalField(rest, 'л|литр[а-яе]*');
+    if (!liters.found) return fail('FUEL_LITERS_REQUIRED', 'auto.fuel.create');
+    if (!(liters.value > 0) || !isFinite(liters.value)) return fail('FUEL_LITERS_INVALID', 'auto.fuel.create');
+    rest = tidy(cut(rest, liters.source));
+    const mileage = integerField(rest, 'пробег(?:ом)?', 'км|километр[а-яе]*');
+    if (mileage.found) rest = tidy(cut(rest, mileage.source));
+    if (mileage.found && (!(mileage.value >= 0) || !isFinite(mileage.value))) return fail('MILEAGE_INVALID', 'auto.fuel.create');
+    const when = extractWhen(rest, context);
+    if (when.error) return fail(when.error, 'auto.fuel.create');
+    rest = tidy(when.rest || '');
+    const amount = findAmount(rest);
+    if (amount.error) return fail(amount.error, 'auto.fuel.create');
+    if (amount.found) rest = tidy(cut(rest, amount.source).replace(/^на\s+/, ' ').replace(new RegExp('^' + CURRENCY_TAIL + NOT_AFTER, 'i'), ' '));
+    if (parts.linked && !amount.found) return fail('AMOUNT_REQUIRED', 'auto.fuel.create');
+    if (/\d/.test(rest)) return fail('AUTO_NUMBER_AMBIGUOUS', 'auto.fuel.create');
+    const out = intent('auto.fuel.create', 'mutation', {
+      liters: liters.value, amountMinor: amount.found ? amount.minor : 0,
+      mileage: mileage.found ? mileage.value : null, dateISO: when.dateISO || '',
+      note: '', linkFinance: parts.linked, accountQuery: parts.accountQuery
+    }, 'auto.fuel.create');
+    if (parts.linked) out.requiresConfirmation = true;
+    return out;
+  }
+  function parseServiceCreate(n, raw, context) {
+    const rx = /^(?:(?:запиши|добавь|создай)\s+(?:новое\s+)?(?:обслуживани[ея]|сервис)|(?:обслуживани[ея]|сервис))\s*(.*)$/i;
+    if (!rx.test(n)) return null;
+    const rawRest = (rx.exec(n) || [])[1] || '';
+    if (/пробег(?:ом)?\s*-/.test(rawRest)) return fail('MILEAGE_INVALID', 'auto.service.create');
+    let parts = autoFinanceParts(rawRest);
+    let rest = parts.rest;
+    const mileage = integerField(rest, 'пробег(?:ом)?', 'км|километр[а-яе]*');
+    if (mileage.found) rest = tidy(cut(rest, mileage.source));
+    if (mileage.found && (!(mileage.value >= 0) || !isFinite(mileage.value))) return fail('MILEAGE_INVALID', 'auto.service.create');
+    const when = extractWhen(rest, context);
+    if (when.error) return fail(when.error, 'auto.service.create');
+    rest = tidy(when.rest || '');
+    /* Стоимость у service вводится конструкцией «на/стоимость 3500 рублей»,
+       чтобы число внутри названия работы не принималось за деньги. */
+    const moneyRx = new RegExp(NOT_BEFORE + '(?:на|стоимост[ьюи]?)\\s+(\\d{1,3}(?: \\d{3})+|\\d+)(?:[.,](\\d{1,2}))?\\s*' + CURRENCY_TAIL + NOT_AFTER, 'i');
+    const mm = moneyRx.exec(rest);
+    let amountMinor = 0;
+    if (mm) {
+      const parsed = findAmount(mm[0]);
+      if (parsed.error || !parsed.found) return fail((parsed.error || 'AMOUNT_INVALID'), 'auto.service.create');
+      amountMinor = parsed.minor; rest = tidy(rest.replace(mm[0], ' '));
+    } else if (new RegExp(NOT_BEFORE + CURRENCY_TAIL + NOT_AFTER, 'i').test(rest) || /-\s*\d/.test(rest)) {
+      const parsed = findAmount(rest);
+      return fail((parsed.error || 'AMOUNT_UNSUPPORTED'), 'auto.service.create');
+    }
+    if (parts.linked && !(amountMinor > 0)) return fail('AMOUNT_REQUIRED', 'auto.service.create');
+    const title = capitalize(tidy(rest.replace(/^[,;:\-—–]+/, '')));
+    if (!title) return fail('AUTO_SERVICE_TITLE_REQUIRED', 'auto.service.create');
+    const out = intent('auto.service.create', 'mutation', {
+      title, amountMinor, mileage: mileage.found ? mileage.value : null,
+      dateISO: when.dateISO || '', comment: '', linkFinance: parts.linked,
+      accountQuery: parts.accountQuery
+    }, 'auto.service.create');
+    if (parts.linked) out.requiresConfirmation = true;
+    return out;
   }
 
   /* «Запиши расход 850 ₽ на продукты», «Добавь расход 1 250,50 ₽ на бензин»,
@@ -632,7 +733,7 @@ window.AvenCommand = (function () {
 
   const RULES = [
     parseTaskCreate, parseNoteCreate, parseNoteSearch, parseReminderCreate, parseReminderSearch,
-    parseExpenseCreate, parseExpenseList, parseIncomeUnsupported,
+    parseFuelCreate, parseServiceCreate, parseExpenseCreate, parseExpenseList, parseIncomeUnsupported,
     parseEventCreate, parseTaskComplete, parseTaskReschedule,
     parseCapabilities, parseFinanceQuery, parseAutoQuery, parseOverdueQuery,
     parseSuggestionsQuery, parseDayQuery, parseUnsupported
@@ -746,6 +847,18 @@ window.AvenCommand = (function () {
     if (intentObj.action === 'task.complete' || intentObj.action === 'task.reschedule') {
       return resolveTask((intentObj.params || {}).query, context);
     }
+    if ((intentObj.action === 'auto.fuel.create' || intentObj.action === 'auto.service.create') &&
+        (intentObj.params || {}).linkFinance) {
+      const p = intentObj.params || {};
+      const cat = resolveFinanceSlot('cat', 'Авто', context.slots.cat);
+      if (!cat.ok) return { ok: false, status: cat.status === 'stale' ? 'not_found' : cat.status,
+        resolution: cat.status === 'not_found' ? 'UNSUPPORTED' : 'AMBIGUOUS', slot: 'cat', candidates: cat.candidates || cat.items || [] };
+      const acc = resolveFinanceSlot('account', p.accountQuery, context.slots.account);
+      if (!acc.ok) return { ok: false, status: acc.status === 'stale' || acc.status === 'not_found' ? 'not_found' : 'ambiguous',
+        resolution: acc.status === 'not_found' ? 'UNSUPPORTED' : 'AMBIGUOUS', slot: 'account', candidates: acc.candidates || acc.items || [] };
+      return { ok: true, status: 'resolved', resolution: acc.resolution,
+        entity: { cat: cat.item.title, account: acc.item.title } };
+    }
     if (intentObj.action === 'finance.expense.create') {
       const p = intentObj.params || {};
       const cat = resolveFinanceSlot('cat', p.catQuery, context.slots.cat);
@@ -768,7 +881,7 @@ window.AvenCommand = (function () {
   const SLOT_LABEL = { cat: 'категорию', account: 'счёт' };
   const SLOT_SELF = { cat: 'её', account: 'его' };
   function financeSlotProblem(kind, res, intentObj) {
-    const action = 'finance.expense.create';
+    const action = (intentObj && intentObj.action) || 'finance.expense.create';
     if (res.status === 'stale') {
       return result(false, 'stale', action, {
         code: 'STALE_' + (kind === 'account' ? 'ACCOUNT' : 'CATEGORY'), intent: intentObj, slot: kind,
@@ -805,6 +918,19 @@ window.AvenCommand = (function () {
       ' · счёт ' + quote(preview.accountName) +
       ' · дата ' + whenPhrase(preview.dateISO, '') +
       '. Подтвердите — пока ничего не изменилось.';
+  }
+  function autoSummary(kind, preview) {
+    const C = Core();
+    const fields = kind === 'fuel'
+      ? 'Записать заправку: ' + preview.liters + ' л' +
+        (preview.amountMinor ? ', ' + C.money.exact(preview.amountMinor / 100) : '') +
+        ', пробег ' + preview.mileage + ' км, дата ' + whenPhrase(preview.dateISO, '')
+      : 'Записать обслуживание ' + quote(preview.title) +
+        (preview.amountMinor ? ': ' + C.money.exact(preview.amountMinor / 100) : '') +
+        ', пробег ' + preview.mileage + ' км, дата ' + whenPhrase(preview.dateISO, '');
+    return fields + '. И добавить расход ' + C.money.exact(preview.amountMinor / 100) +
+      ' в «Финансы»: категория ' + quote(preview.cat) + ', счёт ' + quote(preview.accountName) +
+      '. Продолжить? Пока ничего не изменилось.';
   }
   function ambiguous(actionName, intentObj, candidates) {
     return result(false, 'ambiguous', actionName, {
@@ -882,6 +1008,42 @@ window.AvenCommand = (function () {
          Три обязательных шага владельца: уточнение недостающего → подтверждение
          конкретной операции → только потом единственное общее действие.
          Ни на одном шаге до подтверждения состояние и «История» не меняются. */
+      case 'auto.fuel.create':
+      case 'auto.service.create': {
+        const kind = intentObj.action === 'auto.fuel.create' ? 'fuel' : 'service';
+        const amountMinor = Math.round(Number(p.amountMinor) || 0);
+        const dateISO = ISO_RE.test(String(p.dateISO || '')) ? p.dateISO : context.todayISO;
+        const car = C.auto.car();
+        const mileage = p.mileage == null ? Math.round(Number(car.mileage) || 0) : Math.round(Number(p.mileage));
+        if (!(mileage >= 0) || !isFinite(mileage)) return result(false, 'invalid', intentObj.action,
+          { code: 'MILEAGE_INVALID', message: 'Пробег должен быть целым числом не меньше нуля.', intent: intentObj });
+        let cat = null, acc = null;
+        if (p.linkFinance) {
+          cat = resolveFinanceSlot('cat', 'Авто', context.slots.cat);
+          if (!cat.ok) return financeSlotProblem('cat', cat, intentObj);
+          acc = resolveFinanceSlot('account', p.accountQuery, context.slots.account);
+          if (!acc.ok) return financeSlotProblem('account', acc, intentObj);
+          const preview = { kind, title: p.title || '', liters: p.liters || 0, amountMinor, mileage, dateISO,
+            cat: cat.item.title, accountId: acc.item.id, accountName: acc.item.title };
+          if (!context.confirmed) return result(false, 'confirmation_required', intentObj.action, {
+            code: 'CONFIRMATION_REQUIRED', resolution: acc.resolution, intent: intentObj,
+            preview, summary: autoSummary(kind, preview)
+          });
+        }
+        const params = kind === 'fuel'
+          ? { liters: p.liters, sum: amountMinor / 100, km: mileage, dateISO, note: p.note || '' }
+          : { title: p.title, cost: amountMinor / 100, km: mileage, dateISO, comment: p.comment || '' };
+        params.linkFinance = !!p.linkFinance;
+        if (p.linkFinance) params.finance = { cat: cat.item.title, account: acc.item.id };
+        const res = C.auto.createRecord(kind, params, opts);
+        if (!res.ok) return actionFailed(intentObj.action, res, intentObj);
+        return result(true, 'done', intentObj.action, {
+          intent: intentObj, entity: res.entity, historyId: res.entry && res.entry.id,
+          data: { kind, title: res.entity.title || '', liters: res.entity.liters || 0,
+            amount: kind === 'fuel' ? res.entity.sum : res.entity.cost, mileage: res.entity.km,
+            dateISO: C.auto.dateISO(res.entity), linked: !!res.entity.financeOpId }
+        });
+      }
       case 'finance.expense.create': {
         const amountMinor = Math.round(Number(p.amountMinor) || 0);
         if (!(amountMinor > 0) || !isFinite(amountMinor)) {
@@ -1189,6 +1351,16 @@ window.AvenCommand = (function () {
             ? 'Сейчас предлагаю: ' + res.data.items.map((x) => x.title + ' (почему: ' + x.reason + ')').join('; ') + '.'
             : 'Сейчас предложений нет: по вашим записям я не вижу полезного следующего шага.';
         case 'finance.summary': return financeText(res.data);
+        case 'auto.fuel.create':
+          return 'Заправка записана: ' + res.data.liters + ' л, ' + C.money.exact(res.data.amount) +
+            ', пробег ' + res.data.mileage + ' км, дата ' + whenPhrase(res.data.dateISO, '') +
+            (res.data.linked ? '. Связанный расход создан в «Финансах»' : '. Расход в «Финансах» не создавался') +
+            '. Запись видна в «Авто»; отменить можно в «Истории».';
+        case 'auto.service.create':
+          return 'Обслуживание ' + quote(res.data.title) + ' записано: ' + C.money.exact(res.data.amount) +
+            ', пробег ' + res.data.mileage + ' км, дата ' + whenPhrase(res.data.dateISO, '') +
+            (res.data.linked ? '. Связанный расход создан в «Финансах»' : '. Расход в «Финансах» не создавался') +
+            '. Запись видно в «Авто»; отменить можно в «Истории».';
         case 'finance.expense.create':
           return 'Расход ' + C.money.exact(res.data.amount) + ' записан: категория ' + quote(res.data.cat) +
             ', счёт ' + quote(res.data.accountName) + ', дата ' + whenPhrase(res.data.dateISO, '') +
@@ -1263,7 +1435,9 @@ window.AvenCommand = (function () {
         { action: 'task.reschedule', example: 'Перенеси задачу купить масло на пятницу', about: 'меняет дату задачи' },
         { action: 'note.create', example: 'Создай заметку купить фильтр для машины', about: 'создаёт заметку с этим текстом' },
         { action: 'reminder.create', example: 'Напомни купить масло на завтра', about: 'создаёт напоминание на указанную дату' },
-        { action: 'finance.expense.create', example: 'Запиши расход 850 ₽ на продукты', about: 'записывает расход — всегда после вашего подтверждения' }
+        { action: 'finance.expense.create', example: 'Запиши расход 850 ₽ на продукты', about: 'записывает расход — всегда после вашего подтверждения' },
+        { action: 'auto.fuel.create', example: 'Запиши заправку 45 л на 2500 рублей', about: 'создаёт заправку в разделе «Авто»' },
+        { action: 'auto.service.create', example: 'Запиши обслуживание замена масла на 3500 рублей', about: 'создаёт обслуживание в разделе «Авто»' }
       ],
       notYet: [
         'удаление записей текстом',
@@ -1271,7 +1445,6 @@ window.AvenCommand = (function () {
         'изменение и удаление уже записанной финансовой операции текстом',
         'создание новых категорий и счетов текстом',
         'сокращения сумм вроде «5к» и пересчёт валют',
-        'заправки и обслуживание авто текстом',
         'изменение, архивирование и удаление уже существующих заметок текстом',
         'изменение, откладывание, скрытие и удаление уже существующих напоминаний текстом',
         'перенос событий текстом',
