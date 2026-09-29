@@ -299,10 +299,18 @@ window.AvenNotify = (function () {
     return out;
   }
   function ensureReminders() { const st = s(); if (!Array.isArray(st.reminders)) st.reminders = []; return st.reminders; }
+  /* Календарный контракт даты один на весь прототип и живёт в слое действий:
+     второй проверки здесь нет, напоминания просто пользуются общей. */
+  function reminderDateIssue(action, params) {
+    const issue = Core().dates.paramsIssue(params, [['dateISO', 'дату напоминания'], ['date', 'дату напоминания']]);
+    return issue ? { ok: false, action, code: issue.code, message: issue.message } : null;
+  }
 
   function createReminder(params, opts) {
     opts = opts || {};
     const list = ensureReminders();
+    const badDate = reminderDateIssue('reminder.create', params);
+    if (badDate) return badDate;
     const f = buildReminderFields(params || {}, null);
     if (!f.title) return { ok: false, action: 'reminder.create', code: 'TITLE_REQUIRED', message: 'Введите название напоминания' };
     if (!f.dateISO) return { ok: false, action: 'reminder.create', code: 'DATE_REQUIRED', message: 'Выберите дату напоминания' };
@@ -323,6 +331,8 @@ window.AvenNotify = (function () {
     const list = ensureReminders();
     const r = list.filter((x) => x && x.id === id)[0];
     if (!r) return { ok: false, action: 'reminder.update', code: 'NOT_FOUND', message: 'Напоминание не найдено' };
+    const badDate = reminderDateIssue('reminder.update', patch);
+    if (badDate) return badDate;
     const prev = reminderSnapshot(r);
     const f = buildReminderFields(patch || {}, r);
     if (!f.title) return { ok: false, action: 'reminder.update', code: 'TITLE_REQUIRED', message: 'Введите название напоминания' };

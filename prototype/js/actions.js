@@ -11,6 +11,44 @@ window.AvenActions = (function () {
   const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
   const TIME_RE = /^\d{2}:\d{2}$/;
 
+  /* ======== ЕДИНЫЙ КАЛЕНДАРНЫЙ КОНТРАКТ ДАТЫ ========
+     Форма `YYYY-MM-DD` — это только форма. Раньше слой действий проверял именно
+     её, поэтому «30 февраля» проходило во все разделы и сохранялось в состояние.
+     Здесь одна детерминированная проверка на весь прототип: разбираются сами
+     компоненты года/месяца/дня и сверяются с настоящими границами календаря.
+     `new Date()` сознательно НЕ используется: JS молча нормализует невозможные
+     даты (`new Date('2026-02-30')` → 2 марта), поэтому отсутствие NaN ничего не
+     доказывает. Год не ограничивается продуктовым диапазоном — в модели данных
+     такого диапазона нет (см. DATA_MODEL §4.3), ограничены только реальные
+     месяц и день. */
+  const MONTH_LENGTHS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  function isLeapYear(year) {
+    const y = Number(year);
+    if (!Number.isInteger(y)) return false;
+    return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  }
+  function daysInMonth(year, month) {
+    const m = Number(month);
+    if (!Number.isInteger(m) || m < 1 || m > 12) return 0;
+    return m === 2 && isLeapYear(year) ? 29 : MONTH_LENGTHS[m - 1];
+  }
+  /* Ровно та форма + реально существующий день. Проверка чистая: без Date,
+     без часового пояса, без системных часов — один и тот же ответ всегда. */
+  function isValidCalendarDate(v) {
+    const raw = String(v == null ? '' : v);
+    if (!ISO_RE.test(raw)) return false;
+    const y = Number(raw.slice(0, 4));
+    const m = Number(raw.slice(5, 7));
+    const d = Number(raw.slice(8, 10));
+    if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return false;
+    if (m < 1 || m > 12) return false;
+    if (d < 1 || d > daysInMonth(y, m)) return false;
+    /* Round-trip: дата, собранная обратно из разобранных компонентов, обязана
+       совпасть с исходной строкой символ в символ. Это и есть доказательство,
+       что никакой молчаливой нормализации не произошло. */
+    return (String(y).padStart(4, '0') + '-' + pad(m) + '-' + pad(d)) === raw;
+  }
+
   function todayISO(offset) {
     if (window.AvenDemo && typeof window.AvenDemo.todayISO === 'function') return window.AvenDemo.todayISO(offset || 0);
     const d = new Date();
@@ -19,7 +57,10 @@ window.AvenActions = (function () {
     return localISO(d);
   }
   function localISO(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
-  function isISODate(v) { return ISO_RE.test(String(v || '')); }
+  /* Единственный ответ на вопрос «это дата?» во всём слое действий: форма плюс
+     реальность дня. Раньше здесь была только форма — отсюда и брались
+     невозможные даты в задачах, событиях, финансах, авто и покупках. */
+  function isISODate(v) { return isValidCalendarDate(v); }
   function parseISO(iso) {
     const p = String(iso || '').split('-').map(Number);
     return new Date(p[0] || 1970, (p[1] || 1) - 1, p[2] || 1, 12, 0, 0, 0);
@@ -48,6 +89,28 @@ window.AvenActions = (function () {
     if (v === 'yesterday') return todayISO(-1);
     return fallback || '';
   }
+  /* Отказ по дате для пользователя. Формулировка человеческая: ни regex, ни NaN,
+     ни Date, ни round-trip в тексте не появляются. */
+  const DATE_INVALID_CODE = 'DATE_INVALID';
+  function dateInvalidError(label) {
+    return { ok: false, code: DATE_INVALID_CODE, message: 'Проверьте ' + (label || 'дату') + ': такого дня в календаре нет' };
+  }
+  /* «Дату не указали» и «указали невозможную дату» — разные случаи. Первое
+     законно (подставится значение по умолчанию), второе обязано быть честным
+     отказом: молча заменять 30 февраля на сегодня или на пустую дату нельзя —
+     пользователь не узнает, что его запись сохранилась не так. */
+  function isUsableDateInput(v) { return isBlank(v) || !!normalizeDate(v, ''); }
+  function dateParamsIssue(params, spec) {
+    const p = params || {};
+    for (let i = 0; i < spec.length; i++) {
+      const key = spec[i][0];
+      if (!Object.prototype.hasOwnProperty.call(p, key)) continue;
+      if (isUsableDateInput(p[key])) continue;
+      return dateInvalidError(spec[i][1]);
+    }
+    return null;
+  }
+
   function normalizeTime(v) {
     const raw = String(v || '').trim();
     if (!raw) return '';
@@ -414,8 +477,14 @@ window.AvenActions = (function () {
     'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
   function formatDateByProfile(iso) {
     const raw = String(iso || '');
-    if (!ISO_RE.test(raw)) {
+    /* Форматирование — не валидация. Новые невозможные даты сюда больше не
+       попадают (их не пропускает слой действий), но значение, сохранённое до
+       ужесточения, показывается как есть: пусть лучше человек увидит странную
+       строку, чем уверенно неверное «2 марта» вместо «30 февраля». Падать на
+       таком значении формат тоже не имеет права. */
+    if (!isValidCalendarDate(raw)) {
       if (!raw) return '—';
+      if (ISO_RE.test(raw)) return raw;
       const d0 = parseISO(raw);
       if (isNaN(d0.getTime())) return raw;
     }
@@ -567,9 +636,14 @@ window.AvenActions = (function () {
       reminder: has('reminder') ? normalizeReminder(params.reminder) : (ex.reminder || null)
     };
   }
+  /* Все поля задачи, в которые пользователь может положить дату. Проверяются на
+     входе действия, до любой мутации и до записи в «Историю». */
+  const TASK_DATE_PARAMS = [['date', 'дату задачи'], ['dueDate', 'дату задачи'], ['deadline', 'дедлайн']];
   function createTask(params, opts) {
     opts = opts || {};
     const st = s(); const list = ensureList(st, 'tasks');
+    const badDate = dateParamsIssue(params, TASK_DATE_PARAMS);
+    if (badDate) return err('task.create', badDate.code, badDate.message);
     const fields = buildTaskFields(params || {}, null);
     if (!fields.title) return err('task.create', 'TASK_TITLE_REQUIRED', 'Введите название задачи');
     const now = todayISO();
@@ -594,6 +668,8 @@ window.AvenActions = (function () {
     const list = ensureList(s(), 'tasks');
     const task = getById(list, id);
     if (!task) return err('task.update', 'TASK_NOT_FOUND', 'Задача не найдена', { id });
+    const badDate = dateParamsIssue(patch, TASK_DATE_PARAMS);
+    if (badDate) return err('task.update', badDate.code, badDate.message, { id });
     const prev = taskSnapshot(task);
     const next = buildTaskFields(patch || {}, task);
     if (!next.title) return err('task.update', 'TASK_TITLE_REQUIRED', 'Введите название задачи', { id });
@@ -802,9 +878,12 @@ window.AvenActions = (function () {
     const bb = b.allDay ? '00:00' : (eventStart(b) || '23:59');
     return aa.localeCompare(bb) || String(a.title || '').localeCompare(String(b.title || ''), 'ru');
   }
+  const EVENT_DATE_PARAMS = [['date', 'дату события']];
   function createEvent(params, opts) {
     opts = opts || {};
     const st = s(); const list = ensureList(st, 'events');
+    const badDate = dateParamsIssue(params, EVENT_DATE_PARAMS);
+    if (badDate) return err('event.create', badDate.code, badDate.message);
     const fields = buildEventFields(params || {}, null);
     if (!fields.title) return err('event.create', 'EVENT_TITLE_REQUIRED', 'Введите название события');
     if (!fields.date) return err('event.create', 'EVENT_DATE_REQUIRED', 'Выберите дату события');
@@ -829,6 +908,8 @@ window.AvenActions = (function () {
     const list = ensureList(s(), 'events');
     const ev = getById(list, id);
     if (!ev) return err('event.update', 'EVENT_NOT_FOUND', 'Событие не найдено', { id });
+    const badDate = dateParamsIssue(patch, EVENT_DATE_PARAMS);
+    if (badDate) return err('event.update', badDate.code, badDate.message, { id });
     const prev = eventSnapshot(ev);
     const fields = buildEventFields(patch || {}, ev);
     if (!fields.title) return err('event.update', 'EVENT_TITLE_REQUIRED', 'Введите название события', { id });
@@ -900,11 +981,47 @@ window.AvenActions = (function () {
      (копейки/центы), поэтому 0.1 + 0.2 даёт ровно 0.30, а не 0.30000000000000004.
      Раньше эти же правила лежали в истории действий (`A.minor`/`A.sumMoney`);
      теперь владелец правил — слой действий, а интерфейс только пользуется ими. */
-  function minorUnits(v) { return Math.round((Number(v) || 0) * 100); }
+  const MONEY_SCALE = 100;
+  function minorUnits(v) { return Math.round((Number(v) || 0) * MONEY_SCALE); }
   function sumMoney() {
     let total = 0;
     for (let i = 0; i < arguments.length; i++) total += minorUnits(arguments[i]);
-    return total / 100;
+    return total / MONEY_SCALE;
+  }
+  /* ======== ЖЁСТКИЙ ИНВАРИАНТ БЕЗОПАСНЫХ ДЕНЕГ ========
+     Деньги хранятся как JS Number в целых минимальных единицах. Такая
+     арифметика точна ТОЛЬКО внутри безопасного целочисленного диапазона: за его
+     пределами `+`/`-` начинают терять единицы, и баланс перестаёт быть
+     настоящим числом (именно так расход «99999999999999999999» превращал баланс
+     в -100000000000000000000). Поэтому ни одна сохраняемая денежная величина —
+     сумма операции, баланс счёта, результат сложения — не имеет права выйти за
+     пределы safe integer. Граница НЕ выписана руками: она вычисляется из
+     Number.MAX_SAFE_INTEGER и масштаба валюты. */
+  function isSafeMinor(m) { return Number.isSafeInteger(m); }
+  /* Минимальные единицы или null, если значение непригодно для точного учёта. */
+  function safeMinorUnits(v) {
+    const n = Number(v);
+    if (!isFinite(n)) return null;
+    const m = Math.round(n * MONEY_SCALE);
+    return Number.isSafeInteger(m) ? m : null;
+  }
+  function maxSafeAmount() { return Number.MAX_SAFE_INTEGER / MONEY_SCALE; }
+  function minSafeAmount() { return Number.MIN_SAFE_INTEGER / MONEY_SCALE; }
+  const AMOUNT_RANGE_CODE = 'AMOUNT_OUT_OF_RANGE';
+  const BALANCE_RANGE_CODE = 'BALANCE_OUT_OF_RANGE';
+  function amountRangeError(label) {
+    return { ok: false, code: AMOUNT_RANGE_CODE,
+      message: (label || 'Сумма') + ' слишком большая — Aven не сохранит её, чтобы расчёты остались точными' };
+  }
+  function balanceRangeError() {
+    return { ok: false, code: BALANCE_RANGE_CODE,
+      message: 'После этой операции баланс счёта станет слишком большим — Aven не сохранит её, чтобы расчёты остались точными' };
+  }
+  /* Проверка одной введённой суммы. Пустое значение не проверяется здесь:
+     «нужна ли сумма вообще» решает валидация конкретного раздела. */
+  function amountRangeIssue(raw, label) {
+    if (isBlank(raw)) return null;
+    return safeMinorUnits(raw) === null ? amountRangeError(label) : null;
   }
   function isBlank(v) { return v === '' || v === null || v === undefined; }
   function isFiniteNumber(v) {
@@ -1180,6 +1297,30 @@ window.AvenActions = (function () {
       if (o && typeof o[key] === 'number') o[key] = sumMoney(o[key], x.delta);
     });
   }
+  function readFinNumber(path) {
+    const st = s();
+    const parts = String(path).split('.');
+    const key = parts.pop();
+    let o = st;
+    for (let i = 0; i < parts.length; i++) { if (o == null) return null; o = o[parts[i]]; }
+    return o && typeof o[key] === 'number' ? o[key] : null;
+  }
+  /* Сумма сама по себе может быть безопасной, а `баланс + сумма` — уже нет.
+     Поэтому будущий баланс считается ДО мутации, ровно тем же выражением, что
+     потом выполнит applyFinAdjust, и операция отклоняется целиком, если
+     результат выходит за безопасный диапазон. */
+  function balanceRangeIssue(fromOp, toOp) {
+    const adjust = finAccountAdjust(fromOp, toOp);
+    for (let i = 0; i < adjust.length; i++) {
+      const current = readFinNumber(adjust[i].path);
+      if (current === null) continue;
+      const currentMinor = safeMinorUnits(current);
+      const deltaMinor = safeMinorUnits(adjust[i].delta);
+      if (currentMinor === null || deltaMinor === null) return balanceRangeError();
+      if (!isSafeMinor(currentMinor + deltaMinor)) return balanceRangeError();
+    }
+    return null;
+  }
   function buildOpFields(params, existing) {
     const ex = existing ? opSnapshot(existing) : {};
     const has = (k) => Object.prototype.hasOwnProperty.call(params || {}, k);
@@ -1207,6 +1348,8 @@ window.AvenActions = (function () {
     if (isBlank(fields.rawAmount)) return { ok: false, code: 'AMOUNT_REQUIRED', message: 'Введите сумму' };
     if (!isFiniteNumber(fields.rawAmount)) return { ok: false, code: 'AMOUNT_INVALID', message: 'Сумма: нужно число' };
     if (!(minorUnits(fields.rawAmount) > 0)) return { ok: false, code: 'AMOUNT_INVALID', message: 'Сумма должна быть больше нуля' };
+    const range = amountRangeIssue(fields.rawAmount, 'Сумма');
+    if (range) return range;
     if (!fields.dateISO) return { ok: false, code: 'DATE_INVALID', message: 'Выберите дату операции' };
     if (!finAccountsList().some((a) => a && a.id === fields.account)) {
       return { ok: false, code: 'ACCOUNT_NOT_FOUND', message: 'Такого счёта нет — выберите счёт из списка' };
@@ -1230,11 +1373,16 @@ window.AvenActions = (function () {
       return acc;
     }, []);
   }
+  const OP_DATE_PARAMS = [['dateISO', 'дату операции'], ['date', 'дату операции']];
   function createOperation(params, opts) {
     opts = opts || {};
+    const badDate = dateParamsIssue(params, OP_DATE_PARAMS);
+    if (badDate) return err('finance.operation.create', badDate.code, badDate.message);
     const fields = buildOpFields(params || {}, null);
     const check = validateOperation(fields);
     if (!check.ok) return err('finance.operation.create', check.code, check.message);
+    const overflow = balanceRangeIssue(null, { account: fields.account, type: fields.type, amount: fields.amount });
+    if (overflow) return err('finance.operation.create', overflow.code, overflow.message);
     const op = {
       id: S.id('o'), type: fields.type, cat: fields.cat, account: fields.account,
       title: fields.title || fields.cat, amount: fields.amount,
@@ -1263,6 +1411,8 @@ window.AvenActions = (function () {
     opts = opts || {};
     const op = getById(opsList(), id);
     if (!op) return err('finance.operation.update', 'OPERATION_NOT_FOUND', 'Операция не найдена', { id });
+    const badDate = dateParamsIssue(patch, OP_DATE_PARAMS);
+    if (badDate) return err('finance.operation.update', badDate.code, badDate.message, { id });
     const prev = opSnapshot(op);
     const fields = buildOpFields(patch || {}, op);
     const check = validateOperation(fields);
@@ -1271,6 +1421,10 @@ window.AvenActions = (function () {
       type: fields.type, cat: fields.cat, account: fields.account, title: fields.title || fields.cat,
       amount: fields.amount, dateISO: fields.dateISO, date: humanDate(fields.dateISO), comment: fields.comment
     };
+    /* Замена операции — это откат старой суммы плюс применение новой. Обе части
+       обязаны остаться в безопасном диапазоне ДО того, как что-то изменится. */
+    const overflow = balanceRangeIssue(prev, next);
+    if (overflow) return err('finance.operation.update', overflow.code, overflow.message, { id });
     const adjust = finAccountAdjust(prev, next);
     Object.assign(op, next);
     applyFinAdjust(adjust);
@@ -1411,7 +1565,9 @@ window.AvenActions = (function () {
     if (raw !== '' && raw != null && !isFiniteNumber(raw)) {
       return err('finance.account.create', 'AMOUNT_INVALID', 'Баланс: нужно число');
     }
-    const balance = minorUnits(raw) / 100;
+    const balanceRange = amountRangeIssue(raw, 'Баланс');
+    if (balanceRange) return err('finance.account.create', balanceRange.code, balanceRange.message);
+    const balance = minorUnits(raw) / MONEY_SCALE;
     const acc = { id: S.id('acc'), name, balance };
     list.unshift(acc);
     save();
@@ -1436,9 +1592,11 @@ window.AvenActions = (function () {
     }
     const rawBalance = has('balance') ? patch.balance : acc.balance;
     if (!isFiniteNumber(rawBalance)) return err('finance.account.update', 'AMOUNT_INVALID', 'Баланс: нужно число', { id });
+    const balanceRange = amountRangeIssue(rawBalance, 'Баланс');
+    if (balanceRange) return err('finance.account.update', balanceRange.code, balanceRange.message, { id });
     const prev = { name: acc.name, balance: acc.balance };
     acc.name = name;
-    acc.balance = minorUnits(rawBalance) / 100;
+    acc.balance = minorUnits(rawBalance) / MONEY_SCALE;
     save();
     const changes = [];
     if (prev.name !== acc.name) changes.push({ field: 'Название', from: prev.name, to: acc.name });
@@ -1608,6 +1766,8 @@ window.AvenActions = (function () {
     if (kind === 'fuel') {
       if (!isFiniteNumber(fields.rawLiters) || !(fields.liters > 0)) return { ok: false, code: 'FUEL_LITERS_REQUIRED', message: 'Введите литры больше нуля' };
       if (!isFiniteNumber(fields.rawSum) || minorUnits(fields.rawSum) < 0) return { ok: false, code: 'AMOUNT_INVALID', message: 'Сумма: нужно число не меньше нуля' };
+      const sumRange = amountRangeIssue(fields.rawSum, 'Сумма');
+      if (sumRange) return sumRange;
       if (!isFiniteNumber(fields.rawKm) || fields.km < 0) return { ok: false, code: 'MILEAGE_INVALID', message: 'Пробег: нужно число не меньше нуля' };
       if (!fields.dateISO) return { ok: false, code: 'DATE_INVALID', message: 'Выберите дату заправки' };
       return { ok: true };
@@ -1615,12 +1775,16 @@ window.AvenActions = (function () {
     if (kind === 'expense') {
       if (!fields.title) return { ok: false, code: 'TITLE_REQUIRED', message: 'Введите, за что расход' };
       if (!isFiniteNumber(fields.rawAmount) || !(fields.amount > 0)) return { ok: false, code: 'AMOUNT_REQUIRED', message: 'Введите сумму больше нуля' };
+      const amountRange = amountRangeIssue(fields.rawAmount, 'Сумма');
+      if (amountRange) return amountRange;
       if (!fields.dateISO) return { ok: false, code: 'DATE_INVALID', message: 'Выберите дату расхода' };
       return { ok: true };
     }
     if (kind === 'service') {
       if (!fields.title) return { ok: false, code: 'TITLE_REQUIRED', message: 'Введите, какая работа выполнена' };
       if (!isFiniteNumber(fields.rawCost) || minorUnits(fields.rawCost) < 0) return { ok: false, code: 'AMOUNT_INVALID', message: 'Стоимость: нужно число не меньше нуля' };
+      const costRange = amountRangeIssue(fields.rawCost, 'Стоимость');
+      if (costRange) return costRange;
       if (!isFiniteNumber(fields.rawKm) || fields.km < 0) return { ok: false, code: 'MILEAGE_INVALID', message: 'Пробег: нужно число не меньше нуля' };
       if (!fields.dateISO) return { ok: false, code: 'DATE_INVALID', message: 'Выберите дату обслуживания' };
       return { ok: true };
@@ -1665,12 +1829,14 @@ window.AvenActions = (function () {
   }
   /* Связанная финансовая операция — не копия записи авто, а обычная операция
      «Финансов» со ссылкой на источник. Одна сумма, один источник истины. */
+  /* Причина отказа связанной операции обязана дойти до пользователя как есть
+     («сумма слишком большая»), а не превратиться в общее «не удалось». */
   function autoCreateLinkedFinance(kind, item, finance) {
     if (!(autoCost(kind, item) > 0)) return null;
     const res = createOperation(Object.assign(autoFinancePayload(kind, item, finance), {}), {
       silent: true, link: { carKind: kind, carItemId: item.id }
     });
-    if (!res.ok) return null;
+    if (!res.ok) return { op: null, failed: res };
     item.financeOpId = res.entity.id;
     return { op: res.entity, adjust: res.adjust || [] };
   }
@@ -1680,13 +1846,17 @@ window.AvenActions = (function () {
     const prev = opSnapshot(op);
     const payload = autoFinancePayload(kind, item);
     const res = updateOperation(op.id, payload, { silent: true });
-    if (!res.ok) return null;
+    if (!res.ok) return { op: null, failed: res };
     return { op, prev, next: opSnapshot(op) };
   }
   function autoObject(kind, item) { return AUTO_LABEL[kind] + ' «' + autoTitle(kind, item) + '»'; }
+  const AUTO_DATE_PARAMS = [['dateISO', 'дату записи'], ['date', 'дату записи'],
+    ['untilISO', 'срок документа'], ['until', 'срок документа']];
   function createAutoRecord(kind, params, opts) {
     opts = opts || {};
     if (AUTO_KINDS.indexOf(kind) < 0) return err('car.record.create', 'AUTO_KIND_INVALID', 'Неизвестный вид записи автомобиля');
+    const badDate = dateParamsIssue(params, AUTO_DATE_PARAMS);
+    if (badDate) return err('car.' + kind + '.create', badDate.code, badDate.message);
     const fields = buildAutoFields(kind, params || {}, null);
     const check = validateAuto(kind, fields);
     if (!check.ok) return err('car.' + kind + '.create', check.code, check.message);
@@ -1701,7 +1871,11 @@ window.AvenActions = (function () {
        же Common Action, и только после её успеха запись попадает в Auto. Поэтому
        ошибка счёта/категории не оставляет половину пользовательского действия. */
     const link = wantLink ? autoCreateLinkedFinance(kind, item, (params || {}).finance) : null;
-    if (wantLink && !link) return err('car.' + kind + '.create', 'FINANCE_LINK_FAILED', 'Не удалось создать связанный расход — запись авто не создана');
+    if (wantLink && (!link || !link.op)) {
+      const failed = link && link.failed;
+      return err('car.' + kind + '.create', (failed && failed.code) || 'FINANCE_LINK_FAILED',
+        (failed && failed.message) || 'Не удалось создать связанный расход — запись авто не создана');
+    }
     /* Finance Common Action уже мог успешно изменить ops и balance. Любой сбой
        следующего Auto-шага обязан компенсировать эту часть до возврата ошибки:
        linked action для пользователя атомарен и не оставляет orphan expense. */
@@ -1740,14 +1914,26 @@ window.AvenActions = (function () {
     if (AUTO_KINDS.indexOf(kind) < 0) return err('car.record.update', 'AUTO_KIND_INVALID', 'Неизвестный вид записи автомобиля');
     const item = getById(autoList(kind), id);
     if (!item) return err('car.' + kind + '.update', 'RECORD_NOT_FOUND', AUTO_LABEL[kind] + ': запись не найдена', { id });
+    const badDate = dateParamsIssue(patch, AUTO_DATE_PARAMS);
+    if (badDate) return err('car.' + kind + '.update', badDate.code, badDate.message, { id });
     const prev = autoSnapshot(kind, item);
     const fields = buildAutoFields(kind, patch || {}, item);
     const check = validateAuto(kind, fields);
     if (!check.ok) return err('car.' + kind + '.update', check.code, check.message, { id });
     const clean = Object.assign({}, fields);
     delete clean.rawLiters; delete clean.rawSum; delete clean.rawKm; delete clean.rawAmount; delete clean.rawCost; delete clean.rawRemind;
+    const hadLink = kind === 'doc' ? null : autoLinkedOp(item);
     Object.assign(item, clean);
     const link = kind === 'doc' ? null : autoUpdateLinkedFinance(kind, item);
+    /* Связанный расход и запись авто меняются вместе или не меняются вовсе:
+       отказ «Финансов» (например, баланс вышел бы за безопасный диапазон)
+       откатывает запись авто и не оставляет расхождения между разделами. */
+    if (hadLink && (!link || !link.op)) {
+      Object.assign(item, prev);
+      const failed = link && link.failed;
+      return err('car.' + kind + '.update', (failed && failed.code) || 'FINANCE_LINK_FAILED',
+        (failed && failed.message) || 'Связанный расход не изменён — запись авто оставлена без изменений', { id });
+    }
     save();
     const after = autoSnapshot(kind, item);
     const changes = autoChanges(kind, prev, after);
@@ -1805,7 +1991,11 @@ window.AvenActions = (function () {
     if (!(autoCost(kind, item) > 0)) return err('car.finance.link', 'AMOUNT_REQUIRED', 'Для финансовой связи нужна сумма больше нуля', { id });
     const prev = autoSnapshot(kind, item);
     const link = autoCreateLinkedFinance(kind, item);
-    if (!link) return err('car.finance.link', 'LINK_FAILED', 'Не удалось создать расход', { id });
+    if (!link || !link.op) {
+      const failed = link && link.failed;
+      return err('car.finance.link', (failed && failed.code) || 'LINK_FAILED',
+        (failed && failed.message) || 'Не удалось создать расход', { id });
+    }
     save();
     const entry = log({
       action: 'car.finance.link', title: 'Авто связано с финансами', object: autoObject(kind, item) + ' · ' + money(link.op.amount),
@@ -1949,6 +2139,8 @@ window.AvenActions = (function () {
     if (!isBlank(fields.rawPrice) && (!isFiniteNumber(fields.rawPrice) || minorUnits(fields.rawPrice) < 0)) {
       return { ok: false, code: 'PRICE_INVALID', message: 'Цена: нужно число не меньше нуля' };
     }
+    const priceRange = amountRangeIssue(fields.rawPrice, 'Цена');
+    if (priceRange) return priceRange;
     if (params && Object.prototype.hasOwnProperty.call(params, 'status') && !SHOP_STATUS[fields.status]) {
       return { ok: false, code: 'STATUS_INVALID', message: 'Такого статуса нет' };
     }
@@ -1992,9 +2184,13 @@ window.AvenActions = (function () {
     };
   }
   function purchaseLinkedOp(p) { return p && p.financeOpId ? getById(opsList(), p.financeOpId) : null; }
+  const PURCHASE_DATE_PARAMS = [['dateISO', 'дату покупки'], ['date', 'дату покупки'],
+    ['warrantyISO', 'дату окончания гарантии'], ['warranty', 'дату окончания гарантии']];
   function purchaseObject(p) { return 'Покупка «' + (p.name || 'без названия') + '»'; }
   function createPurchase(params, opts) {
     opts = opts || {};
+    const badDate = dateParamsIssue(params, PURCHASE_DATE_PARAMS);
+    if (badDate) return err('purchase.create', badDate.code, badDate.message);
     const fields = buildPurchaseFields(params || {}, null);
     const check = validatePurchase(fields, params);
     if (!check.ok) return err('purchase.create', check.code, check.message);
@@ -2050,6 +2246,8 @@ window.AvenActions = (function () {
     opts = opts || {};
     const item = getById(purchasesList(), id);
     if (!item) return err('purchase.update', 'PURCHASE_NOT_FOUND', 'Покупка не найдена', { id });
+    const badDate = dateParamsIssue(patch, PURCHASE_DATE_PARAMS);
+    if (badDate) return err('purchase.update', badDate.code, badDate.message, { id });
     const prev = purchaseSnapshot(item);
     const fields = buildPurchaseFields(patch || {}, item);
     const check = validatePurchase(fields, patch);
@@ -2062,7 +2260,14 @@ window.AvenActions = (function () {
     if (linked) {
       linkedPrev = opSnapshot(linked);
       const res = updateOperation(linked.id, purchaseFinancePayload(item), { silent: true });
-      if (res.ok) linkedNext = opSnapshot(linked); else linkedPrev = null;
+      /* Покупка и её связанный расход меняются вместе: отказ «Финансов»
+         откатывает покупку, чтобы не осталось расхождения между разделами. */
+      if (!res.ok) {
+        Object.assign(item, prev);
+        return err('purchase.update', res.code || 'FINANCE_LINK_FAILED',
+          res.message || 'Связанный расход не изменён — покупка оставлена без изменений', { id });
+      }
+      linkedNext = opSnapshot(linked);
     }
     save();
     const after = purchaseSnapshot(item);
@@ -2120,6 +2325,10 @@ window.AvenActions = (function () {
       return err('purchase.service.create', 'AMOUNT_INVALID', 'Стоимость: нужно число', { id });
     }
     if (minorUnits(rawCost) < 0) return err('purchase.service.create', 'AMOUNT_INVALID', 'Стоимость не может быть отрицательной', { id });
+    const costRange = amountRangeIssue(rawCost, 'Стоимость');
+    if (costRange) return err('purchase.service.create', costRange.code, costRange.message, { id });
+    const badDate = dateParamsIssue(params, [['dateISO', 'дату обслуживания'], ['date', 'дату обслуживания']]);
+    if (badDate) return err('purchase.service.create', badDate.code, badDate.message, { id });
     const dateISO = normalizeDate((params || {}).dateISO || (params || {}).date, '') || todayISO();
     if (!Array.isArray(item.repairs)) item.repairs = [];
     const rec = { id: S.id('pr'), title, dateISO, date: humanDate(dateISO), cost: minorUnits(rawCost) / 100, comment: String((params || {}).comment || '').trim() };
@@ -2240,7 +2449,10 @@ window.AvenActions = (function () {
 
   return {
     dates: { todayISO, localISO, parseISO, diffDays, addDays, humanDate, dateLabel, normalizeDate,
-      nowDate, nowMinutes, nowHM, tzOffsetMinutes, tzLabel },
+      nowDate, nowMinutes, nowHM, tzOffsetMinutes, tzLabel,
+      /* Единый календарный контракт: одна проверка на все разделы. */
+      isValid: isValidCalendarDate, isLeapYear, daysInMonth,
+      invalidError: dateInvalidError, paramsIssue: dateParamsIssue },
     format: { taskDueLabel, eventTime, eventStart, eventEnd, repeatLabel, reminderLabel,
       money, moneyExact, date: formatDateByProfile, time: formatTimeByProfile, weekStartIndex, currency: currencyInfo },
     profile: { get: getProfile, setField: setProfileField, update: updateProfile,
@@ -2258,7 +2470,11 @@ window.AvenActions = (function () {
       normalize: applyEventAliases, occursOn: eventOccursOn, start: eventStart, end: eventEnd, description: eventDesc, snapshot: eventSnapshot },
 
     /* --- Stage 1.3: те же правила контракта, что у задач и событий --- */
-    money: { minor: minorUnits, sum: sumMoney, format: money, exact: moneyExact },
+    /* Денежный контракт: минимальные единицы всегда остаются безопасными
+       целыми, граница вычисляется из Number.MAX_SAFE_INTEGER и масштаба валюты. */
+    money: { minor: minorUnits, sum: sumMoney, format: money, exact: moneyExact,
+      scale: MONEY_SCALE, safeMinor: safeMinorUnits, isSafeMinor,
+      maxAmount: maxSafeAmount, minAmount: minSafeAmount, rangeIssue: amountRangeIssue },
     notes: { createNote, updateNote, deleteNote, getNote, getNotes, setNotePinned, setNoteArchived, saveNoteBody,
       createFolder: createNoteFolder, folders: noteFolders, tags: noteTagList, summary: notesSummary,
       snapshot: noteSnapshot, preview: notePreview, folderOf: noteFolderOf },
