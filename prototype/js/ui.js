@@ -107,7 +107,7 @@ window.Aven = (function () {
         '<div class="modal-body">' + (opts.body || '') + '</div>' +
         '<div class="modal-foot">' +
           '<button class="btn" data-x>' + api.esc(opts.cancelText || 'Отмена') + '</button>' +
-          (opts.submitText === null ? '' : '<button class="btn primary" data-submit>' + api.esc(opts.submitText || 'Сохранить') + '</button>') +
+          (opts.submitText === null ? '' : '<button class="btn primary" data-submit' + (opts.submitTour ? ' data-tour="' + api.esc(opts.submitTour) + '"' : '') + '>' + api.esc(opts.submitText || 'Сохранить') + '</button>') +
         '</div>' +
       '</div>';
     root.innerHTML = '';

@@ -69,14 +69,23 @@ Result → UI
 ```
 Help Center / Contextual Help
         ↓
-Tutorial Engine → declarative tutorial definitions → overlay/highlight/progress
-        ↓                                      ↓
-обычный UI path / Common Actions          optional existing TTS narration
+Tutorial Engine → declarative info/action definitions → spotlight/progress/feedback
+        ↓                    ↓                         ↓
+наблюдает real UI action   проверяет result       optional existing TTS narration
+        ↓
+обычный UI path / Common Actions
 ```
 
 Правила этого слоя:
 
 - обучение не создаёт отдельные task/event copies и не дублирует business logic;
+- информационный шаг сохраняет старый контракт `target/title/text` и кнопку «Далее»;
+- action-шаг добавляет декларативное ожидаемое событие, validator наблюдаемого результата, optional feedback
+  и подготовку контекста; доменные детали остаются в definition/adapters, не в reusable engine;
+- target разрешается заново после render/route, а delegated listeners снимаются на next/previous/skip/finish/close;
+- persisted schema остаётся `tutorials.voice/progress/completed`; ожидание, DOM и функции эфемерны;
+- Tasks correlation — before/after ID плюс matching History ID; Undo вызывается только настоящей кнопкой
+  именно этой записи. Commands проверяет настоящий query-result и отсутствие изменения business state;
 - если tutorial взаимодействует с сущностями, он ведёт пользователя через существующий UI и Common Action Layer;
 - голосовое сопровождение — optional adapter к существующему frontend TTS (`AvenVoice`/`AvenTTS`), а не новая voice infrastructure;
 - текст инструкции всегда остаётся основным, narration не заменяет доступный UI/screen-reader text.

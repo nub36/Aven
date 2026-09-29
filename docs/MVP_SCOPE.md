@@ -514,12 +514,17 @@ Aven спрашивает. Сумма приводится к целым коп�
   типичные проблемы и честные ограничения.
 - **Contextual help:** из основных разделов должен быть единый способ открыть справку по текущему разделу и
   запустить обучение, без копипасты разных реализаций.
-- **Tutorial engine:** reusable overlay с декларативными tutorial definitions, progress/completion в demo-state,
-  start/next/previous/skip/finish/restart, missing-target safe behaviour и cleanup на смене route.
+- **Tutorial engine:** один reusable overlay с декларативными tutorial definitions, progress/completion в demo-state,
+  start/next/previous/skip/finish/restart, missing-target fallback и cleanup на смене route.
+- **Tutorial 2.0 (2026-09-29):** definition может остаться информационной (`Далее`) либо объявить
+  интерактивный шаг: точный target, наблюдаемое событие/результат, success feedback и переход. Required action
+  нельзя пролистать; wrong click безопасен; target повторно находится после render; double action даёт один
+  переход. Tasks проводит через реальную форму и коррелированный History/Undo; Commands — через настоящий
+  read-only вопрос без мутации. Business action выполняет обычный UI/Common Actions, не Tutorial.
 - **Voice guidance:** только optional narration через существующий TTS frontend interface; текст инструкции
   всегда остаётся основным. TTS failure/offline не ломает обучение.
-- **Прототип 2026-09-27:** добавлены `prototype/js/help.js` и `prototype/js/tutorial.js`; tutorials покрывают
-  Главную, Задачи, Календарь, День и Help. Проверка: `help-tutorial-check.js` — **33 проверки, 0 провалов**.
+- **Проверки:** совместимость старого слоя — `help-tutorial-check.js` (33); интерактивное поведение,
+  Tasks/Commands/History, a11y/mobile structure — `tutorial2-interactive-check.js` (81).
 
 ### 5.11. Инструменты, Настройки, Админка
 

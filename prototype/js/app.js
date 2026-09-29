@@ -65,14 +65,14 @@
       if (g.group) html += `<div class="side-group">${g.group}</div>`;
       g.items.forEach((it) => {
         if (it.mod && mods[it.mod] === false) return; // модуль выключен в настройках
-        html += `<button class="nav-item ${current === it.id ? 'active' : ''}" data-action="nav" data-id="${it.id}"
+        html += `<button class="nav-item ${current === it.id ? 'active' : ''}" data-action="nav" data-id="${it.id}" data-tour="nav-${it.id}"
                    ${it.stage ? `title="Не входит в срез Stage 1.0 — ${A.esc(it.stage)} (docs/MVP_SCOPE.md §4.3)"` : ''}>
                    <span class="ico">${it.icon}</span>${it.label}${it.stage ? `<span class="stage-badge later">${A.esc(it.stage)}</span>` : ''}</button>`;
       });
     });
     html += `</div><div class="side-bottom">`;
     NAV.find((g) => g.bottom).items.forEach((it) => {
-      html += `<button class="nav-item ${current === it.id ? 'active' : ''}" data-action="nav" data-id="${it.id}">
+      html += `<button class="nav-item ${current === it.id ? 'active' : ''}" data-action="nav" data-id="${it.id}" data-tour="nav-${it.id}">
                  <span class="ico">${it.icon}</span>${it.label}</button>`;
     });
     html += `</div>`;

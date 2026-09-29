@@ -118,6 +118,30 @@ prototype/tests/
 
 Зависимостей нет. Сборка не нужна.
 
+## Tutorial 2.0 — interactive guided learning (2026-09-29)
+
+Существующий `js/tutorial.js` расширен без второго framework:
+
+- старые шаги `target/title/text` остаются информационными и идут по кнопке «Далее»;
+- action-шаг ждёт настоящий `click`/`input`/`submit`, повторно находит target после render, проверяет
+  наблюдаемый результат и показывает немедленный текстовый success feedback;
+- required step нельзя пролистать кнопкой «Далее»; wrong click даёт спокойную подсказку; missing target
+  предлагает retry/continue; Skip/Close/Escape всегда доступны;
+- spotlight не перекрывает target (`pointer-events: none`), card остаётся интерактивной; mobile — bottom sheet
+  с safe-area/dynamic viewport constraints; reduced motion отключает движение;
+- **Tasks:** «Новая задача» → title → настоящий Save → correlation по новому ID → задача в списке →
+  «История» → настоящий Undo именно matching History entry;
+- **Commands:** настоящий read-only вопрос «Что у меня сегодня?» через input и Enter/Send; ответ проверяется,
+  а Tasks/History не меняются;
+- ephemeral waiting/context не persist; совместимая схема `tutorials.voice/progress/completed` сохранена.
+
+Остальные tours (Home, Calendar, Day, Suggestions, Notifications, Notes, Finance, Auto, Shopping,
+Morning/Evening, Settings, Profile, Help) остаются информационными, с существующими entry points,
+подсветкой и progress. Голос — необязательная существующая надстройка; текстовый tutorial автономен.
+
+Проверки: `tests/tutorial2-interactive-check.js` — 81 behavioral checks; существующий
+`tests/help-tutorial-check.js` — 33 checks совместимости.
+
 ## Текстовые команды (Stage 2, итерации 1–8, 2026-09-28 … 2026-09-29)
 
 `js/command.js` (`window.AvenCommand`) — ядро текстовых команд **без DOM, без AI/LLM, без сети и без
@@ -524,7 +548,7 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 **Проверка:** `node prototype/tests/actions-core-check.js` — **18 проверок Common Actions без DOM**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/help-tutorial-check.js` — **33 проверки Help/Tutorial/responsive/TTS narration**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js`
-(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage13-entities-check.js` — **124 проверки заметок, финансов, авто, покупок и напоминаний** (контракт слоя без DOM на часах приложения, производные итоги «Финансов», сценарии через интерфейс, история и Undo, согласованность Главной/Истории/помощника/уведомлений, справка и обучение, темы и ширины, запрет записи в обход слоя). `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` — **613 проверок текстовых команд, заметок, напоминаний, расходов и Assistant UI** (включая обязательное подтверждение финансовой мутации, отмену/Escape/double confirm, уточнение счёта и категории, stale-защиту, форматы суммы и отказ от `5к`/валют); `node prototype/tests/command-session-check.js` — **140 проверок transient clarification/confirmation flow** (включая финансовые slots и сброс pending в обе стороны); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/data-integrity-check.js` — **127 проверок целостности данных** (календарный контракт даты и високосные годы, матрица невозможных дат по шести разделам, инвариант безопасных денег с границей, вычисленной из `Number.MAX_SAFE_INTEGER`, переполнение баланса, атомарность связанных Auto/Shopping, запрет обхода слоя через команду и форму, Undo и перезагрузка, детерминированные property-проверки). Полный набор из пятнадцати suite — **1810 проверок, 0 провалов**.
+(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage13-entities-check.js` — **124 проверки заметок, финансов, авто, покупок и напоминаний** (контракт слоя без DOM на часах приложения, производные итоги «Финансов», сценарии через интерфейс, история и Undo, согласованность Главной/Истории/помощника/уведомлений, справка и обучение, темы и ширины, запрет записи в обход слоя). `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` — **613 проверок текстовых команд, заметок, напоминаний, расходов и Assistant UI** (включая обязательное подтверждение финансовой мутации, отмену/Escape/double confirm, уточнение счёта и категории, stale-защиту, форматы суммы и отказ от `5к`/валют); `node prototype/tests/command-session-check.js` — **140 проверок transient clarification/confirmation flow** (включая финансовые slots и сброс pending в обе стороны); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/data-integrity-check.js` — **127 проверок целостности данных** (календарный контракт даты и високосные годы, матрица невозможных дат по шести разделам, инвариант безопасных денег с границей, вычисленной из `Number.MAX_SAFE_INTEGER`, переполнение баланса, атомарность связанных Auto/Shopping, запрет обхода слоя через команду и форму, Undo и перезагрузка, детерминированные property-проверки); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tutorial2-interactive-check.js` — **81 проверка Tutorial 2.0**. Полный набор из шестнадцати suite — **1891 проверка, 0 провалов**.
 `stage1-proto-check.js` покрывает: меню и метки этапов, история с
 Undo/фильтрами/экспортом, все 8 разделов админки с подтверждениями и аудитом, тема, экраны аккаунта,
 роут-гард, сквозная история и настоящий Undo в задачах/заметках/финансах/авто/покупках/автоматизациях,

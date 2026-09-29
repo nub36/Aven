@@ -180,16 +180,23 @@ Result → UI
 **Осталось открытым (решение владельца, молча не вводилось):** продуктовый диапазон лет для дат
 (сейчас ограничены только реальные месяц и день) — [DATA_MODEL §9](DATA_MODEL.md), вопросы 6–7.
 
-### Ближайший приоритет после Data Integrity Hardening (2026-09-29)
+### TUTORIAL 2.0 — DONE (2026-09-29)
 
-**TUTORIAL 2.0** — следующий крупный этап, утверждённый владельцем: explain → подсветка точной цели
-→ пользователь выполняет настоящее действие → проверка → обратная связь → следующий шаг.
-В этап Data Integrity он не входил и **не начинался**.
+Существующий Tutorial Engine расширен интерактивными action-шагами: точная цель → настоящее действие
+обычного UI → проверка наблюдаемого результата → немедленная текстовая обратная связь → следующий шаг.
+Старые информационные definitions совместимы и по-прежнему используют «Далее».
 
-После Tutorial 2.0 утверждён этап **UI/UX + Mobile Design & Motion** (mobile-first polish,
+Завершены две вертикали: **Tasks** (форма → новая сущность по before/after ID → History → Undo именно
+этой задачи) и **Text Commands / Assistant** (read-only «Что у меня сегодня?» → настоящий ответ без
+мутации/History). Есть waiting/wrong-action/success/missing-target состояния, защита от двойного перехода,
+повторное разрешение target после render, cleanup listeners/focus, keyboard/Escape, mobile bottom sheet,
+dynamic viewport и reduced motion. Эфемерное ожидание не записывается; существующая схема
+`tutorials.progress/completed/voice` не менялась. Подробности — ARCHITECTURE §3.2, UI_UX и WORK_LOG.
+
+**Следующий утверждённый этап:** **UI/UX + Mobile Design & Motion** (mobile-first polish,
 микровзаимодействия, анимации, safe-area/dynamic viewport, тач-эргономика, reduced-motion).
-Он тоже **не начинался**. Дальнейшее функциональное расширение Stage 2 (Command Engine) —
-после этих двух этапов.
+В этой сессии он **не начинался**. Дальнейшее функциональное расширение Stage 2 (Command Engine) —
+после утверждённой Tutorial/UI последовательности.
 
 ### Stage 3 — Голос
 

@@ -25,10 +25,44 @@ window.AvenTutorial = (function () {
     tasks: {
       id: 'tasks', route: 'tasks', title: 'Задачи',
       steps: [
-        { target: 'task-create', title: 'Создать задачу', text: 'Нажмите, чтобы открыть форму. Укажите название, при желании — описание, дату, срок, приоритет, теги и напоминание. Обязательно только название.' },
-        { target: 'task-tabs', title: 'Вкладки', text: 'Вкладки помогают быстро найти нужное: активные, на сегодня, предстоящие, просроченные, выполненные и архив. Переключение вкладок ничего не меняет в задачах.' },
-        { target: 'task-filters', title: 'Поиск и фильтры', text: 'Поиск, проект, приоритет и тег сужают список. Это тоже только просмотр — сами задачи не меняются и остаются общими для «Задач», «Дня» и «Главной».' },
-        { target: 'task-list', title: 'Выполнить, изменить, удалить', text: 'Галочка отмечает задачу выполненной (и возвращает обратно), «Редактировать» меняет поля, «Удалить» спросит подтверждение. Любое из этих действий можно отменить в «Истории».' }
+        { target: 'task-list', title: 'Создадим учебную задачу', text: 'Вы пройдёте настоящий путь создания задачи. Введите понятное учебное название — например, «Учебная задача Aven». Это будет обычная задача: мы не создаём данные скрыто и не удаляем их без вашего действия.' },
+        { target: 'task-create', title: 'Откройте форму', text: 'Теперь ваша очередь: нажмите «Новая задача».', interaction: {
+          event: 'click', success: '✓ Готово. Форма задачи открыта.',
+          validate: () => !!document.querySelector('[data-tour="task-title"]')
+        } },
+        { target: 'task-title', title: 'Введите учебное название', text: 'Введите название самостоятельно. Подойдёт «Учебная задача Aven» или любое другое непустое название. Затем нажмите Tab или коснитесь следующего элемента формы.', interaction: {
+          event: 'change', success: '✓ Название заполнено — его можно сохранить.',
+          validate: ({ target }) => !!(target && target.value.trim())
+        } },
+        { target: 'task-submit', title: 'Сохраните задачу', text: 'Нажмите «Сохранить». Это обычная кнопка формы: задача будет создана через тот же механизм, что и вне обучения.', interaction: {
+          event: 'click', success: '✓ Готово. Задача появилась в «Задачах».', delay: 80,
+          before: ({ context }) => { context.taskIdsBefore = (s().tasks || []).map((x) => x.id); },
+          validate: ({ context }) => {
+            const created = (s().tasks || []).find((x) => (context.taskIdsBefore || []).indexOf(x.id) < 0);
+            if (!created) return false;
+            context.taskId = created.id;
+            context.taskTitle = created.title;
+            const h = (s().history || []).find((x) => x.action === 'task.create' && x.undo && x.undo.id === created.id);
+            context.taskHistoryId = h && h.id;
+            return true;
+          }
+        } },
+        { target: ({ context }) => document.querySelector('.task-card [data-id="' + String(context.taskId || '').replace(/"/g, '') + '"]'),
+          title: 'Задача создана', text: '✓ Это именно новая задача из текущего запуска, а не старая задача с таким же названием. Обучение сопоставило результат по новому идентификатору после сохранения.' },
+        { target: () => (isMobile() && !document.body.classList.contains('nav-open')) ? document.getElementById('mobile-menu-btn') : document.querySelector('[data-tour="nav-history"]'),
+          title: 'Откройте Историю', text: 'Откройте «Историю». На телефоне сначала нажмите кнопку меню, затем «История». Созданная задача останется вашей, пока вы сами её не отмените.', routeAfter: 'history', interaction: {
+            event: 'click', allowRoute: true, success: '✓ История открыта. Здесь видно действие создания.',
+            accept: ({ event }) => !!(event.target.closest('#mobile-menu-btn') || event.target.closest('[data-tour="nav-history"]')),
+            validate: () => currentRoute() === 'history'
+          } },
+        { route: 'history', target: ({ context }) => document.querySelector('[data-action="hist-undo"][data-id="' + String(context.taskHistoryId || '').replace(/"/g, '') + '"]'),
+          title: 'Отмените учебный результат', text: 'Нажмите «Отменить» именно у созданной сейчас задачи. Обучение не вызывает Undo само и не затрагивает чужое последнее действие.', interaction: {
+            event: 'click', success: '✓ Учебная задача удалена через обычный Undo, а отмена записана в Истории.', delay: 80,
+            validate: ({ context }) => !(s().tasks || []).some((x) => x.id === context.taskId)
+              && !!(s().history || []).find((x) => x.id === context.taskHistoryId && x.undone)
+          } },
+        { route: 'history', target: ({ context }) => document.querySelector('.hist-item[data-id="' + String(context.taskHistoryId || '').replace(/"/g, '') + '"]'),
+          title: 'Сценарий завершён', text: '✓ Вы создали реальную задачу, увидели её в списке и сами отменили именно это действие. Другие задачи и записи не изменились.' }
       ]
     },
     calendar: {
@@ -149,9 +183,34 @@ window.AvenTutorial = (function () {
     commands: {
       id: 'commands', route: 'assistant', title: 'Текстовые команды',
       steps: [
-        { target: 'command-input', title: 'Где писать команду', text: 'Это поле помощника. Напишите сюда короткую фразу и нажмите Enter или стрелку. Мышь не обязательна: до поля, примеров и кнопки можно дойти клавишей Tab.' },
-        { target: 'command-examples', title: 'Примеры вместо угадывания', text: 'Нажмите на любой пример — он подставится в поле, и вы увидите, что именно будет отправлено. Текст можно поправить перед отправкой: сам по себе пример ничего не меняет.' },
-        { target: 'command-chat', title: 'Спросите про день', text: 'Начните с безопасного вопроса: «Что у меня сегодня?». Aven ответит по вашим настоящим записям — тем же событиям и задачам, что показывают «День» и «Календарь». Вопрос ничего не меняет.' },
+        { target: 'command-chat', title: 'Безопасный вопрос к Aven', text: 'Сейчас вы зададите read-only вопрос «Что у меня сегодня?». Aven ответит по настоящим задачам и событиям, но ничего не создаст и не изменит.' },
+        { target: 'command-input', title: 'Введите команду', text: 'Теперь ваша очередь: введите «Что у меня сегодня?». Регистр и знак вопроса не важны.', interaction: {
+          event: 'input', success: '✓ Команда распознана. Осталось отправить её.',
+          validate: ({ context }) => {
+            const input = document.getElementById('chat-input');
+            const normalized = String(input && input.value || '').toLowerCase().replace(/ё/g, 'е').replace(/[?!.]+$/g, '').trim();
+            if (normalized !== 'что у меня сегодня') return false;
+            context.command = input.value.trim();
+            return true;
+          }
+        } },
+        { target: 'command-send', title: 'Отправьте команду', text: 'Нажмите стрелку или вернитесь в поле и нажмите Enter. Обучение дождётся настоящего ответа помощника.', interaction: {
+          event: ['click', 'submit'], success: '✓ Aven ответила по вашим настоящим данным.', delay: 420,
+          before: ({ context }) => {
+            context.commandHistoryCount = (s().history || []).length;
+            context.commandTaskIds = (s().tasks || []).map((x) => x.id);
+          },
+          accept: ({ event }) => !!(event.target.closest('[data-tour="command-send"]') || event.target.closest('#cmd-form')),
+          validate: ({ context }) => {
+            const out = A._lastCommand;
+            const readOnly = !!(out && out.intent && out.intent.kind === 'query' && out.response);
+            const noHistory = (s().history || []).length === context.commandHistoryCount;
+            const sameTasks = (s().tasks || []).map((x) => x.id).join('|') === (context.commandTaskIds || []).join('|');
+            return readOnly && noHistory && sameTasks;
+          }
+        } },
+        { target: 'command-chat', title: 'Ответ без скрытых изменений', text: '✓ Ответ уже в диалоге. Это результат по текущим данным Aven: read-only урок не добавил задачу, расход или запись в Историю. Неподдерживаемая фраза не засчитывается — её можно исправить и повторить.' },
+        { target: 'command-limits', title: 'Команды дополняют обычный интерфейс', text: 'Все разделы работают без команд и без голоса. Изменяющие команды используют обычные действия, подтверждения и Историю, но в первом интерактивном уроке мы намеренно выбрали безопасный вопрос.' },
         { target: 'command-chat', title: 'Создайте задачу одной фразой', text: 'Теперь попробуйте: «Создай задачу купить масло на завтра». Aven создаст обычную задачу — такую же, как через форму. Ответ скажет, что именно создано и на какую дату.' },
         { target: 'command-chat', title: 'Проверьте в обычном разделе', text: 'После команды откройте «Задачи» или «День» — новая задача уже там. Отдельных «командных» записей не бывает: это одни и те же данные во всех разделах.' },
         { target: 'command-chat', title: 'Запишите заметку одной фразой', text: 'Попробуйте: «Создай заметку купить фильтр для машины». Текст после слова «заметку» целиком становится содержимым заметки — даже если внутри есть похожие на другие команды слова, вроде «встреча» или «расход». Это обычная заметка, как через форму.' },
@@ -224,69 +283,90 @@ window.AvenTutorial = (function () {
     try { return window.matchMedia && window.matchMedia(MOBILE_QUERY).matches; }
     catch (e) { return window.innerWidth <= 640; }
   }
+  function reducedMotion() {
+    try { return document.documentElement.classList.contains('reduce-motion')
+      || !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+    catch (e) { return false; }
+  }
   function currentRoute() { return (location.hash || '#/home').replace(/^#\//, '') || 'home'; }
   function targetSelector(name) { return '[data-tour="' + String(name || '').replace(/"/g, '') + '"]'; }
   function stepDef() { return active && defs[active.id] && defs[active.id].steps[active.step]; }
-
-  function textForSpeech(step) {
-    if (!step) return '';
-    return step.title + '. ' + step.text;
+  function resolveTarget(step) {
+    if (!step) return null;
+    try {
+      if (typeof step.target === 'function') {
+        const result = step.target({ context: active.context, state: s() });
+        return typeof result === 'string' ? document.querySelector(result) : result;
+      }
+      return document.querySelector(targetSelector(step.target));
+    } catch (e) { return null; }
   }
+  function isAction(step) { return !!(step && step.interaction); }
+
+  function textForSpeech(step) { return step ? step.title + '. ' + step.text : ''; }
   function stopVoice() {
     try { if (window.AvenVoice && window.AvenVoice.stop) window.AvenVoice.stop(); }
-    catch (e) { /* narration is optional */ }
+    catch (e) { /* optional adapter */ }
   }
   function speakStep() {
-    const st = store();
-    const step = stepDef();
+    const st = store(), step = stepDef();
     if (!active || !st.voice || !step) return false;
     stopVoice();
-    try {
-      if (window.AvenVoice && window.AvenVoice.speak) return !!window.AvenVoice.speak(textForSpeech(step), null);
-    } catch (e) { /* TTS failure must not break tutorial */ }
-    return false;
+    try { return !!(window.AvenVoice && window.AvenVoice.speak && window.AvenVoice.speak(textForSpeech(step), null)); }
+    catch (e) { return false; }
   }
 
   function ensureEls() {
     if (els && document.body.contains(els.layer)) return els;
     const layer = document.createElement('div');
     layer.className = 'tour-layer';
-    layer.innerHTML = '<div class="tour-scrim" aria-hidden="true"></div><div class="tour-pop" role="dialog" aria-modal="false" aria-live="polite"></div>';
+    layer.innerHTML = '<div class="tour-spotlight" aria-hidden="true"></div><div class="tour-pop" role="dialog" aria-modal="false" aria-labelledby="tour-title" aria-describedby="tour-instruction"></div>';
     document.body.appendChild(layer);
-    layer.querySelector('.tour-scrim').addEventListener('click', () => close());
     document.body.classList.add('tour-open');
-    els = { layer, pop: layer.querySelector('.tour-pop') };
+    els = { layer, pop: layer.querySelector('.tour-pop'), spotlight: layer.querySelector('.tour-spotlight') };
     return els;
   }
   function clearTarget() {
     document.querySelectorAll('.tour-target-active').forEach((el) => el.classList.remove('tour-target-active'));
+    if (els && els.spotlight) els.spotlight.hidden = true;
+  }
+  function detachInteraction() {
+    if (!active || !active.boundEvents) return;
+    active.boundEvents.forEach((name) => document.removeEventListener(name, onInteraction, true));
+    active.boundEvents = [];
   }
   function cleanup(removeCompletion) {
-    stopVoice();
-    clearTarget();
-    if (els && els.layer && els.layer.parentNode) els.layer.parentNode.removeChild(els.layer);
+    stopVoice(); detachInteraction(); clearTarget();
+    if (active && active.observer) active.observer.disconnect();
+    clearTimeout(resizeTimer);
+    if (els && els.layer && els.layer.parentNode) els.layer.remove();
     document.body.classList.remove('tour-open');
     els = null;
     window.removeEventListener('resize', onResize);
-    document.removeEventListener('keydown', onKey);
+    window.removeEventListener('scroll', onScroll, true);
+    document.removeEventListener('keydown', onKey, true);
     const prev = active && active.previousFocus;
     active = null;
     if (removeCompletion === true) return;
     try { if (prev && document.contains(prev)) prev.focus(); } catch (e) { /* noop */ }
   }
-  function onResize() {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(render, 80);
-  }
+  function onResize() { clearTimeout(resizeTimer); resizeTimer = setTimeout(refreshPosition, 80); }
+  function onScroll() { clearTimeout(resizeTimer); resizeTimer = setTimeout(refreshPosition, 20); }
   function onKey(e) {
     if (!active) return;
-    if (e.key === 'Escape') { e.preventDefault(); close(); }
-    if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
-    if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+    if (e.key === 'Escape') {
+      e.preventDefault(); e.stopImmediatePropagation(); close(); return;
+    }
+    if (e.key === 'ArrowRight' && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { e.preventDefault(); next(); }
+    if (e.key === 'ArrowLeft' && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { e.preventDefault(); prev(); }
   }
   window.addEventListener('hashchange', () => {
     if (!active) return;
-    if (active.navigating) { active.navigating = false; setTimeout(render, 180); return; }
+    if (active.navigating) {
+      active.navigating = false;
+      setTimeout(() => { evaluateInteraction(); render(); }, 180);
+      return;
+    }
     close();
   });
 
@@ -294,139 +374,205 @@ window.AvenTutorial = (function () {
     if (!els) return;
     const pop = els.pop;
     pop.classList.toggle('tour-pop-mobile', isMobile());
+    const vv = window.visualViewport;
+    const vw = Math.max(280, (vv && vv.width) || document.documentElement.clientWidth || window.innerWidth);
+    const vh = Math.max(320, (vv && vv.height) || document.documentElement.clientHeight || window.innerHeight);
+    const ox = (vv && vv.offsetLeft) || 0, oy = (vv && vv.offsetTop) || 0;
     if (isMobile() || !target) {
-      pop.style.left = '12px';
-      pop.style.right = '12px';
-      pop.style.top = 'auto';
-      pop.style.bottom = '12px';
-      pop.style.maxWidth = 'none';
+      pop.style.left = Math.round(ox + 12) + 'px'; pop.style.right = 'auto'; pop.style.top = 'auto';
+      pop.style.bottom = 'max(12px, env(safe-area-inset-bottom))'; pop.style.maxWidth = Math.max(256, vw - 24) + 'px';
       return;
     }
-    const r = target.getBoundingClientRect();
-    const vw = document.documentElement.clientWidth || window.innerWidth;
-    const vh = document.documentElement.clientHeight || window.innerHeight;
-    const pw = Math.min(380, Math.max(300, pop.offsetWidth || 340));
-    const ph = Math.min(320, pop.offsetHeight || 220);
-    let left = r.left + Math.min(r.width / 2, 160) + 18;
-    let top = r.top;
-    if (left + pw + 16 > vw) left = r.left - pw - 18;
-    if (left < 12) left = Math.min(vw - pw - 12, 12);
-    if (top + ph + 16 > vh) top = Math.max(12, vh - ph - 16);
-    pop.style.left = Math.round(left) + 'px';
-    pop.style.right = 'auto';
-    pop.style.top = Math.round(top) + 'px';
-    pop.style.bottom = 'auto';
-    pop.style.maxWidth = pw + 'px';
+    const r = target.getBoundingClientRect(), pw = Math.min(380, Math.max(300, pop.offsetWidth || 340));
+    const ph = Math.min(vh - 24, pop.offsetHeight || 260);
+    let left = r.right + 18, top = r.top;
+    if (left + pw + 12 > ox + vw) left = r.left - pw - 18;
+    left = Math.max(ox + 12, Math.min(left, ox + vw - pw - 12));
+    top = Math.max(oy + 12, Math.min(top, oy + vh - ph - 12));
+    Object.assign(pop.style, { left: Math.round(left) + 'px', right: 'auto', top: Math.round(top) + 'px', bottom: 'auto', maxWidth: pw + 'px' });
+  }
+  function placeSpotlight(target) {
+    if (!els || !els.spotlight || !target || !document.contains(target)) return;
+    const r = target.getBoundingClientRect(), pad = 6, spot = els.spotlight;
+    Object.assign(spot.style, {
+      left: Math.max(4, r.left - pad) + 'px', top: Math.max(4, r.top - pad) + 'px',
+      width: Math.max(1, r.width + pad * 2) + 'px', height: Math.max(1, r.height + pad * 2) + 'px'
+    });
+    spot.hidden = false;
+  }
+  function refreshPosition() {
+    if (!active || !els) return;
+    const target = resolveTarget(stepDef());
+    clearTarget();
+    if (target) { target.classList.add('tour-target-active'); placeSpotlight(target); }
+    placePopover(target);
+  }
+  function scrollToTarget(target) {
+    if (!target) return;
+    try { target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' }); } catch (e) { /* jsdom */ }
+  }
+  function interactionComplete(step) {
+    if (!isAction(step)) return true;
+    if (active.successStep === active.step || active.completedSteps[active.step]) return true;
+    try { return !!(step.interaction.completed && step.interaction.completed({ context: active.context, state: s(), target: resolveTarget(step) })); }
+    catch (e) { return false; }
+  }
+  function bindInteraction(step) {
+    detachInteraction();
+    if (!isAction(step) || interactionComplete(step)) return;
+    const events = Array.isArray(step.interaction.event) ? step.interaction.event : [step.interaction.event || 'click'];
+    active.boundEvents = events;
+    events.forEach((name) => document.addEventListener(name, onInteraction, true));
+  }
+  function onInteraction(event) {
+    if (!active || active.transitioning) return;
+    const step = stepDef(), spec = step && step.interaction, target = resolveTarget(step);
+    if (!spec) return;
+    const accepted = spec.accept
+      ? !!spec.accept({ event, target, context: active.context, state: s() })
+      : !!(target && (event.target === target || target.contains(event.target)));
+    if (!accepted) {
+      if (event.type === 'click' && !(els && els.pop.contains(event.target))) showHint('Попробуйте нажать подсвеченный элемент.');
+      return;
+    }
+    if (spec.allowRoute) active.navigating = true;
+    if (!active.preparedSteps[active.step] && spec.before) {
+      active.preparedSteps[active.step] = true;
+      try { spec.before({ event, target, context: active.context, state: s() }); } catch (e) { /* safe */ }
+    }
+    setTimeout(() => evaluateInteraction(event), Number(spec.delay || 0));
+  }
+  function evaluateInteraction(event) {
+    if (!active || active.transitioning) return false;
+    const step = stepDef(), spec = step && step.interaction;
+    if (!spec) return false;
+    let valid = false;
+    try { valid = !!spec.validate({ event, target: resolveTarget(step), context: active.context, state: s() }); } catch (e) { valid = false; }
+    if (!valid) {
+      refreshPosition();
+      if (event && event.type !== 'input') showHint(spec.retry || 'Пока не получилось. Попробуйте ещё раз на подсвеченном элементе.');
+      return false;
+    }
+    succeed(spec.success || '✓ Готово. Действие выполнено.');
+    return true;
+  }
+  function showHint(text) {
+    if (!active || !els) return;
+    active.hint = text;
+    const box = els.pop.querySelector('.tour-feedback');
+    if (box) { box.className = 'tour-feedback tour-feedback-hint'; box.textContent = text; }
+    const target = resolveTarget(stepDef());
+    if (target) { target.classList.remove('tour-target-nudge'); void target.offsetWidth; target.classList.add('tour-target-nudge'); }
+  }
+  function succeed(text) {
+    if (!active || active.transitioning || active.successStep === active.step) return;
+    active.transitioning = true; active.successStep = active.step; active.completedSteps[active.step] = true; detachInteraction();
+    const box = els && els.pop.querySelector('.tour-feedback');
+    if (box) { box.className = 'tour-feedback tour-feedback-success'; box.textContent = text; }
+    const delay = reducedMotion() ? 80 : 650;
+    setTimeout(() => {
+      if (!active) return;
+      active.transitioning = false;
+      const def = defs[active.id];
+      if (active.step < def.steps.length - 1) { active.step++; active.successStep = -1; render(); }
+      else finish();
+    }, delay);
   }
 
   function render() {
     if (!active) return;
-    const def = defs[active.id];
-    const step = def && def.steps[active.step];
+    const def = defs[active.id], step = def && def.steps[active.step];
     if (!def || !step) return close();
-    const ui = ensureEls();
-    /* Шаг может подготовить экран (например, открыть нужный шаг дневного сценария).
-       Это не бизнес-логика: обучение только переключает представление. */
-    if (typeof step.prepare === 'function') { try { step.prepare(); } catch (e) { /* обучение не должно ломать страницу */ } }
-    clearTarget();
-    const target = document.querySelector(targetSelector(step.target));
-    if (target) {
-      target.classList.add('tour-target-active');
-      try { target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' }); } catch (e) { /* jsdom */ }
+    if (step.route && currentRoute() !== step.route) {
+      active.navigating = true; location.hash = '#/' + step.route; setTimeout(render, 260); return;
     }
-    const total = def.steps.length;
-    const st = store();
-    const canPrev = active.step > 0;
-    const isLast = active.step >= total - 1;
+    const ui = ensureEls();
+    if (typeof step.prepare === 'function') { try { step.prepare(); } catch (e) { /* presentation only */ } }
+    clearTarget();
+    const target = resolveTarget(step);
+    if (target) { target.classList.add('tour-target-active'); scrollToTarget(target); placeSpotlight(target); }
+    const total = def.steps.length, st = store(), canPrev = active.step > 0, isLast = active.step >= total - 1;
+    const action = isAction(step), done = interactionComplete(step), missing = !target;
+    const remaining = Math.max(0, total - active.step - 1);
     ui.pop.innerHTML = `
-      <div class="tour-kicker">Обучение · ${A.esc(def.title)} · шаг ${active.step + 1}/${total}</div>
-      <h3>${A.esc(step.title)}</h3>
-      <p>${A.esc(step.text)}</p>
-      ${target ? '' : '<div class="tour-missing">Этот элемент сейчас не виден. Можно продолжить обучение: engine не ломает страницу при missing target.</div>'}
+      <div class="tour-kicker">Обучение · ${A.esc(def.title)}</div>
+      <div class="tour-progress-row"><span>Шаг ${active.step + 1} из ${total}</span><span>${remaining ? 'Осталось: ' + remaining : 'Финальный шаг'}</span></div>
+      <div class="tour-progress" role="progressbar" aria-label="Прогресс обучения" aria-valuemin="1" aria-valuemax="${total}" aria-valuenow="${active.step + 1}"><span style="width:${Math.round((active.step + 1) / total * 100)}%"></span></div>
+      <h3 id="tour-title">${A.esc(step.title)}</h3>
+      <p id="tour-instruction">${A.esc(step.text)}</p>
+      ${action ? `<div class="tour-turn" aria-live="polite">${done ? '✓ Действие уже выполнено' : 'Теперь ваша очередь'}</div>` : ''}
+      <div class="tour-feedback${active.hint ? ' tour-feedback-hint' : ''}" role="status" aria-live="polite">${A.esc(active.hint || '')}</div>
+      ${missing ? '<div class="tour-missing">Элемент сейчас не виден. Повторите поиск или продолжите без этого шага — обучение не заблокирует страницу.</div>' : ''}
       <div class="tour-controls" aria-label="Управление обучением">
         <button class="btn small" data-action="tour-prev" ${canPrev ? '' : 'disabled'}>← Назад</button>
-        ${isLast ? '<button class="btn primary small" data-action="tour-finish">Готово</button>' : '<button class="btn primary small" data-action="tour-next">Далее →</button>'}
+        ${isLast ? '<button class="btn primary small" data-action="tour-finish">Готово</button>' : `<button class="btn primary small" data-action="tour-next" ${action && !done ? 'disabled aria-disabled="true"' : ''}>Далее →</button>`}
+        ${missing ? '<button class="btn small" data-action="tour-retry">Повторить поиск</button>' + (action ? '<button class="btn small" data-action="tour-continue">Продолжить без действия</button>' : '') : ''}
         <button class="btn small" data-action="tour-skip">Пропустить</button>
       </div>
       <div class="tour-voice">
         <button class="btn small" data-action="tour-voice" aria-pressed="${st.voice ? 'true' : 'false'}">${st.voice ? '🔊 Голос: вкл' : '🔇 Голос: выкл'}</button>
-        <button class="btn small" data-action="tour-repeat">Повторить</button>
+        <button class="btn small" data-action="tour-repeat">Повторить текст</button>
         <button class="btn small" data-action="tour-stop">Стоп</button>
         <button class="icon-btn" data-action="tour-close" aria-label="Закрыть обучение">✕</button>
       </div>`;
-    placePopover(target);
-    st.progress[active.id] = active.step;
-    save();
-    const focus = ui.pop.querySelector(isLast ? '[data-action="tour-finish"]' : '[data-action="tour-next"]');
-    try { focus && focus.focus(); } catch (e) { /* noop */ }
+    active.hint = '';
+    placePopover(target); bindInteraction(step);
+    st.progress[active.id] = active.step; save();
+    if (action && target && !done) {
+      try { target.focus({ preventScroll: true }); } catch (e) { /* not every target is focusable */ }
+    } else {
+      const focus = ui.pop.querySelector(isLast ? '[data-action="tour-finish"]' : '[data-action="tour-next"]');
+      try { focus && focus.focus(); } catch (e) { /* noop */ }
+    }
     speakStep();
   }
 
   function start(id, opts) {
-    const def = defs[id];
-    if (!def) return false;
+    const def = defs[id]; if (!def) return false;
     close(false);
-    const st = store();
-    const restart = opts && opts.restart;
-    const saved = Number(st.progress[id] || 0);
-    active = {
-      id,
-      step: restart ? 0 : Math.max(0, Math.min(saved, def.steps.length - 1)),
-      previousFocus: document.activeElement,
-      navigating: false
-    };
-    window.addEventListener('resize', onResize);
-    document.addEventListener('keydown', onKey);
-    const route = currentRoute();
-    if (def.route && route !== def.route) {
-      active.navigating = true;
-      location.hash = '#/' + def.route;
-      setTimeout(render, 260);
-    } else render();
+    const st = store(), restart = opts && opts.restart, saved = Number(st.progress[id] || 0);
+    let initialStep = restart ? 0 : Math.max(0, Math.min(saved, def.steps.length - 1));
+    /* Waiting/context/DOM are intentionally ephemeral. After reload an interactive
+       checkpoint cannot be trusted, so restart that scenario instead of restoring
+       a stale modal/entity correlation. Informational progress remains compatible. */
+    if (!restart && isAction(def.steps[initialStep])) initialStep = 0;
+    active = { id, step: initialStep, previousFocus: document.activeElement,
+      navigating: false, transitioning: false, successStep: -1, hint: '', context: {}, preparedSteps: {}, completedSteps: {}, boundEvents: [], observer: null };
+    window.addEventListener('resize', onResize); window.addEventListener('scroll', onScroll, true);
+    document.addEventListener('keydown', onKey, true);
+    if (window.MutationObserver) {
+      active.observer = new MutationObserver(() => { if (active && !active.transitioning) refreshPosition(); });
+      active.observer.observe(document.getElementById('page') || document.body, { childList: true, subtree: true });
+    }
+    if (def.route && currentRoute() !== def.route) { active.navigating = true; location.hash = '#/' + def.route; setTimeout(render, 260); }
+    else render();
     return true;
   }
-  function next() {
-    if (!active) return;
-    const def = defs[active.id];
-    stopVoice();
-    active.step = Math.min(active.step + 1, def.steps.length - 1);
-    render();
+  function next(force) {
+    if (!active || active.transitioning) return false;
+    const def = defs[active.id], step = stepDef();
+    if (isAction(step) && !interactionComplete(step) && force !== true) { showHint('Сначала выполните действие на подсвеченном элементе.'); return false; }
+    stopVoice(); detachInteraction(); active.step = Math.min(active.step + 1, def.steps.length - 1); active.successStep = -1; render(); return true;
   }
   function prev() {
-    if (!active) return;
-    stopVoice();
-    active.step = Math.max(active.step - 1, 0);
-    render();
+    if (!active || active.transitioning) return false;
+    stopVoice(); detachInteraction(); active.step = Math.max(active.step - 1, 0); active.successStep = -1; render(); return true;
   }
   function finish() {
     if (!active) return;
-    const st = store();
-    st.completed[active.id] = true;
-    st.progress[active.id] = 0;
-    save();
-    A && A.toast && A.toast('Обучение завершено: ' + (defs[active.id] && defs[active.id].title));
-    close(false);
+    const st = store(); st.completed[active.id] = true; st.progress[active.id] = 0; save();
+    A && A.toast && A.toast('Обучение завершено: ' + (defs[active.id] && defs[active.id].title)); close(false);
   }
   function skip() {
     if (!active) return;
-    const st = store();
-    st.progress[active.id] = 0;
-    save();
-    A && A.toast && A.toast('Обучение пропущено — можно запустить позже из Help');
-    close(false);
+    const st = store(); st.progress[active.id] = 0; save();
+    A && A.toast && A.toast('Обучение пропущено — реальные действия сохранены; вернуться можно из Help'); close(false);
   }
   function close(showToast) {
     if (!active) return;
-    cleanup(false);
-    if (showToast !== false && A && A.toast) A.toast('Обучение закрыто');
+    cleanup(false); if (showToast !== false && A && A.toast) A.toast('Обучение закрыто');
   }
-  function toggleVoice() {
-    const st = store();
-    st.voice = !st.voice;
-    save();
-    if (!st.voice) stopVoice();
-    render();
-  }
+  function toggleVoice() { const st = store(); st.voice = !st.voice; save(); if (!st.voice) stopVoice(); render(); }
   function repeat() { speakStep(); }
 
   /* tourId позволяет разделить категорию Help и идентификатор обучения
@@ -449,14 +595,16 @@ window.AvenTutorial = (function () {
     'tour-close': () => close(),
     'tour-voice': () => toggleVoice(),
     'tour-repeat': () => repeat(),
-    'tour-stop': () => stopVoice()
+    'tour-stop': () => stopVoice(),
+    'tour-retry': () => render(),
+    'tour-continue': () => next(true)
   });
 
   return {
     definitions: defs,
     start, next, prev, finish, skip, close,
     isActive: () => !!active,
-    current: () => active ? { id: active.id, step: active.step } : null,
+    current: () => active ? { id: active.id, step: active.step, waiting: isAction(stepDef()) && !interactionComplete(stepDef()), context: Object.assign({}, active.context) } : null,
     store
   };
 })();

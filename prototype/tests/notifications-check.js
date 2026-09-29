@@ -192,7 +192,7 @@ async function load(hash) {
     await p.go('#/notifications');
     ok('H6 на странице «Уведомления» есть кнопка контекстной помощи', !!p.q('[data-action="help-topic"][data-topic="notifications"]'));
     p.w.AvenTutorial.start('notifications', { restart: true }); await sleep(200);
-    ok('H7 тур «Уведомления» запускается и показывает шаг 1', !!p.q('.tour-layer') && /шаг 1/.test(p.text('.tour-pop')), p.text('.tour-pop').slice(0, 60));
+    ok('H7 тур «Уведомления» запускается и показывает шаг 1', !!p.q('.tour-layer') && /Шаг 1 из/.test(p.text('.tour-pop')), p.text('.tour-pop').slice(0, 60));
   }
 
   console.log('\nвсего проверок: ' + (pass + fail) + ', провалено: ' + fail);
