@@ -540,3 +540,18 @@
 - **Что проверить перед `Accepted`:** измерения в spike S2/S3 (нагрузка на БД, задержки) — вводить компонент без цифр нельзя.
 - **Последствия:** Введение кэш-сервера оформляется новым ADR с результатами измерений; архитектура приложения
   не должна предполагать наличия внешнего кэша (иначе отказ от него станет скрытой зависимостью).
+
+## Product Decision — Auto/Shopping cost and Finance-link policy (2026-09-29)
+
+**Статус:** Product Decision, утверждено владельцем.
+
+- Цена, стоимость или сумма внутри Auto entity сама по себе **не является** Finance mutation.
+- Auto-only запись может содержать стоимость и следует обычной command policy: EXACT safe mutation
+  выполняется сразу; INFERRED требует confirmation; ambiguity требует clarification.
+- Finance operation создаётся только по явной просьбе пользователя («добавь в расходы», «учти в
+  финансах») либо по отдельно документированному обязательному product rule. Молчаливой связи нет.
+- Любой реальный Auto + Finance link требует confirmation ALWAYS. До Confirm и после Cancel нет Auto,
+  Finance и History. Confirm/Undo должны быть атомарны через существующий Common Action contract.
+- Для будущего Shopping действует тот же принцип: цена покупки сама по себе не создаёт Finance
+  operation; реальная Finance mutation требует confirmation ALWAYS. Shopping text commands этим
+  решением не реализованы.

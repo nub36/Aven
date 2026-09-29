@@ -422,6 +422,44 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
     }
   }
 
+  {
+    /* Auto iteration 6 использует тот же session: Auto-only сразу, linked —
+       уточнение счёта → отдельное финансовое подтверждение. */
+    {
+      const e = sandbox(); clearHistory(e);
+      const r = e.session.submit('Запиши заправку 40 л на 2000 рублей, пробег 105000');
+      ok('S121 Auto-only EXACT выполняется сразу без pending',
+        r.ok && r.status === 'done' && e.session.pending() === null && e.state.car.fuel.length === 1);
+      ok('S122 Auto-only cost не создаёт Finance', e.state.ops.length === 0 && e.state.history.length === 1);
+    }
+    {
+      const e = sandbox(); clearHistory(e);
+      const r = e.session.submit('Запиши заправку 40 л на 2000 рублей и добавь в расходы со счета карта');
+      ok('S123 linked Auto всегда ждёт confirmation', r.status === 'confirmation_required' && e.session.pending().type === 'confirmation');
+      ok('S124 до linked confirm нет Auto/Finance/History', e.state.car.fuel.length === 0 && e.state.ops.length === 0 && e.state.history.length === 0);
+      const done = e.session.confirm();
+      ok('S125 linked confirm создаёт одну Auto и одну Finance', done.ok && e.state.car.fuel.length === 1 && e.state.ops.length === 1);
+      ok('S126 linked action пишет одну History entry', e.state.history.length === 1 && e.state.history[0].undo.type === 'batch');
+      ok('S127 repeat confirm безопасен', e.session.confirm().status === 'no_pending' && e.state.car.fuel.length === 1 && e.state.ops.length === 1);
+    }
+    {
+      const e = sandbox(); clearHistory(e);
+      e.session.submit('Запиши обслуживание замена масла на 3000 рублей и учти в финансах со счета карта');
+      const no = e.session.submit('нет');
+      ok('S128 cancel linked flow создаёт ничего', no.status === 'cancelled' && e.state.car.service.length === 0 && e.state.ops.length === 0 && e.state.history.length === 0);
+    }
+    {
+      const e = sandbox(); clearHistory(e);
+      const r = e.session.submit('Запиши обслуживание фильтры на 1500 рублей и учти в финансах');
+      ok('S129 linked Auto без счёта уточняет через общий slot flow', r.status === 'clarification_required' && e.session.pending().slot === 'account');
+      const choice = e.session.choose(0);
+      ok('S130 выбор счёта не считается Confirm', choice.status === 'confirmation_required' && e.state.car.service.length === 0 && e.state.ops.length === 0);
+      e.state.finAccounts.length = 0;
+      const stale = e.session.confirm();
+      ok('S131 stale account безопасен для обеих сущностей', stale.status === 'stale' && e.state.car.service.length === 0 && e.state.ops.length === 0 && e.state.history.length === 0);
+    }
+  }
+
   ['первую', 'вторая', 'вторую', 'отмена', 'нет', 'подтвердить'].forEach((word, i) => {
     const e = sandbox(); const a = task(e, 'Тест один'), b = task(e, 'Тест два'); clearHistory(e);
     e.session.submit('Отметь тест выполненным');

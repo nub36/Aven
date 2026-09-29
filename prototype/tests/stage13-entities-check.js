@@ -196,6 +196,17 @@ function partA() {
   ok('R4 позже обслуживание связывается с финансами отдельной командой',
     link.ok && !!C.auto.getRecord('service', svc.entity.id).entity.financeOpId && C.finance.getOperations({}).count === opsBefore + 1);
   ok('R5 повторная связь не создаёт вторую трату', C.auto.linkFinance('service', svc.entity.id).code === 'ALREADY_LINKED');
+  const fuelCountAtomic = C.auto.getRecords('fuel').count, opCountAtomic = C.finance.getOperations({}).count;
+  const atomicFail = C.auto.createRecord('fuel', { liters: '20', sum: '1000', km: km0 + 800,
+    dateISO: FIXED, linkFinance: true, finance: { cat: 'Авто', account: 'missing-account' } });
+  ok('R5a ошибка linked Finance не оставляет частичную Auto-запись',
+    !atomicFail.ok && C.auto.getRecords('fuel').count === fuelCountAtomic && C.finance.getOperations({}).count === opCountAtomic);
+  const atomicOk = C.auto.createRecord('fuel', { liters: '20', sum: '1000', km: km0 + 800,
+    dateISO: FIXED, linkFinance: true, finance: { cat: 'Авто', account: 'card' } });
+  ok('R5b linked Common Action создаёт обе части с одной batch History entry',
+    atomicOk.ok && !!atomicOk.entity.financeOpId && H()[0].action === 'car.fuel.create' && H()[0].undo.type === 'batch');
+  ok('R5c linked Common Action использует явно разрешённый существующий счёт',
+    C.finance.getOperation(atomicOk.entity.financeOpId).entity.account === 'card');
   ok('R6 показатели авто считаются, а не берутся из воздуха',
     C.auto.stats().totalCost > 0 && typeof C.auto.stats().nextServiceLeft === 'number');
   const doc = C.auto.createRecord('doc', { title: 'ОСАГО', untilISO: C.dates.todayISO(20), remindDays: 30 });
