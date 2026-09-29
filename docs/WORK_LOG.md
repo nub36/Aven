@@ -2416,4 +2416,12 @@ engine — `settings.voice.engine`, голос — `settings.voice.natural.voice
 - **Известное ограничение:** настоящий browser smoke зависит от наличия Chromium; jsdom не заменяет его.
 - **Дальше:** отдельный Shopping text commands block после review/merge Iteration 6; не начат.
 - **Финальная проверка:** command-engine 448/448, command-session 116/116,
-  stage13-entities 118/118; полный regression 14 suites, 1488/1488, 0 failures.
+  stage13-entities 119/119; полный regression 14 suites, 1489/1489, 0 failures.
+
+### 2026-09-29 — независимое review PR #32: компенсация linked failure
+
+- Review воспроизвёл контролируемый сбой Auto insertion после успешного silent Finance Common Action.
+- `createAutoRecord` теперь компенсирует созданную Finance operation и баланс, возвращает mileage и
+  не пишет History; orphan expense после post-Finance failure невозможен.
+- Behavioral regression R5d принудительно вызывает этот failure path и проверяет operations, balance,
+  mileage и History. Итоговый полный regression: 14 suites, 1489/1489.

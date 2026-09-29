@@ -207,6 +207,17 @@ function partA() {
     atomicOk.ok && !!atomicOk.entity.financeOpId && H()[0].action === 'car.fuel.create' && H()[0].undo.type === 'batch');
   ok('R5c linked Common Action использует явно разрешённый существующий счёт',
     C.finance.getOperation(atomicOk.entity.financeOpId).entity.account === 'card');
+  const rollbackOps = C.finance.getOperations({}).count, rollbackHistory = H().length;
+  const rollbackBalance = C.finance.account('card').balance, rollbackMileage = C.auto.car().mileage;
+  const originalUnshift = state.car.fuel.unshift;
+  state.car.fuel.unshift = function () { throw new Error('controlled Auto insertion failure'); };
+  const rollback = C.auto.createRecord('fuel', { liters: '25', sum: '1250', km: rollbackMileage + 100,
+    dateISO: FIXED, linkFinance: true, finance: { cat: 'Авто', account: 'card' } });
+  state.car.fuel.unshift = originalUnshift;
+  ok('R5d failure ПОСЛЕ успешного Finance шага компенсирует expense/balance и не пишет History',
+    !rollback.ok && rollback.code === 'AUTO_CREATE_FAILED' &&
+    C.finance.getOperations({}).count === rollbackOps && C.finance.account('card').balance === rollbackBalance &&
+    C.auto.car().mileage === rollbackMileage && H().length === rollbackHistory);
   ok('R6 показатели авто считаются, а не берутся из воздуха',
     C.auto.stats().totalCost > 0 && typeof C.auto.stats().nextServiceLeft === 'number');
   const doc = C.auto.createRecord('doc', { title: 'ОСАГО', untilISO: C.dates.todayISO(20), remindDays: 30 });

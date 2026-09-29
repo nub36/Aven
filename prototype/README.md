@@ -578,5 +578,5 @@ Assistant и строка Главной понимают создание за�
 через существующий `AvenActions.auto.createRecord`. Shopping/Voice/деструктивные команды не добавлены.
 
 Проверка Iteration 6: `command-engine-check.js` — 448/448,
-`command-session-check.js` — 116/116, `stage13-entities-check.js` — 118/118;
-полный набор — 14 suite, 1488/1488, 0 провалов.
+`command-session-check.js` — 116/116, `stage13-entities-check.js` — 119/119;
+полный набор — 14 suite, 1489/1489, 0 провалов.

@@ -1702,9 +1702,20 @@ window.AvenActions = (function () {
        ошибка счёта/категории не оставляет половину пользовательского действия. */
     const link = wantLink ? autoCreateLinkedFinance(kind, item, (params || {}).finance) : null;
     if (wantLink && !link) return err('car.' + kind + '.create', 'FINANCE_LINK_FAILED', 'Не удалось создать связанный расход — запись авто не создана');
-    list.unshift(item);
-    if (kind === 'fuel' && item.km > (Number(car.mileage) || 0)) car.mileage = item.km;
-    save();
+    /* Finance Common Action уже мог успешно изменить ops и balance. Любой сбой
+       следующего Auto-шага обязан компенсировать эту часть до возврата ошибки:
+       linked action для пользователя атомарен и не оставляет orphan expense. */
+    try {
+      list.unshift(item);
+      if (kind === 'fuel' && item.km > (Number(car.mileage) || 0)) car.mileage = item.km;
+      save();
+    } catch (failure) {
+      const inserted = indexOfId(list, item.id);
+      if (inserted >= 0) list.splice(inserted, 1);
+      car.mileage = wasMileage;
+      if (link) deleteOperation(link.op.id, { silent: true });
+      return err('car.' + kind + '.create', 'AUTO_CREATE_FAILED', 'Не удалось создать запись авто — связанный расход отменён');
+    }
     const steps = [{ type: 'remove', list: AUTO_LIST_PATH[kind], id: item.id }];
     if (link) steps.push({ type: 'remove', list: 'ops', id: link.op.id });
     if (car.mileage !== wasMileage) steps.push({ type: 'value', path: 'car.mileage', value: wasMileage });

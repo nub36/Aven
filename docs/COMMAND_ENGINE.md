@@ -703,5 +703,9 @@ linkFinance: true)`: Common Action сначала безопасно созда�
 баланса и изменившегося mileage. Исчезнувший счёт/категория перед Confirm даёт stale failure.
 
 Проверка итерации 6: `command-engine-check.js` — **448/448** (+49),
-`command-session-check.js` — **116/116** (+11), `stage13-entities-check.js` — **118/118** (+3);
-полный regression — **14 suites, 1488/1488, 0 failures**.
+`command-session-check.js` — **116/116** (+11), `stage13-entities-check.js` — **119/119** (+3);
+полный regression — **14 suites, 1489/1489, 0 failures**.
+
+Review hardening: failure Auto insertion после успешного Finance Common Action теперь запускает
+компенсацию Finance operation, account balance и mileage в `AvenActions.auto.createRecord`; R5d
+поведенчески проверяет отсутствие orphan expense и ложной History entry. Полный regression — 1489/1489.
