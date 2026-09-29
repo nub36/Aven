@@ -63,6 +63,17 @@ window.AvenCommand = (function () {
       /* Только transient orchestration flags; business state сюда не попадает. */
       targetId: ctx.targetId || '',
       expectedTitle: ctx.expectedTitle || '',
+      /* Ожидаемое состояние цели на момент показа подтверждения. Это не копия
+         сущности как отдельной бизнес-записи, а минимальный слепок для повторной
+         проверки: если событие успели изменить снаружи, подтверждение обязано
+         безопасно отказать, а не применить устаревший перенос. */
+      expected: ctx.expected && typeof ctx.expected === 'object' ? {
+        title: String(ctx.expected.title || ''),
+        dateISO: String(ctx.expected.dateISO || ''),
+        time: String(ctx.expected.time || ''),
+        endTime: String(ctx.expected.endTime || ''),
+        allDay: ctx.expected.allDay === true
+      } : null,
       selected: ctx.selected === true,
       confirmed: ctx.confirmed === true,
       /* Slots — заполненные пользователем недостающие параметры (счёт/категория
@@ -204,7 +215,8 @@ window.AvenCommand = (function () {
     'Напомни купить масло на завтра',
     'Покажи напоминания',
     'Запиши расход 850 ₽ на продукты',
-    'Покажи расходы за сегодня'
+    'Покажи расходы за сегодня',
+    'Перенеси событие стоматолог на 12:00'
   ];
   const PARSE_MESSAGES = {
     EMPTY: 'Напишите команду — например: «Что у меня сегодня?»',
@@ -216,7 +228,10 @@ window.AvenCommand = (function () {
     TIME_INVALID: 'Такого времени не бывает. Напишите время как «в 10» или «в 10:30».',
     RESCHEDULE_DATE_REQUIRED: 'Напишите, на какую дату перенести: «Перенеси задачу купить масло на завтра».',
     UNSUPPORTED_DELETE: 'Удалять записи текстовой командой я пока не умею — это делается в разделе, с подтверждением и возможностью отмены.',
-    UNSUPPORTED_EVENT_UPDATE: 'Переносить события текстом я пока не умею. Откройте событие в «Календаре» — там можно изменить дату и время.',
+    UNSUPPORTED_EVENT_UPDATE: 'Перенести событие я умею так: «Перенеси встречу с Сергеем на завтра в 12:00» или «Перенеси событие стоматолог на 15:30» — и всегда спрошу подтверждение. В этой фразе я не поняла, какое событие переносить; название лучше писать сразу после слова «встречу» или «событие». Остальное в событии (название, место, описание, участники, повторение) пока меняется только в «Календаре».',
+    UNSUPPORTED_EVENT_FIELD: 'Менять текстом название, место, описание, участников или повторение события я пока не умею — только дату и время: «Перенеси встречу с Сергеем на завтра в 12:00». Остальные поля есть в форме события в «Календаре».',
+    EVENT_QUERY_REQUIRED: 'Не поняла, какое событие перенести. Напишите так: «Перенеси встречу с Сергеем на завтра в 12:00».',
+    EVENT_WHEN_REQUIRED: 'Не поняла, на какую дату или время перенести событие. Напишите так: «Перенеси встречу с Сергеем на завтра», «Перенеси событие стоматолог на 15:30» или «… на пятницу в 15:30».',
     UNSUPPORTED_FINANCE: 'Записывать расходы и доходы текстом я пока не умею. Добавьте операцию в разделе «Финансы».',
     UNSUPPORTED_REMINDER: 'Изменять, откладывать или скрывать уже созданное напоминание текстовой командой я пока не умею. Откройте «Уведомления» — там это можно сделать, и действие попадёт в «Историю». Создать новое напоминание и посмотреть список я уже умею: «Напомни купить масло на завтра», «Покажи напоминания».',
     UNSUPPORTED_AUTO: 'Эту команду об автомобиле я пока не понимаю. Заправку можно записать так: «Запиши заправку 45 л на 2500 рублей».',
@@ -615,7 +630,11 @@ window.AvenCommand = (function () {
       if (!q) return fail('PURCHASE_QUERY_REQUIRED', 'shopping.purchase.warranty');
       return intent('shopping.purchase.warranty', 'query', { mode: 'item', q }, 'shopping.purchase.warranty');
     }
-    if (/(истекл[а-яе]*|просроченн[а-яе]*)\s+гаранти[а-яе]*|гаранти[а-яе]*\s+(?:истекл[а-яе]*|просроченн[а-яе]*)/.test(n)) {
+    /* Формы «истекла» и «истекшей/истёкшей» (после нормализации ё→е — одна и та же
+       строка) относятся к одному и тому же вопросу про уже закончившуюся гарантию.
+       Это точечное перечисление словоформ, а не морфологический анализатор:
+       «истекающая» по-прежнему означает «скоро закончится» и разбирается ниже. */
+    if (/(истек(?:л|ш)[а-яе]*|просроченн[а-яе]*)\s+гаранти[а-яе]*|гаранти[а-яе]*\s+(?:истек(?:л|ш)[а-яе]*|просроченн[а-яе]*)/.test(n)) {
       return intent('shopping.purchase.warranty', 'query', { mode: 'expired' }, 'shopping.purchase.warranty');
     }
     if (/(скоро|заканчива(?:ется|ются)|законч(?:ится|атся)|истекающ[а-яе]*|истекает)/.test(n)) {
@@ -741,6 +760,65 @@ window.AvenCommand = (function () {
     if (!title || /^событие$/i.test(title)) return fail('EVENT_TITLE_REQUIRED', 'event.create');
     return intent('event.create', 'mutation',
       { title, dateISO: when.dateISO || context.todayISO, time: when.time || '' }, 'event.create');
+  }
+
+  /* ---------- Перенос уже существующего события (Stage 2, итерация 8) ----------
+     «Перенеси встречу с Сергеем на завтра в 12:00», «Перенеси событие стоматолог
+     на 15:30», «Измени встречу с врачом на пятницу в 15:30».
+
+     Домен определяется ровно тем же явным словом, что и у `event.create`
+     (EVENT_WORD/EVENT_LABEL): «встречу», «событие», «созвон», «звонок», «приём»,
+     «визит» — и это слово должно стоять в начале названия. Никакого fuzzy-подбора
+     домена по содержимому нет: «Перенеси задачу …» остаётся задачей, «перенеси
+     заметку/напоминание/покупку …» — своими честными отказами. Название события
+     собирается тем же правилом «метка + остаток», которым `event.create` строит
+     заголовок, поэтому «перенеси встречу с Сергеем» ищет событие «Встреча
+     с Сергеем» без морфологического анализатора.
+
+     Разбор остаётся чистым: событие здесь не ищется и не меняется. */
+  function parseEventReschedule(n, raw, context) {
+    const rx = new RegExp('^(?:' + MOVE_VERB + '|измени|изменить|поменяй|поменять)\\s+(.+?)\\s+на\\s+(.+)$', 'i');
+    if (!rx.test(n)) return null;
+    if (!EVENT_WORD.test(n)) return null;
+    /* Другие домены разбираются своими правилами — перехватывать их нельзя. */
+    if (new RegExp(NOT_BEFORE + TASK_WORD + NOT_AFTER).test(n)) return null;
+    if (new RegExp(NOT_BEFORE + '(?:' + NOTE_WORD + '|' + REMINDER_WORD + '|' + PURCHASE_WORD + '|' + EXPENSE_WORD + ')').test(n)) return null;
+    const m = rx.exec(raw) || rx.exec(n);
+    const head = tidy(String(m[1] || '').replace(/^(?:мо[юяей][а-яё]*|эт[ауоей][а-яё]*)\s+/i, ''));
+    const tail = tidy(m[2] || '');
+    let label = null, restTitle = head;
+    for (let i = 0; i < EVENT_LABEL.length; i++) {
+      const e = EVENT_LABEL[i];
+      if (e.rx.test(head)) { label = e.label; restTitle = tidy(head.replace(e.rx, ' ')); break; }
+    }
+    /* Слово события должно быть тем, что переносят, а не случайным словом внутри
+       фразы: иначе «перенеси оплату на встречу» стало бы переносом события. */
+    if (label === null) return null;
+    const query = tidy(label ? label + ' ' + restTitle : restTitle);
+    if (!query) return fail('EVENT_QUERY_REQUIRED', 'event.reschedule');
+    const when = extractWhen(tail, context);
+    if (when.error) return fail(when.error, 'event.reschedule');
+    let time = when.time || '';
+    let leftover = tidy(when.rest || '');
+    if (!time && leftover) {
+      /* «на 12» — это час, а не дата: числа как даты пишутся «12.05». Та же
+         конвенция, что у «в 10» в существующем парсере времени. */
+      const bare = /^(\d{1,2})(?:\s*(?:час[а-яе]*|ч))?$/.exec(normalize(leftover));
+      if (bare) {
+        const h = +bare[1];
+        if (h > 23) return fail('TIME_INVALID', 'event.reschedule');
+        time = pad(h) + ':00';
+        leftover = '';
+      }
+    }
+    /* Непонятый хвост («на следующую пятницу», «на утро») не отбрасывается молча:
+       иначе команда выполнила бы не то, что попросили. */
+    if (leftover && !/^(?:в|во|к|на|уже|пожалуйста)(?:\s+(?:в|во|к|на|уже|пожалуйста))*$/i.test(normalize(leftover))) {
+      return fail('EVENT_WHEN_REQUIRED', 'event.reschedule');
+    }
+    if (!when.dateISO && !time) return fail('EVENT_WHEN_REQUIRED', 'event.reschedule');
+    return intent('event.reschedule', 'mutation',
+      { query, dateISO: when.dateISO || '', time }, 'event.reschedule');
   }
 
   function parseTaskComplete(n, raw) {
@@ -872,7 +950,18 @@ window.AvenCommand = (function () {
         return fail('UNSUPPORTED_PURCHASE_UPDATE', 'guard.purchase.update');
       }
     }
-    if (new RegExp('^(?:' + MOVE_VERB + ')').test(n) && EVENT_WORD.test(n)) return fail('UNSUPPORTED_EVENT_UPDATE', 'guard.event.update');
+    /* Перенос события по дате/времени уже разобран правилом выше
+       (parseEventReschedule). Если разбор дошёл сюда со словом события, значит это
+       либо непонятая формулировка переноса, либо изменение других полей события —
+       и то и другое честно объясняется, без мутации и без записи в «Историю». */
+    if (EVENT_WORD.test(n)) {
+      if (hasWord(n, 'переименуй|переименовать|назови|назвать|название|место|описание|участник[а-яе]*|повтор[а-яе]*|напоминание')) {
+        return fail('UNSUPPORTED_EVENT_FIELD', 'guard.event.field');
+      }
+      if (new RegExp('^(?:' + MOVE_VERB + '|измени|изменить|поменяй|поменять)').test(n)) {
+        return fail('UNSUPPORTED_EVENT_UPDATE', 'guard.event.update');
+      }
+    }
     return null;
   }
 
@@ -880,7 +969,7 @@ window.AvenCommand = (function () {
     parseTaskCreate, parseNoteCreate, parseNoteSearch, parseReminderCreate, parseReminderSearch,
     parseFuelCreate, parseServiceCreate, parseExpenseCreate, parseExpenseList,
     parsePurchaseCreate, parsePurchaseWarranty, parsePurchaseSearch, parseIncomeUnsupported,
-    parseEventCreate, parseTaskComplete, parseTaskReschedule,
+    parseEventReschedule, parseEventCreate, parseTaskComplete, parseTaskReschedule,
     parseCapabilities, parseFinanceQuery, parseAutoQuery, parseOverdueQuery,
     parseSuggestionsQuery, parseDayQuery, parseUnsupported
   ];
@@ -945,6 +1034,41 @@ window.AvenCommand = (function () {
     if (partial.length > 1) return { ok: false, status: 'ambiguous', resolution: 'AMBIGUOUS', code: 'AMBIGUOUS', candidates: partial.map(taskCandidate) };
     return { ok: false, status: 'not_found', resolution: 'UNSUPPORTED', code: 'NOT_FOUND', candidates: [] };
   }
+  /* Событие как цель команды. Кандидат показывает пользователю только то, что
+     помогает выбрать (название, дату, время); id нужен лишь для продолжения flow. */
+  function eventCandidate(e) {
+    const C = Core();
+    return {
+      id: e.id, kind: 'event', title: e.title || '',
+      dateISO: e.date || '', time: C.events.start(e) || '', endTime: C.events.end(e) || '',
+      allDay: !!e.allDay, repeat: e.repeat || 'none'
+    };
+  }
+  /* Ровно те же дискретные правила, что у задач (resolveTask): полное название —
+     EXACT, единственное вхождение целым словом/фразой с содержательным словом
+     3+ символа — INFERRED, несколько — AMBIGUOUS, ничего — not_found.
+     Отдельного EventResolutionEngine и fuzzy-подбора нет. */
+  function resolveEvent(query, context) {
+    const list = (Core().events.getEvents({}).items || []).filter((e) => e && !e.archived);
+    const q = normalize(query);
+    if (!q) return { ok: false, status: 'not_found', resolution: 'UNSUPPORTED', code: 'EVENT_NOT_FOUND', candidates: [] };
+    const exact = list.filter((e) => normalize(e.title) === q);
+    if (exact.length === 1) return { ok: true, status: 'resolved', resolution: 'EXACT', entity: eventCandidate(exact[0]) };
+    if (exact.length > 1) return { ok: false, status: 'ambiguous', resolution: 'AMBIGUOUS', code: 'AMBIGUOUS_EVENT', candidates: exact.map(eventCandidate) };
+    const meaningful = q.split(/\s+/).some((part) => part.length >= 3);
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const partialRx = meaningful ? wordRx(escaped) : null;
+    const partial = partialRx ? list.filter((e) => partialRx.test(normalize(e.title))) : [];
+    if (partial.length === 1) return { ok: true, status: 'resolved', resolution: 'INFERRED', entity: eventCandidate(partial[0]) };
+    if (partial.length > 1) return { ok: false, status: 'ambiguous', resolution: 'AMBIGUOUS', code: 'AMBIGUOUS_EVENT', candidates: partial.map(eventCandidate) };
+    return { ok: false, status: 'not_found', resolution: 'UNSUPPORTED', code: 'EVENT_NOT_FOUND', candidates: [] };
+  }
+  function toMinutes(hm) {
+    const m = /^(\d{2}):(\d{2})$/.exec(String(hm || ''));
+    return m ? (+m[1]) * 60 + (+m[2]) : -1;
+  }
+  function fromMinutes(total) { return pad(Math.floor(total / 60)) + ':' + pad(total % 60); }
+
   /* Общий безопасный подбор справочного значения (категория/счёт финансов).
      Ровно те же дискретные правила, что у задач: полное совпадение — EXACT,
      единственное вхождение целым словом — INFERRED, несколько — AMBIGUOUS,
@@ -992,6 +1116,9 @@ window.AvenCommand = (function () {
     if (!intentObj || intentObj.ok !== true) return { ok: false, status: 'unsupported', resolution: 'UNSUPPORTED', candidates: [] };
     if (intentObj.action === 'task.complete' || intentObj.action === 'task.reschedule') {
       return resolveTask((intentObj.params || {}).query, context);
+    }
+    if (intentObj.action === 'event.reschedule') {
+      return resolveEvent((intentObj.params || {}).query, context);
     }
     if ((intentObj.action === 'auto.fuel.create' || intentObj.action === 'auto.service.create') &&
         (intentObj.params || {}).linkFinance) {
@@ -1106,6 +1233,23 @@ window.AvenCommand = (function () {
     return fields + '. И добавить расход ' + C.money.exact(preview.amountMinor / 100) +
       ' в «Финансы»: категория ' + quote(preview.cat) + ', счёт ' + quote(preview.accountName) +
       '. Продолжить? Пока ничего не изменилось.';
+  }
+  /* Сводка переноса события: пользователь обязан увидеть, какое это событие и что
+     именно изменится — старая дата/время → новая дата/время, целиком. Ни id,
+     ни JSON, ни имён действий. Интервал показывается полностью (начало—окончание),
+     потому что окончание сдвигается вместе с началом (Product Decision «Event update text commands», DECISIONS.md, 2026-09-29). */
+  function eventWhenText(dateISO, time, endTime, allDay) {
+    const C = Core();
+    const day = whenPhrase(dateISO, '');
+    if (allDay) return day + ', весь день';
+    if (!time) return day + ', без времени';
+    return day + ', ' + C.format.time(time) + (endTime ? '–' + C.format.time(endTime) : '');
+  }
+  function eventMoveSummary(target, next) {
+    return 'Перенести ' + quote(target.title) + ': ' +
+      eventWhenText(target.dateISO, target.time, target.endTime, target.allDay) + ' → ' +
+      eventWhenText(next.dateISO, next.time, next.endTime, target.allDay) +
+      '? Пока ничего не изменилось.';
   }
   function ambiguous(actionName, intentObj, candidates) {
     return result(false, 'ambiguous', actionName, {
@@ -1397,6 +1541,105 @@ window.AvenCommand = (function () {
           data: actionName === 'task.complete' ? { title: res.entity.title } : { title: res.entity.title, dateISO: p.dateISO }
         });
       }
+      /* Перенос существующего события. Политика владельца: подтверждение ВСЕГДА,
+         даже при EXACT-совпадении и простой смене времени. До Confirm событие,
+         «Календарь» и «История» не меняются ни на байт. */
+      case 'event.reschedule': {
+        let found;
+        if (context.targetId) {
+          /* Продолжение flow хранит только ссылку и ожидаемые поля; перед
+             выполнением цель перечитывается общим запросом. */
+          const fresh = C.events.getEvent(context.targetId);
+          const staleFail = () => result(false, 'stale', 'event.reschedule', {
+            code: 'STALE_TARGET', intent: intentObj,
+            message: 'Это событие уже изменилось или его больше нет. Ничего не изменилось — повторите команду.'
+          });
+          if (!fresh.ok || fresh.entity.archived) return staleFail();
+          const cand = eventCandidate(fresh.entity);
+          const exp = context.expected;
+          if (context.expectedTitle && normalize(cand.title) !== normalize(context.expectedTitle)) return staleFail();
+          if (exp && (cand.dateISO !== exp.dateISO || cand.time !== exp.time ||
+              cand.endTime !== exp.endTime || cand.allDay !== exp.allDay)) return staleFail();
+          found = { ok: true, resolution: context.selected ? 'EXACT' : 'INFERRED', entity: cand };
+        } else found = resolveEvent(p.query, context);
+        if (!found.ok && found.status === 'ambiguous') {
+          return result(false, 'ambiguous', 'event.reschedule', {
+            code: 'AMBIGUOUS_EVENT', resolution: 'AMBIGUOUS', intent: intentObj, candidates: found.candidates
+          });
+        }
+        if (!found.ok) {
+          return result(false, 'not_found', 'event.reschedule', {
+            code: 'EVENT_NOT_FOUND', resolution: 'UNSUPPORTED', intent: intentObj, query: p.query
+          });
+        }
+        const target = found.entity;
+        /* Повторяющиеся события: перенести «это повторение» и «всю серию» —
+           разные действия, и модель события такого выбора не хранит. Честный
+           отказ вместо тихого сдвига всей серии. */
+        if (target.repeat && target.repeat !== 'none') {
+          return result(false, 'invalid', 'event.reschedule', {
+            code: 'UNSUPPORTED_EVENT_REPEAT', intent: intentObj, target,
+            message: 'Событие ' + quote(target.title) + ' повторяющееся, а перенести одно повторение и перенести всю серию — разные действия. Текстом я этого пока не делаю: откройте событие в «Календаре».'
+          });
+        }
+        if (target.allDay && p.time) {
+          return result(false, 'invalid', 'event.reschedule', {
+            code: 'UNSUPPORTED_EVENT_ALLDAY_TIME', intent: intentObj, target,
+            message: 'У события ' + quote(target.title) + ' стоит «весь день», поэтому времени у него нет. Дату я перенести могу («Перенеси событие ' + target.title.toLowerCase() + ' на пятницу»), а превратить его в событие со временем — только в «Календаре».'
+          });
+        }
+        const next = { dateISO: p.dateISO || target.dateISO, time: target.time, endTime: target.endTime };
+        if (p.time) {
+          next.time = p.time;
+          /* Длительность события сохраняется: окончание сдвигается на ту же
+             величину, что и начало (Product Decision «Event update text commands», DECISIONS.md, 2026-09-29).
+             Обе границы показываются в подтверждении — скрытых правил нет. */
+          const from = toMinutes(target.time), to = toMinutes(target.endTime);
+          if (from >= 0 && to >= 0) {
+            const duration = to - from;
+            if (duration < 0) {
+              return result(false, 'invalid', 'event.reschedule', {
+                code: 'EVENT_RANGE_INVALID', intent: intentObj, target,
+                message: 'У события ' + quote(target.title) + ' окончание записано раньше начала, поэтому перенести его со сдвигом я не могу. Поправьте время в «Календаре».'
+              });
+            }
+            const endMinutes = toMinutes(p.time) + duration;
+            if (endMinutes >= 24 * 60) {
+              return result(false, 'invalid', 'event.reschedule', {
+                code: 'EVENT_TIME_OVERFLOW', intent: intentObj, target,
+                message: 'С таким переносом событие ' + quote(target.title) + ' закончилось бы уже после полуночи, а событий через полночь в календаре пока нет. Выберите время пораньше или измените событие в «Календаре».'
+              });
+            }
+            next.endTime = fromMinutes(endMinutes);
+          }
+        }
+        if (next.dateISO === target.dateISO && next.time === target.time && next.endTime === target.endTime) {
+          /* Переносить некуда: настоящего изменения нет, поэтому нет ни мутации,
+             ни записи в «Историю» — фиктивная запись «изменений нет» была бы мусором. */
+          return result(true, 'info', 'event.reschedule', {
+            intent: intentObj, target,
+            data: { noop: true, title: target.title, dateISO: target.dateISO, time: target.time, endTime: target.endTime, allDay: target.allDay }
+          });
+        }
+        if (!context.confirmed) {
+          return result(false, 'confirmation_required', 'event.reschedule', {
+            code: 'CONFIRMATION_REQUIRED', resolution: found.resolution, intent: intentObj,
+            target, preview: next, summary: eventMoveSummary(target, next)
+          });
+        }
+        const patch = { date: next.dateISO };
+        if (!target.allDay) { patch.startTime = next.time; patch.endTime = next.endTime; }
+        const res = C.events.updateEvent(target.id, patch, opts);
+        if (!res.ok) return actionFailed('event.reschedule', res, intentObj);
+        return result(true, 'done', 'event.reschedule', {
+          resolution: found.resolution, intent: intentObj, entity: res.entity, historyId: res.entry && res.entry.id,
+          data: {
+            title: res.entity.title, allDay: !!res.entity.allDay,
+            fromDateISO: target.dateISO, fromTime: target.time, fromEndTime: target.endTime,
+            dateISO: res.entity.date, time: C.events.start(res.entity) || '', endTime: C.events.end(res.entity) || ''
+          }
+        });
+      }
       case 'day.plan': {
         const dateISO = ISO_RE.test(String(p.dateISO || '')) ? p.dateISO : context.todayISO;
         const events = C.events.getEventsForDate(dateISO).items || [];
@@ -1682,6 +1925,16 @@ window.AvenCommand = (function () {
         case 'task.reschedule':
           return 'Задача ' + quote(res.data.title) + ' перенесена на ' + whenPhrase(res.data.dateISO, '') +
             '. Отменить можно в «Истории».';
+        case 'event.reschedule':
+          if (res.data.noop) {
+            return 'Событие ' + quote(res.data.title) + ' и так стоит на ' +
+              eventWhenText(res.data.dateISO, res.data.time, res.data.endTime, res.data.allDay) +
+              '. Ничего менять не пришлось — я ничего не изменила.';
+          }
+          return 'Событие ' + quote(res.data.title) + ' перенесено: ' +
+            eventWhenText(res.data.fromDateISO, res.data.fromTime, res.data.fromEndTime, res.data.allDay) + ' → ' +
+            eventWhenText(res.data.dateISO, res.data.time, res.data.endTime, res.data.allDay) +
+            '. Оно уже на новом месте в «Календаре» и в «Дне»; отменить можно в «Истории».';
         case 'day.plan': return dayText(res.data);
         case 'tasks.overdue':
           return res.data.items.length
@@ -1717,6 +1970,12 @@ window.AvenCommand = (function () {
       return (res.question || 'Уточните выбор.') + ' Варианты: ' +
         (res.candidates || []).map((x, i) => (i + 1) + '. ' + x.title).join('; ') + '. Пока ничего не изменилось.';
     }
+    if (res.status === 'ambiguous' && res.code === 'AMBIGUOUS_EVENT') {
+      return 'Нашла несколько подходящих событий: ' +
+        (res.candidates || []).slice(0, 5).map((c, i) => (i + 1) + '. ' + quote(c.title) + ' — ' +
+          eventWhenText(c.dateISO, c.time, c.endTime, c.allDay)).join('; ') +
+        '. Уточните, какое перенести — пока ничего не изменилось.';
+    }
     if (res.status === 'ambiguous') {
       return 'Нашла несколько задач: ' + listTitles(res.candidates) +
         '. Уточните, какую выбрать — пока ничего не изменилось.';
@@ -1724,9 +1983,17 @@ window.AvenCommand = (function () {
     if (res.status === 'confirmation_required') return res.summary || 'Подтвердить это действие?';
     if (res.status === 'stale') return res.message || 'Эта запись уже недоступна. Ничего не изменилось.';
     if (res.status === 'not_found' && res.slot) return res.message;
+    if (res.status === 'not_found' && res.code === 'EVENT_NOT_FOUND') {
+      return 'Не нашла в «Календаре» событие ' + quote(p.query || res.query || '') +
+        '. Новое событие вместо переноса я не создаю и ничего не меняла. Проверьте название в «Календаре» — ' +
+        'создать новое можно командой «Добавь завтра в 10 встречу с Сергеем».';
+    }
     if (res.status === 'not_found') {
       return 'Не нашла подходящую открытую задачу ' + quote(p.query || res.query || '') +
-        '. Проверьте название в разделе «Задачи» — я ничего не меняла.';
+        '. Проверьте название в разделе «Задачи» — я ничего не меняла.' +
+        (res.action === 'task.reschedule'
+          ? ' Если это событие из «Календаря», напишите «Перенеси событие ' + (p.query || '') + ' на завтра».'
+          : '');
     }
     if (res.status === 'invalid') {
       return (res.message || PARSE_MESSAGES.UNKNOWN_COMMAND) + ' Ничего не изменилось.';
@@ -1777,6 +2044,7 @@ window.AvenCommand = (function () {
         { action: 'event.create', example: 'Добавь завтра в 10 встречу с Сергеем', about: 'создаёт событие' },
         { action: 'task.complete', example: 'Отметь купить масло выполненной', about: 'отмечает задачу выполненной' },
         { action: 'task.reschedule', example: 'Перенеси задачу купить масло на пятницу', about: 'меняет дату задачи' },
+        { action: 'event.reschedule', example: 'Перенеси событие стоматолог на 12:00', about: 'меняет дату и время уже существующего события — всегда после вашего подтверждения' },
         { action: 'note.create', example: 'Создай заметку купить фильтр для машины', about: 'создаёт заметку с этим текстом' },
         { action: 'reminder.create', example: 'Напомни купить масло на завтра', about: 'создаёт напоминание на указанную дату' },
         { action: 'finance.expense.create', example: 'Запиши расход 850 ₽ на продукты', about: 'записывает расход — всегда после вашего подтверждения' },
@@ -1794,7 +2062,8 @@ window.AvenCommand = (function () {
         'изменение, откладывание, скрытие и удаление уже существующих напоминаний текстом',
         'изменение, ведение ремонтов, смена статуса и удаление покупок текстом (создание, поиск и гарантии уже умею)',
         'чеки, фото и файлы к покупкам — ждут сервис хранения',
-        'перенос событий текстом',
+        'изменение названия, места, описания, участников и повторения события текстом (дату и время уже переношу)',
+        'перенос повторяющихся событий текстом',
         'свободный разговор за пределами перечисленных уточнений'
       ]
     };

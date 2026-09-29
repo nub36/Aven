@@ -504,6 +504,93 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
     }
   }
 
+  {
+    /* Event update (итерация 8): тот же общий session. Подтверждение ВСЕГДА,
+       stale-проверка цели, отмена и double confirm безопасны. */
+    const ev = (e, title, date, start, end, extra) =>
+      e.C.events.createEvent(Object.assign({ title, date, startTime: start, endTime: end }, extra || {}), { source: 'fixture' }).entity;
+    {
+      const e = sandbox(); const x = ev(e, 'Встреча с Сергеем', '2026-09-28', '15:00', '16:00'); clearHistory(e);
+      const r = e.session.submit('Перенеси встречу с Сергеем на 12');
+      ok('S141 EXACT перенос события всегда требует подтверждения',
+        r.status === 'confirmation_required' && e.session.pending().type === 'confirmation');
+      ok('S142 до confirm событие и History не тронуты',
+        e.C.events.getEvent(x.id).entity.startTime === '15:00' && e.state.history.length === 0);
+      const done = e.session.confirm();
+      ok('S143 confirm переносит событие ровно один раз, сохраняя длительность',
+        done.ok && e.C.events.getEvent(x.id).entity.startTime === '12:00' &&
+        e.C.events.getEvent(x.id).entity.endTime === '13:00' && e.state.history.length === 1 &&
+        e.state.history[0].action === 'event.update');
+      ok('S144 повторный confirm ничего не делает второй раз',
+        e.session.confirm().status === 'no_pending' && e.state.history.length === 1);
+    }
+    {
+      const e = sandbox(); const x = ev(e, 'Стоматолог', '2026-09-28', '10:00', '11:00'); clearHistory(e);
+      e.session.submit('Перенеси событие стоматолог на завтра');
+      const no = e.session.submit('нет');
+      ok('S145 «нет» отменяет перенос: ноль мутаций, ноль History, pending пуст',
+        no.status === 'cancelled' && e.C.events.getEvent(x.id).entity.date === '2026-09-28' &&
+        e.state.history.length === 0 && e.session.pending() === null);
+      e.session.submit('Перенеси событие стоматолог на завтра');
+      const cancelled = e.session.cancel();
+      ok('S146 cancel() тоже безопасен',
+        cancelled.status === 'cancelled' && e.C.events.getEvent(x.id).entity.date === '2026-09-28' && e.state.history.length === 0);
+    }
+    {
+      const e = sandbox(); ev(e, 'Встреча с Сергеем', '2026-09-28', '15:00', '16:00');
+      ev(e, 'Встреча с врачом', '2026-09-28', '09:00', '09:30'); clearHistory(e);
+      const amb = e.session.submit('Перенеси встречу на 14:00');
+      ok('S147 несколько событий → clarification без мутации',
+        amb.status === 'clarification_required' && amb.candidates.length === 2 && e.state.history.length === 0);
+      ok('S148 кандидаты события подписаны датой и временем, а не статусом задачи',
+        /15:00/.test(amb.response) && !/открыта|выполнена/i.test(amb.response), amb.response);
+      const chosen = e.session.choose(0);
+      ok('S149 выбор варианта не выполняет перенос — дальше обязательное подтверждение',
+        chosen.status === 'confirmation_required' && e.state.history.length === 0);
+      const done = e.session.confirm();
+      ok('S150 перенос выполняется только после подтверждения выбранного события',
+        done.ok && e.state.history.length === 1 && e.state.history[0].action === 'event.update');
+    }
+    {
+      const e = sandbox(); const x = ev(e, 'Стоматолог', '2026-09-28', '10:00', '11:00'); clearHistory(e);
+      e.session.submit('Перенеси событие стоматолог на 12:00');
+      e.C.events.updateEvent(x.id, { startTime: '08:00', endTime: '09:00' }, { source: 'external' });
+      const hist = e.state.history.length;
+      const stale = e.session.confirm();
+      ok('S151 изменённое снаружи событие не переносится вслепую',
+        stale.status === 'stale' && e.C.events.getEvent(x.id).entity.startTime === '08:00' &&
+        e.state.history.length === hist);
+      e.session.submit('Перенеси событие стоматолог на 12:00');
+      e.C.events.deleteEvent(x.id, { source: 'external' });
+      const hist2 = e.state.history.length;
+      ok('S152 удалённое до confirm событие даёт безопасный отказ',
+        e.session.confirm().status === 'stale' && e.state.history.length === hist2);
+    }
+    {
+      const e = sandbox(); const x = ev(e, 'Стоматолог', '2026-09-28', '10:00', '11:00'); task(e, 'Купить масло', '2026-09-29'); clearHistory(e);
+      e.session.submit('Перенеси событие стоматолог на 12:00');
+      const other = e.session.submit('Что у меня завтра?');
+      ok('S153 новая независимая команда сбрасывает pending перенос события',
+        other.ok && e.session.pending() === null &&
+        e.C.events.getEvent(x.id).entity.startTime === '10:00' && e.state.history.length === 0);
+      const t1 = task(e, 'Проверить шины', '2026-09-29');
+      const t2 = task(e, 'Проверить шины', '2026-09-30');
+      const amb = e.session.submit('Отметь проверить шины выполненной');
+      const evFlow = e.session.submit('Перенеси событие стоматолог на 12:00');
+      ok('S154 команда о событии сбрасывает pending flow задачи, не выполняя его',
+        amb.status === 'clarification_required' && evFlow.status === 'confirmation_required' &&
+        !e.C.tasks.isCompleted(e.C.tasks.getTask(t1.id).entity) &&
+        !e.C.tasks.isCompleted(e.C.tasks.getTask(t2.id).entity));
+    }
+    {
+      const e = sandbox(); const x = ev(e, 'Планёрка', '2026-09-29', '10:00', '10:45', { repeat: 'weekly' }); clearHistory(e);
+      const rep = e.session.submit('Перенеси событие планёрка на завтра');
+      ok('S155 повторяющееся событие честно не переносится и не создаёт pending',
+        rep.ok === false && e.session.pending() === null &&
+        e.C.events.getEvent(x.id).entity.date === '2026-09-29' && e.state.history.length === 0);
+    }
+  }
+
   ['первую', 'вторая', 'вторую', 'отмена', 'нет', 'подтвердить'].forEach((word, i) => {
     const e = sandbox(); const a = task(e, 'Тест один'), b = task(e, 'Тест два'); clearHistory(e);
     e.session.submit('Отметь тест выполненным');

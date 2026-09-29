@@ -824,7 +824,28 @@ batch Undo. Остальные Auto operations и Shopping text commands вне 
 связанное действие атомарно (расход без покупки и покупка со «связанным» ссылкой невозможны, сбой
 компенсируется) и отменяется одним batch Undo. Счёт и категория только существующие.
 
-Изменение/статус/ремонт/удаление покупки текстом, чеки/файлы/OCR, Event update, destructive/bulk,
-morphology/fuzzy и голос в scope не входят и честно отклоняются
+Изменение/статус/ремонт/удаление покупки текстом, чеки/файлы/OCR, destructive/bulk,
+morphology/fuzzy и голос в scope итерации 7 не входят и честно отклоняются
 (`UNSUPPORTED_PURCHASE_UPDATE/REPAIR/FILE`, `UNSUPPORTED_DELETE`). Контракт —
 [COMMAND_ENGINE.md §15](COMMAND_ENGINE.md).
+
+### Stage 2 / Iteration 8 — Event update text commands (2026-09-29)
+
+Перенос **уже существующего** события на другую дату и/или время через существующий Common Action
+`AvenActions.events.updateEvent`: «Перенеси встречу с Сергеем на завтра в 12:00», «Перенеси событие
+стоматолог на 15:30». Домен определяется тем же явным словом события, что и у `event.create`;
+разрешение цели — те же дискретные уровни (`EXACT`/`INFERRED`/`AMBIGUOUS`/not found), что у задач;
+второго Event-парсера, второй session и второй Event schema нет.
+
+Политика владельца (DECISIONS.md «Event update text commands»): **подтверждение ВСЕГДА**, даже при
+`EXACT` и простой смене только времени; сводка показывает событие и «было → станет» целиком; до
+Confirm и после Cancel/«нет»/Escape — ноль изменений события и ноль записей «Истории»; double confirm
+даёт ровно один перенос; изменённая/удалённая снаружи цель — безопасный `stale`-отказ. Перенос
+времени сохраняет длительность (окончание сдвигается на ту же величину), перенос даты сохраняет
+время, перенос «в то же самое» не пишет History.
+
+Вне scope и честно отклоняется: удаление события текстом (`UNSUPPORTED_DELETE`), повторяющиеся
+события (`UNSUPPORTED_EVENT_REPEAT`), время для события «весь день»
+(`UNSUPPORTED_EVENT_ALLDAY_TIME`), название/место/описание/участники/повторение
+(`UNSUPPORTED_EVENT_FIELD`), timezone-миграция, bulk/destructive, morphology/fuzzy, голос. Event
+schema не менялась. Контракт — [COMMAND_ENGINE.md §16](COMMAND_ENGINE.md).

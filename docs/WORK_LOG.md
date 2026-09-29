@@ -2476,3 +2476,73 @@ engine — `settings.voice.engine`, голос — `settings.voice.natural.voice
   `prototype/tests/stage13-entities-check.js`
 - `docs/CHANGELOG.md`, `docs/MVP_SCOPE.md`, `docs/COMMAND_ENGINE.md`, `docs/DECISIONS.md`,
   `docs/WORK_LOG.md` (этот файл), `prototype/README.md`
+
+## 2026-09-29 — Stage 2 / Iteration 8: перенос события текстом (event update text commands)
+
+- **Дата и база:** 2026-09-29. Проверено самостоятельно, без доверия к handoff: `origin/main =
+  017f871fc1aa640f7ad5d524d467f289197cba4c`, PR #33 (итерация 7, Shopping) — MERGED, его merge commit =
+  этот же SHA, workflow «Prototype Pages» на нём success. Рабочая ветка сессии
+  `arena/01a0ed48-aven` от этого коммита. Открытые PR #8 (Natural Voice) и #15 (Female Aven 3D) не
+  трогались; TTS/VPS/`deploy-vps.sh` не трогались.
+- **Baseline до работы:** 14 suites, **1582/1582**, 0 провалов (перепроверено прогоном, не со слов
+  предыдущей сессии). jsdom@30 установлен только во временный `/tmp/lab`; зависимости проекта не менялись.
+- **Scope:** ровно один блок — **перенос уже существующего события** (`event.reschedule`) плюс один
+  разрешённый микро-фикс Shopping («истекшей/истёкшей гарантией»). Следующий блок не начинался.
+- **Owner decision (получен в этой сессии, до кода):** при переносе **времени** сохраняется
+  длительность (10:00–10:45 → 12:00–12:45), при переносе только **даты** время не меняется.
+  Зафиксировано в `DECISIONS.md` («Product Decision — Event update text commands») вместе с
+  «подтверждение ВСЕГДА» и списком того, что вне scope. Причина вопроса: буквальный контракт
+  `updateEvent` (patch-merge) дал бы 12:00–10:45, валидации `end >= start` в модели нет.
+- **Сделано в коде:**
+  - `prototype/js/command.js`: правило `parseEventReschedule` (те же слова события, что у
+    `event.create`; название через существующую таблицу `EVENT_LABEL`, без морфологии; «куда» — общий
+    `extractWhen` + документированная форма «на 12» = 12:00; непонятый хвост → `EVENT_WHEN_REQUIRED`),
+    `resolveEvent`/`eventCandidate` (те же дискретные уровни, что у задач), ветка `execute`
+    `event.reschedule` (подтверждение ВСЕГДА, сводка «было → станет», re-resolve цели и сверка
+    ожидаемого слепка → `stale`, честные отказы `UNSUPPORTED_EVENT_REPEAT`/
+    `UNSUPPORTED_EVENT_ALLDAY_TIME`/`EVENT_TIME_OVERFLOW`/`EVENT_RANGE_INVALID`, no-op без History,
+    одна мутация через существующий `AvenActions.events.updateEvent`), человеческие ответы,
+    `UNSUPPORTED_EVENT_FIELD`, переформулированный `UNSUPPORTED_EVENT_UPDATE`, обновлённый
+    `supported()`/`examples()`; Shopping F1 — одна словоформа `истек(?:л|ш)[а-яе]*`.
+  - `prototype/js/command-session.js`: в pending добавлен минимальный `expected`-слепок цели (для
+    stale-проверки), подпись кандидатов-событий (дата + интервал) и текст уточнения для событий.
+    Второй session/parser/Event-store не создавался.
+  - `prototype/js/pages2.js`: рендер вариантов выбора для событий (дата/время вместо «Открыта/
+    Выполнена») и `aria-label="Выберите событие"`; Drawer и AvenDaily не трогались.
+  - `help.js` (новые статьи `cmd-events` и `calendar-move-command`, обновлены `cmd-supported`,
+    `cmd-confirm`, `cmd-ambiguity`, `cmd-limits`, `assistant-current`), `tutorial.js` (+4 шага в туре
+    «Текстовые команды» через существующий движок и обязательное подтверждение, +1 шаг в туре
+    «Календарь», обновлён шаг об ограничениях).
+- **Тесты:** `command-engine-check.js` 527 → **613** (+86): блок A17 (грамматика, доменные приоритеты в
+  обе стороны, чистота `parse`, невалидные дата/время, обязательное подтверждение даже при EXACT,
+  сохранение длительности, перенос даты, событие без окончания, INFERRED/AMBIGUOUS, «не нашла» не
+  создаёт событие, повторяющиеся, «весь день», no-op, overflow, stale-изменение и stale-удаление,
+  только существующие Common Actions, общие часы) + Shopping F1 (A489–A493); блоки B3g/B3h/B3i
+  (сквозной путь через настоящий Assistant: подтверждение, Cancel/Escape/новая команда, double
+  confirm = один перенос и одна History, «Календарь»/«День»/«Главная», Undo, уточнение с aria-label,
+  ширина 320) и B100a–B100l (Help/Tutorial). `command-session-check.js` 125 → **140** (+15: S141–S155).
+  A144 приведён в соответствие с новым составом `supported()` (11 mutations) — проверка не ослаблена.
+- **Full regression:** 14 suites, **1683/1683**, 0 провалов.
+- **Static checks:** `node --check` по всем изменённым JS/тестам — чисто; `git diff --check` — чисто.
+  В диффе нет `console.*`/`debugger`, прямых записей в `AvenState`/`logAction`, `new Date()`/`Date.now()`,
+  ASCII `\b`/`\w` в русских шаблонах, изменений зависимостей и второго Event-движка.
+- **Не проверено честно:** реальный браузер (Chromium/Playwright в окружении нет) — jsdom за него не
+  выдаётся; ручной тест на Android не выполнялся.
+- **Документация:** `COMMAND_ENGINE.md` (новый §16), `DECISIONS.md` (Product Decision), `MVP_SCOPE.md`
+  (Stage 2 / Iteration 8), `PROJECT_PLAN.md`, `FEATURES.md`, `CHANGELOG.md`, `prototype/README.md`,
+  `WORK_LOG.md` (эта запись). `ARCHITECTURE.md`/`DATA_MODEL.md` не менялись: слои и схема события
+  структурно те же.
+- **Дальше (не начато):** классификация следующего блока — за владельцем. Кандидаты: изменение
+  остальных полей события текстом, перенос повторяющихся событий (нужно owner-решение «одно
+  повторение vs серия»), настройки текстом, доходы текстом. Event delete остаётся честно
+  неподдержанным. Открытый вопрос timezone-семантики события не решался.
+- **Не тронуто:** Voice/STT/TTS/Natural Voice/VPS/nginx и PR #8; Female Aven/3D и PR #15;
+  StorageProvider/files; Admin/Auth; morphology/fuzzy/custom dictionary; зависимости проекта.
+
+### Какие файлы изменены (Iteration 8)
+
+- `prototype/js/command.js`, `prototype/js/command-session.js`, `prototype/js/pages2.js`,
+  `prototype/js/help.js`, `prototype/js/tutorial.js`
+- `prototype/tests/command-engine-check.js`, `prototype/tests/command-session-check.js`
+- `docs/COMMAND_ENGINE.md`, `docs/DECISIONS.md`, `docs/MVP_SCOPE.md`, `docs/PROJECT_PLAN.md`,
+  `docs/FEATURES.md`, `docs/CHANGELOG.md`, `docs/WORK_LOG.md`, `prototype/README.md`
