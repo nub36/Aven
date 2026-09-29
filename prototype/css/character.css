@@ -33,11 +33,15 @@ body.assistant-mode .aven-float { display: none; }
   border: none; cursor: pointer;
   padding: 0;
   position: relative;
-  transition: transform .2s ease;
+  box-shadow: var(--shadow-floating, 0 12px 36px rgba(27, 31, 45, .16));
+  touch-action: manipulation;
+  transition: transform var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast);
+  animation: aven-bob 4s ease-in-out infinite;
 }
 .float-btn img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .float-btn img.char-img, .float-btn .logo-mark { width: 100%; height: 100%; border-radius: 50%; font-size: 1.4rem; }
-.float-btn:hover { transform: translateY(-2px) scale(1.03); }
+.float-btn:hover { transform: translateY(-2px) scale(1.03); animation-play-state: paused; }
+.float-btn:active { transform: scale(var(--scale-pressed, 0.97)); }
 .float-btn .float-dot {
   position: absolute; right: 2px; bottom: 2px;
   width: 14px; height: 14px; border-radius: 50%;
@@ -46,24 +50,18 @@ body.assistant-mode .aven-float { display: none; }
 }
 .float-btn.listen .float-dot { background: var(--danger); animation: aven-pulse 1s infinite; }
 @keyframes aven-pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.25); opacity: .7; } }
-
-/* мягкое «парение» персонажа; отключается reduce-motion */
-.float-btn { animation: aven-bob 4s ease-in-out infinite; }
-html.reduce-motion .float-btn { animation: none; }
 @keyframes aven-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
-.float-btn:hover { animation-play-state: paused; }
 
 /* пузырь-приветствие и popover */
 .float-pop {
   width: 300px;
-  background: var(--panel);
+  background: var(--panel-solid, var(--panel));
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius, 18px);
   box-shadow: var(--shadow-lg);
   padding: 16px;
-  animation: aven-pop .18s ease;
+  animation: popover-in var(--motion-base) var(--ease-emphasized) both;
 }
-@keyframes aven-pop { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .float-pop .fp-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .float-pop .fp-name { font-weight: 700; font-size: 1.02rem; }
 .float-pop .fp-tag { color: var(--muted); font-size: .82rem; }
@@ -80,6 +78,7 @@ html.reduce-motion .float-btn { animation: none; }
   border-radius: 50%;
   background: radial-gradient(circle at 50% 38%, var(--accent-soft), transparent 78%);
   display: inline-block;
+  box-shadow: 0 4px 16px rgba(99, 87, 232, .18);
 }
 
 /* ---------- ассистент: персонаж в шапке и сообщениях ---------- */
@@ -103,10 +102,16 @@ html.reduce-motion .float-btn { animation: none; }
   box-shadow: var(--shadow);
 }
 .stt-status .rec { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); animation: aven-pulse 1s infinite; }
-html.reduce-motion .stt-status .rec { animation: none; }
 
 @media (max-width: 860px) {
   .aven-float { right: 14px; bottom: 14px; }
   .float-btn { width: 56px; height: 56px; }
   .float-pop { width: calc(100vw - 40px); max-width: 320px; }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .float-btn { animation: none !important; }
+  .stt-status .rec { animation: none !important; }
+}
+html.reduce-motion .float-btn { animation: none !important; }
+html.reduce-motion .stt-status .rec { animation: none !important; }

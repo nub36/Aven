@@ -6,6 +6,85 @@
 
 ---
 
+## 2026-09-29 — UI/UX + Mobile Design & Motion (Mobile Polish, Motion System & Ergonomics)
+
+### Что сделано
+
+1. **Дизайн-токены и системная архитектура CSS:**
+   - Систематизированы токены в `:root` и `html[data-theme="dark"]`:
+     - Отступы: `--space-3xs` (2px), `--space-2xs` (4px), `--space-xs` (8px), `--space-sm` (12px), `--space-md` (16px), `--space-lg` (20px), `--space-xl` (26px), `--space-2xl` (36px), `--space-page` (26px desktop / 14px mobile).
+     - Скругления: `--radius-xs` (6px), `--radius-sm` (10px), `--radius-md` (14px), `--radius` (18px), `--radius-lg` (22px), `--radius-xl` (28px), `--radius-pill` (9999px).
+     - Возвышения и тени: `--shadow-xs`, `--shadow-sm`, `--shadow`, `--shadow-md`, `--shadow-lg`, `--shadow-floating`.
+     - Поверхности: `--panel`, `--panel-solid`, `--panel-2`, `--surface-3`, `--surface-elevated`, `--surface-subtle`, `--surface-hover`.
+     - Motion contract: `--motion-instant` (0ms), `--motion-fast` (140ms), `--motion-base` (220ms), `--motion-slow` (320ms), `--motion-enter` (260ms), `--ease-standard` (cubic-bezier(0.2, 0, 0, 1)), `--ease-emphasized` (cubic-bezier(0.2, 0.8, 0.25, 1)), `--ease-decelerate` (cubic-bezier(0.05, 0.7, 0.1, 1)), `--ease-bounce` (cubic-bezier(0.34, 1.56, 0.64, 1)).
+     - Интерактивные масштабы: `--scale-pressed` (0.97), `--scale-active` (0.985), `--scale-subtle` (0.99).
+     - Тач-стандарты: `--touch-target` (44px), `--touch-target-compact` (40px).
+
+2. **Мобильная эргономика, шелл и Drawer навигация:**
+   - Строгий порядок stacking context: `sidebar (z-index: 220)` > `nav-backdrop (z-index: 210)` > `app (z-index: auto на mobile)`.
+   - Плавное выдвижение drawer с кривой `--ease-emphasized`, единый вертикальный скролл панели (`overscroll-behavior: contain`), резервирование нижнего отступа (`padding-bottom: calc(env(safe-area-inset-bottom) + 24px)`).
+   - Кнопки топбара (гамбургер, колокольчик уведомлений, переключатель темы, выход, аватар) приведены к touch-стандарту (hit-box ≥44px) с активным micro-scale откликом.
+   - Полноценная поддержка safe-area insets на мобильных устройствах (`env(safe-area-inset-top)`, `bottom`, `left`, `right`) и динамического вьюпорта (`100dvh` / `100vh`).
+
+3. **Иерархия Главной страницы и презентация Female Aven:**
+   - Переработана структура Hero: приветствие, дата, статусное состояние Aven (Готова / Думаю / Говорю / Слушаю), спокойная презентация персонажа с мягким halo-ореолом (`.hc-ring.r1`) и напольной тенью (`.hero-char::after`), командная строка (`.cmdbar`) с полями ввода и кнопками микрофона и отправки.
+   - Чёткое разделение внимания: «Предложения Aven» с явными причинами и действиями, баннер утреннего/вечернего сценария дня, информационная сетка сущностей (Задачи, Календарь, Финансы, Авто, Гарантии, Заметки, Быстрые действия).
+
+4. **Aven Assistant и виртуальная клавиатура:**
+   - Полноэкранный режим учитывает динамический вьюпорт (`100dvh`) и безопасную нижнюю зону (`env(safe-area-inset-bottom)`).
+   - Док ввода прижат к низу, с удобными кнопками отправки и микрофона.
+   - Карточки вариантов (уточнение) и подтверждения (сводка изменений «было → станет») снабжены крупными touch-кнопками (≥48px) с контрастным фокусом.
+   - Сообщения чата получили плавную анимацию появления (`msg-enter`).
+
+5. **Осмысленные микровзаимодействия:**
+   - Завершение задачи: мгновенное семантическое действие в слое данных + визуальный всплеск чекбокса и мягкое зачёркивание/приглушение текста.
+   - Тактильный отклик кнопок при нажатии (`:active { transform: scale(var(--scale-pressed)); }`).
+   - Плавное появление создаваемых элементов (`item-enter`) и спокойный переход страниц (`content-enter`).
+   - Чёткий фидбек Undo и обновление статуса в «Истории».
+
+6. **Reduced Motion (обязательное требование):**
+   - Полная поддержка `@media (prefers-reduced-motion: reduce)` и пользовательского переключателя `html.reduce-motion`.
+   - При активации все анимации и переходы отключаются или сводятся к 0.001ms, убираются эффекты трансформаций при hover/active, останавливается покачивание плавающего персонажа и пульсация ореола, а визуальный и текстовый фидбек сохраняются полностью.
+
+7. **Сохранение Tutorial 2.0:**
+   - Все `data-tour` хуки сохранены без изменений.
+   - Spotlight cutout, интерактивные action-шаги, сценарии Tasks, Assistant, History и Help работают штатно.
+
+### Изменённые файлы
+
+- `prototype/css/style.css` — консолидированная система дизайн-токенов, motion contract, мобильная эргономика, safe areas, dynamic viewport, стили карточек/кнопок/форм/модальных окон, reduced-motion.
+- `prototype/css/character.css` — дизайн-токены для плавающего персонажа, halo-свечение, reduced-motion.
+- `prototype/tests/mobile-ui-polish-check.js` — расширен тестовый набор мобильной регрессии (33 проверки: дизайн-токены, motion tokens, touch targets, safe area, dynamic viewport, reduced motion, responsive smoke 320–430px, drawer stacking, modal, tutorial, home hierarchy, assistant mode).
+- `docs/UI_UX.md` — добавлен раздел §14 (UI/UX + Mobile Design & Motion).
+- `docs/PROJECT_PLAN.md` — зафиксировано завершение этапа UI/UX + Mobile Design & Motion.
+- `docs/CHANGELOG.md` — добавлена запись о пользовательских улучшениях этапа.
+- `docs/WORK_LOG.md` — добавлена подробная запись журнала.
+- `prototype/README.md` — обновлена сводка о дизайн-системе, мобильной эргономике и тестах.
+
+### Что проверено
+
+- **Регрессионный baseline:** 16 тестовых наборов, **1913 проверок, 0 провалов**:
+  - `prototype/tests/actions-core-check.js` → 18/18
+  - `prototype/tests/aven3d-viewer-check.js` → 43/43
+  - `prototype/tests/command-engine-check.js` → 613/613
+  - `prototype/tests/command-session-check.js` → 140/140
+  - `prototype/tests/daily-check.js` → 139/139
+  - `prototype/tests/data-integrity-check.js` → 127/127
+  - `prototype/tests/help-tutorial-check.js` → 33/33
+  - `prototype/tests/mobile-ui-polish-check.js` → 33/33
+  - `prototype/tests/navigation-check.js` → 63/63
+  - `prototype/tests/notifications-check.js` → 49/49
+  - `prototype/tests/settings-profile-check.js` → 121/121
+  - `prototype/tests/stage1-proto-check.js` → 232/232
+  - `prototype/tests/stage13-entities-check.js` → 124/124
+  - `prototype/tests/suggestions-check.js` → 46/46
+  - `prototype/tests/tts-proto-check.js` → 42/42
+  - `prototype/tests/tutorial2-interactive-check.js` → 90/90
+- **Браузерная среда:** реальные браузерные движки (Chromium/Playwright/Puppeteer/Firefox) недоступны в песочнице: **real-browser validation not performed** (jsdom за реальный браузер не выдаётся).
+- **PR #8 и PR #15 не затрагивались.**
+- **Known Natural Voice 404 не затрагивался.**
+- **deploy-vps.sh не затрагивался.**
+
 ## 2026-09-29 — Tutorial 2.0 / Interactive Guided Learning
 
 ### Независимый review PR #36
