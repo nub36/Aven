@@ -64,7 +64,14 @@ window.AvenCommand = (function () {
       targetId: ctx.targetId || '',
       expectedTitle: ctx.expectedTitle || '',
       selected: ctx.selected === true,
-      confirmed: ctx.confirmed === true
+      confirmed: ctx.confirmed === true,
+      /* Slots — заполненные пользователем недостающие параметры (счёт/категория
+         финансовой операции). Это transient orchestration data того же рода, что
+         targetId: бизнес-состояние сюда не попадает и нигде не сохраняется. */
+      slots: {
+        cat: (ctx.slots && ctx.slots.cat) || '',
+        account: (ctx.slots && ctx.slots.account) || ''
+      }
     };
   }
 
@@ -195,7 +202,9 @@ window.AvenCommand = (function () {
     'Создай заметку купить фильтр для машины',
     'Покажи заметки про отпуск',
     'Напомни купить масло на завтра',
-    'Покажи напоминания'
+    'Покажи напоминания',
+    'Запиши расход 850 ₽ на продукты',
+    'Покажи расходы за сегодня'
   ];
   const PARSE_MESSAGES = {
     EMPTY: 'Напишите команду — например: «Что у меня сегодня?»',
@@ -215,6 +224,14 @@ window.AvenCommand = (function () {
     UNSUPPORTED_NOTE_UPDATE: 'Изменять текст уже существующей заметки текстовой командой я пока не умею. Откройте заметку в разделе «Заметки» — там можно отредактировать текст.',
     UNSUPPORTED_NOTE_ARCHIVE: 'Отправлять заметку в архив или возвращать её текстом я пока не умею. Это делается в разделе «Заметки».',
     REMINDER_CONTENT_REQUIRED: 'Не поняла, о чём напомнить. Напишите так: «Напомни купить масло на завтра».',
+    AMOUNT_REQUIRED: 'Не поняла сумму расхода. Напишите её цифрами — например: «Запиши расход 850 ₽ на продукты», «Потратил 1 250,50 руб на продукты».',
+    AMOUNT_UNSUPPORTED: 'Такую запись суммы я пока не понимаю: сокращения вроде «5к» или «1,2к» и пересчёт валют не поддерживаются. Напишите сумму полностью цифрами — например «5000», «500,50» или «1 250,50 ₽».',
+    AMOUNT_INVALID: 'Сумма расхода должна быть больше нуля и записана цифрами — например «850» или «1 250,50 ₽».',
+    CURRENCY_UNSUPPORTED: 'Я записываю расходы только в валюте вашего профиля и не пересчитываю курсы. Напишите сумму в рублях — например «850 ₽».',
+    UNSUPPORTED_FINANCE_INCOME: 'Работать с доходами текстовой командой я пока не умею — умею только расходы. Доход можно добавить и посмотреть в разделе «Финансы».',
+    UNSUPPORTED_FINANCE_UPDATE: 'Изменять уже записанную финансовую операцию текстовой командой я пока не умею. Откройте «Финансы» — там операцию можно отредактировать, и изменение попадёт в «Историю».',
+    FINANCE_PERIOD_UNSUPPORTED: 'Показывать расходы за такой период я пока не умею. Могу за сегодня, за неделю или за месяц — например: «Покажи расходы за неделю». Остальные периоды есть в разделе «Финансы» с фильтрами.',
+    AMOUNT_AMBIGUOUS: 'Не поняла, какая именно сумма расхода — в команде несколько чисел. Напишите одну сумму: «Запиши расход 850 ₽ на продукты».',
     REMINDER_DATE_REQUIRED: 'Не поняла, на какую дату напомнить — у напоминания обязательно должна быть дата. Напишите так: «Напомни купить масло на завтра» или «Напомни завтра в 10 позвонить Сергею».'
   };
   function intent(action, kind, params, rule, extra) {
@@ -358,6 +375,129 @@ window.AvenCommand = (function () {
     return intent('reminder.search', 'query', { q }, 'reminder.search');
   }
 
+  /* ---------- Финансы текстом (Stage 2, итерация 5) ----------
+     Только расход: создание (всегда через подтверждение) и read-only просмотр.
+     Второго денежного движка здесь нет — сумма лишь извлекается из текста и
+     переводится в целые минимальные единицы (копейки) тем же правилом, что и в
+     общем слое (`AvenActions.money.minor`), после чего её проверяет и сохраняет
+     единственное существующее общее действие `AvenActions.finance.createOperation`. */
+  const EXPENSE_WORD = '(?:расход[а-яе]*|трат[а-яе]*)';
+  const SPEND_VERB = '(?:потратил[аи]?|потратить|истратил[аи]?|заплатил[аи]?|заплатить|оплатил[аи]?|оплатить)';
+  const CURRENCY_TAIL = '(?:₽|руб(?:\\.|л[а-яе]*)?|р\\.?)';
+  const INCOME_WORD = /(доход[а-яе]*|зарплат[а-яе]*|аванс[а-яе]*|премия|премию)/;
+
+  /* Извлечение суммы. Поддерживается ровно то, что задокументировано:
+       500 · 500 ₽ · 500 руб · 500 рублей · 500,50 · 500.50 · 1 250,50 ₽
+     Сокращения («5к», «1,2к», «полтысячи»), словесные суммы и чужая валюта —
+     осознанный отказ без мутации, а не молчаливая догадка. */
+  function findAmount(text) {
+    const t = normalize(text);
+    if (!t) return { found: false };
+    if (new RegExp('\\d\\s*(?:к|k|тыс[а-яе]*|млн|kk)' + NOT_AFTER).test(t)) return { error: 'AMOUNT_UNSUPPORTED' };
+    if (/[$€£]/.test(t) || /(доллар[а-яе]*|евро|usd|eur)/.test(t)) return { error: 'CURRENCY_UNSUPPORTED' };
+    if (/\d+[.,]\d{3,}/.test(t)) return { error: 'AMOUNT_UNSUPPORTED' };
+    if (/-\s*\d/.test(t)) return { error: 'AMOUNT_INVALID' };
+    const rx = new RegExp(NOT_BEFORE + '(\\d{1,3}(?: \\d{3})+|\\d+)(?:[.,](\\d{1,2}))?(?!\\d)');
+    const m = rx.exec(t);
+    if (!m) return { found: false };
+    const rubles = Number(String(m[1]).replace(/ /g, ''));
+    const kopeks = Number((m[2] || '').padEnd(2, '0') || 0);
+    if (!isFinite(rubles) || !isFinite(kopeks)) return { error: 'AMOUNT_INVALID' };
+    /* Целые минимальные единицы: никакого накопления во float. */
+    const minor = Math.round(rubles) * 100 + Math.round(kopeks);
+    if (!(minor > 0)) return { error: 'AMOUNT_INVALID' };
+    return { found: true, minor, source: m[0] };
+  }
+
+  /* «Запиши расход 850 ₽ на продукты», «Добавь расход 1 250,50 ₽ на бензин»,
+     «Потратил 500 рублей на продукты», «Расход 500 ₽ на продукты вчера».
+     Категория и счёт только СВЯЗЫВАЮТСЯ с уже существующими — их разрешение
+     выполняется в execute(), поэтому parse остаётся чистым. */
+  function parseExpenseCreate(n, raw, context) {
+    const head = '^(?:' + CREATE_VERB + '\\s+(?:нов[а-яе]+\\s+)?' + EXPENSE_WORD + NOT_AFTER +
+      '|' + EXPENSE_WORD + NOT_AFTER + '|' + SPEND_VERB + NOT_AFTER + ')\\s*(.*)$';
+    const rx = new RegExp(head, 'i');
+    if (!rx.test(n)) return null;
+    /* Начало без глагола («расходы за сегодня») — это ещё не попытка записи:
+       такой текст должен достаться read-only правилу ниже, а не получить
+       ошибку «не поняла сумму». */
+    const withVerb = new RegExp('^(?:' + CREATE_VERB + '\\s|' + SPEND_VERB + NOT_AFTER + ')', 'i').test(n);
+    /* Слово «доход» внутри такой фразы — это уже НЕ попытка записать доход: команда
+       явно начата словом «расход» или глаголом траты, поэтому «доход» может быть только
+       названием существующей категории. Отвечать здесь «доходы не умею» было бы неправдой. */
+    const m = rx.exec(n);
+    let rest = String(m[1] || '');
+    const amount = findAmount(rest);
+    if (amount.error) {
+      if (!withVerb && !/\d/.test(rest)) return null;
+      return fail(amount.error, 'finance.expense.create');
+    }
+    if (!amount.found) {
+      if (!withVerb) return null;
+      return fail('AMOUNT_REQUIRED', 'finance.expense.create');
+    }
+    rest = tidy(cut(rest, amount.source));
+    rest = tidy(rest.replace(new RegExp('^' + CURRENCY_TAIL + NOT_AFTER, 'i'), ' '));
+    /* Счёт — только явная конструкция «со счёта …»/«с карты …», чтобы обычное
+       «на продукты» никогда не было понято как счёт. Разбирается до дат, иначе
+       общая обрезка хвостовых предлогов могла бы «съесть» название счёта. */
+    let accountQuery = '';
+    const accRx = new RegExp(NOT_BEFORE + '(?:со|с)\\s+(?:счет[а-яе]*|карт[а-яе]*)\\s+(.+?)(?=\\s+(?:на|по)' + NOT_AFTER + '|$)', 'i');
+    const accM = accRx.exec(rest);
+    if (accM) {
+      accountQuery = tidy(accM[1]);
+      rest = tidy(rest.replace(accM[0], ' '));
+    }
+    const when = extractWhen(rest, context);
+    if (when.error) return fail(when.error, 'finance.expense.create');
+    rest = tidy(when.rest || '');
+    /* Если между суммой и первым предлогом осталось ещё одно число («расход 12 34 на
+       продукты»), сумма неоднозначна — брать первое число молча нельзя. */
+    const headTail = String(rest).split(new RegExp(NOT_BEFORE + '(?:на|по)' + NOT_AFTER))[0];
+    if (/\d/.test(headTail)) return fail('AMOUNT_AMBIGUOUS', 'finance.expense.create');
+    /* Хвост после запятой («…на продукты, пожалуйста») в название категории не входит. */
+    const catQuery = tidy(String(rest).replace(new RegExp('^(?:на|по|за)\\s+(?:категори[а-яе]*\\s+)?', 'i'), '').split(',')[0]);
+    const out = intent('finance.expense.create', 'mutation',
+      { amountMinor: amount.minor, catQuery, accountQuery, dateISO: when.dateISO || '' },
+      'finance.expense.create');
+    /* Финансовая мутация ВСЕГДА подтверждается — решение владельца, даже когда
+       команда распознана полностью и однозначно. */
+    out.requiresConfirmation = true;
+    return out;
+  }
+
+  /* «Покажи расходы [за сегодня|за неделю|за месяц] [на продукты]» — read-only
+     через существующие Common Queries; своих расчётов здесь нет. */
+  function parseExpenseList(n, raw, context) {
+    const rx = new RegExp('^(?:' + SHOW_VERB + '\\s+(?:мои\\s+)?|как[а-яе]*\\s+(?:у\\s+меня\\s+)?)?' +
+      EXPENSE_WORD + NOT_AFTER + '\\s*(.*)$', 'i');
+    if (!rx.test(n)) return null;
+    const m = rx.exec(n);
+    let rest = tidy(m[1] || '');
+    let period = 'month';
+    if (new RegExp(NOT_BEFORE + '(?:за\\s+)?сегодня' + NOT_AFTER).test(rest)) { period = 'today'; rest = tidy(rest.replace(/(?:за\s+)?сегодня/, ' ')); }
+    else if (new RegExp(NOT_BEFORE + '(?:за\\s+)?(?:эту\\s+)?недел[юяи][а-яе]*' + NOT_AFTER).test(rest)) { period = 'week'; rest = tidy(rest.replace(/(?:за\s+)?(?:эту\s+)?недел[юяи][а-яе]*/, ' ')); }
+    else if (new RegExp(NOT_BEFORE + '(?:за\\s+)?(?:этот\\s+)?месяц' + NOT_AFTER).test(rest)) { period = 'month'; rest = tidy(rest.replace(/(?:за\s+)?(?:этот\s+)?месяц/, ' ')); }
+    /* Периоды, которых существующий Common Query не поддерживает («за вчера», «за год»,
+       «за сентябрь», конкретная дата), не должны молча превращаться в «за месяц» —
+       это был бы неверный ответ на заданный вопрос. Честно объясняем, что умеем. */
+    const unsupportedPeriod = /(год[а-яе]*|прошл[а-яе]*|позапрошл[а-яе]*|январ|феврал|март|апрел|ма[йея]|июн|июл|август|сентябр|октябр|ноябр|декабр|квартал[а-яе]*)/.test(rest) ||
+      findDate(rest, context).found;
+    if (unsupportedPeriod) return fail('FINANCE_PERIOD_UNSUPPORTED', 'finance.list');
+    const catQuery = tidy(String(rest).replace(new RegExp('^(?:на|по|за)\\s+(?:категори[а-яе]*\\s+)?', 'i'), '').split(',')[0]);
+    return intent('finance.list', 'query', { period, catQuery }, 'finance.list');
+  }
+
+  /* Доходы текстом в эту итерацию не входят (расход-first блок по документации).
+     Честный отказ должен сработать раньше общих правил вроде «какой пробег»,
+     иначе «Запиши доход 500 на авто» попало бы в другой домен. */
+  function parseIncomeUnsupported(n) {
+    const aboutIncome = INCOME_WORD.test(n) || /(заработал[аи]?|заработок)/.test(n);
+    if (!aboutIncome) return null;
+    if (!/(запиши|запишите|добавь|добавить|созда|внеси|внести|получил|получила|заработал|заработала|заработок|покажи|показать|найди|сколько|каки[ем]|какой)/.test(n)) return null;
+    return fail('UNSUPPORTED_FINANCE_INCOME', 'guard.finance.income');
+  }
+
   function parseEventCreate(n, raw, context) {
     const rx = new RegExp('^(?:' + CREATE_VERB + '|назначь|назначить)\\s+(.+)$', 'i');
     if (!rx.test(n)) return null;
@@ -411,6 +551,11 @@ window.AvenCommand = (function () {
   function parseFinanceQuery(n) {
     if (!/(потрат|расход|трат)/.test(n)) return null;
     if (/(запиши|добавь|созда|внеси)/.test(n)) return null; /* это уже попытка записи — см. guard ниже */
+    /* Попытка удалить или изменить уже записанную операцию — это НЕ вопрос «сколько
+       я потратил»: отвечать на неё сводкой расходов было бы неправдой (ADR-010).
+       Такие фразы уходят к честным отказам guard-ов ниже. */
+    if (hasWord(n, 'удали|удалить|сотри|стереть|убери|очисти|очистить')) return null;
+    if (hasWord(n, 'измени|изменить|исправь|исправить|отредактируй|отредактировать|обнови|обновить|перенеси|перенести')) return null;
     return intent('finance.summary', 'query', {}, 'finance.summary');
   }
   function parseAutoQuery(n) {
@@ -462,6 +607,15 @@ window.AvenCommand = (function () {
       hasWord(n, 'измени|изменить|перенеси|перенести|перенос|отложи|отложить|скрой|скрыть|верни|вернуть|восстанови|восстановить');
     if (reminderStartsHere || reminderEditVerbNearby) return fail('UNSUPPORTED_REMINDER', 'guard.reminder');
     if (/(заправ|залил|бензин|топлив)/.test(n)) return fail('UNSUPPORTED_AUTO', 'guard.auto');
+    /* Расходы текстом уже разобраны правилами выше (parseExpenseCreate/parseExpenseList).
+       Здесь остаются только доходы и прочие финансовые записи, которых в этой итерации нет. */
+    if (/(запиши|добавь|созда|внеси|получил|получила)/.test(n) && INCOME_WORD.test(n)) return fail('UNSUPPORTED_FINANCE_INCOME', 'guard.finance.income');
+    /* Изменение уже записанной операции текстом — честный отдельный отказ, а не общее
+       «не поняла» и тем более не сводка расходов. Удаление остаётся под UNSUPPORTED_DELETE выше. */
+    if (/(расход|доход|операци|трат)/.test(n) &&
+      hasWord(n, 'измени|изменить|исправь|исправить|отредактируй|отредактировать|обнови|обновить|перенеси|перенести')) {
+      return fail('UNSUPPORTED_FINANCE_UPDATE', 'guard.finance.update');
+    }
     if (/(запиши|добавь|созда|внеси|потратил|заплатил|оплатил)/.test(n) && (/(рубл|₽|расход|доход|трат)/.test(n) || hasWord(n, 'р'))) return fail('UNSUPPORTED_FINANCE', 'guard.finance');
     /* Создание заметки уже разобрано отдельным правилом выше (см. parseNoteCreate) —
        если разбор дошёл сюда со словом «заметк*», это изменение/архив уже существующей
@@ -478,6 +632,7 @@ window.AvenCommand = (function () {
 
   const RULES = [
     parseTaskCreate, parseNoteCreate, parseNoteSearch, parseReminderCreate, parseReminderSearch,
+    parseExpenseCreate, parseExpenseList, parseIncomeUnsupported,
     parseEventCreate, parseTaskComplete, parseTaskReschedule,
     parseCapabilities, parseFinanceQuery, parseAutoQuery, parseOverdueQuery,
     parseSuggestionsQuery, parseDayQuery, parseUnsupported
@@ -543,13 +698,113 @@ window.AvenCommand = (function () {
     if (partial.length > 1) return { ok: false, status: 'ambiguous', resolution: 'AMBIGUOUS', code: 'AMBIGUOUS', candidates: partial.map(taskCandidate) };
     return { ok: false, status: 'not_found', resolution: 'UNSUPPORTED', code: 'NOT_FOUND', candidates: [] };
   }
+  /* Общий безопасный подбор справочного значения (категория/счёт финансов).
+     Ровно те же дискретные правила, что у задач: полное совпадение — EXACT,
+     единственное вхождение целым словом — INFERRED, несколько — AMBIGUOUS,
+     ничего — not_found. Ничего нового движок не создаёт. */
+  function resolveChoice(query, items) {
+    const q = normalize(query);
+    if (!q) return { ok: false, status: 'missing', resolution: 'AMBIGUOUS', candidates: items };
+    const exact = items.filter((it) => normalize(it.title) === q);
+    if (exact.length === 1) return { ok: true, status: 'resolved', resolution: 'EXACT', item: exact[0] };
+    if (exact.length > 1) return { ok: false, status: 'ambiguous', resolution: 'AMBIGUOUS', candidates: exact };
+    const meaningful = q.split(/\s+/).some((part) => part.length >= 3);
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const rx = meaningful ? wordRx(escaped) : null;
+    const partial = rx ? items.filter((it) => rx.test(normalize(it.title))) : [];
+    if (partial.length === 1) return { ok: true, status: 'resolved', resolution: 'INFERRED', item: partial[0] };
+    if (partial.length > 1) return { ok: false, status: 'ambiguous', resolution: 'AMBIGUOUS', candidates: partial };
+    return { ok: false, status: 'not_found', resolution: 'UNSUPPORTED', candidates: [] };
+  }
+  function financeCategories() {
+    return (Core().finance.categories() || []).map((name) => ({ id: name, title: name, hint: 'категория' }));
+  }
+  function financeAccounts() {
+    return (Core().finance.accounts() || []).filter((a) => a && a.id)
+      .map((a) => ({ id: a.id, title: a.name || a.id, hint: 'счёт' }));
+  }
+  /* Разрешение одного слота финансовой операции. Возвращает либо значение, либо
+     описание того, что нужно уточнить: мутации на этом шаге не происходит никогда. */
+  function resolveFinanceSlot(kind, query, chosenId) {
+    const items = kind === 'account' ? financeAccounts() : financeCategories();
+    if (chosenId) {
+      const still = items.filter((it) => it.id === chosenId)[0];
+      /* Между уточнением и подтверждением счёт/категорию могли удалить или
+         переименовать — тогда честный отказ, а не «почти правильная» запись. */
+      if (!still) return { ok: false, status: 'stale', kind, items };
+      return { ok: true, item: still, resolution: 'EXACT' };
+    }
+    const res = resolveChoice(query, items);
+    if (res.ok) return { ok: true, item: res.item, resolution: res.resolution };
+    if (res.status === 'not_found') return { ok: false, status: 'not_found', kind, query, items };
+    return { ok: false, status: res.status === 'missing' ? 'missing' : 'ambiguous', kind, query, candidates: res.candidates, items };
+  }
+
   function resolve(intentObj, ctx) {
     const context = makeContext(ctx);
     if (!intentObj || intentObj.ok !== true) return { ok: false, status: 'unsupported', resolution: 'UNSUPPORTED', candidates: [] };
     if (intentObj.action === 'task.complete' || intentObj.action === 'task.reschedule') {
       return resolveTask((intentObj.params || {}).query, context);
     }
+    if (intentObj.action === 'finance.expense.create') {
+      const p = intentObj.params || {};
+      const cat = resolveFinanceSlot('cat', p.catQuery, context.slots.cat);
+      if (!cat.ok) {
+        return { ok: false, status: cat.status === 'ambiguous' || cat.status === 'missing' ? 'ambiguous' : 'not_found',
+          resolution: cat.status === 'not_found' ? 'UNSUPPORTED' : 'AMBIGUOUS', slot: 'cat', candidates: cat.candidates || cat.items || [] };
+      }
+      const acc = resolveFinanceSlot('account', p.accountQuery, context.slots.account);
+      if (!acc.ok) {
+        return { ok: false, status: acc.status === 'ambiguous' || acc.status === 'missing' ? 'ambiguous' : 'not_found',
+          resolution: acc.status === 'not_found' ? 'UNSUPPORTED' : 'AMBIGUOUS', slot: 'account', candidates: acc.candidates || acc.items || [] };
+      }
+      return { ok: true, status: 'resolved', resolution: cat.resolution === 'INFERRED' || acc.resolution === 'INFERRED' ? 'INFERRED' : 'EXACT',
+        entity: { cat: cat.item.title, account: acc.item.title } };
+    }
     return { ok: true, status: 'resolved', resolution: (intentObj.match && intentObj.match.resolution) || 'EXACT', entity: null };
+  }
+  /* Единый ответ движка на «нужно уточнить счёт/категорию» и на исчезнувшее
+     значение. Во всех этих случаях мутации нет и «История» не пишется. */
+  const SLOT_LABEL = { cat: 'категорию', account: 'счёт' };
+  const SLOT_SELF = { cat: 'её', account: 'его' };
+  function financeSlotProblem(kind, res, intentObj) {
+    const action = 'finance.expense.create';
+    if (res.status === 'stale') {
+      return result(false, 'stale', action, {
+        code: 'STALE_' + (kind === 'account' ? 'ACCOUNT' : 'CATEGORY'), intent: intentObj, slot: kind,
+        message: kind === 'account'
+          ? 'Этого счёта больше нет в «Финансах». Ничего не изменилось — выберите счёт заново.'
+          : 'Этой категории больше нет в «Финансах». Ничего не изменилось — выберите категорию заново.'
+      });
+    }
+    if (res.status === 'not_found') {
+      return result(false, 'not_found', action, {
+        code: kind === 'account' ? 'ACCOUNT_NOT_FOUND' : 'CATEGORY_NOT_FOUND', intent: intentObj, slot: kind,
+        query: res.query || '', candidates: res.items || [],
+        message: (kind === 'account'
+          ? 'Счёта ' + quote(res.query || '') + ' у вас нет, а сама я счета не создаю.'
+          : 'Категории ' + quote(res.query || '') + ' у вас нет, а сама я категории не создаю.') +
+          ' Ничего не изменилось. Доступные варианты: ' + (res.items || []).map((x) => quote(x.title)).join(', ') +
+          '. Выберите один из них или добавьте новый в разделе «Финансы».'
+      });
+    }
+    return result(false, 'ambiguous', action, {
+      code: 'CLARIFICATION_REQUIRED', resolution: 'AMBIGUOUS', intent: intentObj, slot: kind,
+      candidates: (res.candidates || res.items || []).slice(),
+      question: (res.status === 'missing'
+        ? 'Уточните ' + SLOT_LABEL[kind] + ' расхода — сама я ' + SLOT_SELF[kind] + ' не выбираю.'
+        : 'Подходит несколько вариантов. Уточните ' + SLOT_LABEL[kind] + ' расхода.')
+    });
+  }
+  /* Текст подтверждения: пользователь обязан увидеть конкретные тип, сумму,
+     категорию, счёт и РАЗРЕШЁННУЮ дату — скрытых значений по умолчанию нет. */
+  function expenseSummary(preview) {
+    const C = Core();
+    return 'Записать расход ' + C.money.exact(preview.amountMinor / 100) +
+      ' · категория ' + quote(preview.cat) +
+      ' · счёт ' + quote(preview.accountName) +
+      ' · дата ' + whenPhrase(preview.dateISO, '') +
+      '. Подтвердите — пока ничего не изменилось.';
   }
   function ambiguous(actionName, intentObj, candidates) {
     return result(false, 'ambiguous', actionName, {
@@ -622,6 +877,66 @@ window.AvenCommand = (function () {
         const q = tidy(p.q || '');
         const items = (C.reminders.list({ q }).items) || [];
         return result(true, 'info', 'reminder.search', { intent: intentObj, data: { q, items } });
+      }
+      /* --------- Финансы: создание расхода (Stage 2, итерация 5) ---------
+         Три обязательных шага владельца: уточнение недостающего → подтверждение
+         конкретной операции → только потом единственное общее действие.
+         Ни на одном шаге до подтверждения состояние и «История» не меняются. */
+      case 'finance.expense.create': {
+        const amountMinor = Math.round(Number(p.amountMinor) || 0);
+        if (!(amountMinor > 0) || !isFinite(amountMinor)) {
+          return result(false, 'invalid', 'finance.expense.create', {
+            code: 'AMOUNT_INVALID', message: PARSE_MESSAGES.AMOUNT_INVALID, intent: intentObj
+          });
+        }
+        const dateISO = ISO_RE.test(String(p.dateISO || '')) ? p.dateISO : context.todayISO;
+        const cat = resolveFinanceSlot('cat', p.catQuery, context.slots.cat);
+        if (!cat.ok) return financeSlotProblem('cat', cat, intentObj);
+        const acc = resolveFinanceSlot('account', p.accountQuery, context.slots.account);
+        if (!acc.ok) return financeSlotProblem('account', acc, intentObj);
+        const preview = {
+          amountMinor, amount: amountMinor / 100, cat: cat.item.title,
+          accountId: acc.item.id, accountName: acc.item.title, dateISO
+        };
+        if (!context.confirmed) {
+          return result(false, 'confirmation_required', 'finance.expense.create', {
+            code: 'CONFIRMATION_REQUIRED',
+            resolution: cat.resolution === 'INFERRED' || acc.resolution === 'INFERRED' ? 'INFERRED' : 'EXACT',
+            intent: intentObj, preview, summary: expenseSummary(preview)
+          });
+        }
+        const res = C.finance.createOperation({
+          type: 'expense', amount: preview.amount, cat: preview.cat,
+          account: preview.accountId, dateISO: preview.dateISO
+        }, opts);
+        if (!res.ok) return actionFailed('finance.expense.create', res, intentObj);
+        return result(true, 'done', 'finance.expense.create', {
+          intent: intentObj, entity: res.entity, historyId: res.entry && res.entry.id,
+          data: {
+            amount: res.entity.amount, amountMinor: C.money.minor(res.entity.amount),
+            cat: res.entity.cat, accountName: C.finance.account(res.entity.account).name,
+            dateISO: C.finance.dateISO(res.entity)
+          }
+        });
+      }
+      case 'finance.list': {
+        const period = ['today', 'week', 'month', 'all'].indexOf(p.period) >= 0 ? p.period : 'month';
+        let cat = '';
+        if (tidy(p.catQuery || '')) {
+          const found = resolveChoice(p.catQuery, financeCategories());
+          if (!found.ok) {
+            return result(true, 'info', 'finance.list', {
+              intent: intentObj,
+              data: { period, unknownCat: tidy(p.catQuery), items: [], totals: null, candidates: found.candidates || [] }
+            });
+          }
+          cat = found.item.title;
+        }
+        const filters = { type: 'expense', period, refISO: context.todayISO };
+        if (cat) filters.cat = cat;
+        const items = C.finance.getOperations(filters).items || [];
+        const totals = C.finance.totals(filters);
+        return result(true, 'info', 'finance.list', { intent: intentObj, data: { period, cat, items, totals } });
       }
       case 'task.complete':
       case 'task.reschedule': {
@@ -766,6 +1081,27 @@ window.AvenCommand = (function () {
     return 'Сегодня записано расходов на ' + money(data.summary.todayExpense) + ', за месяц — ' + money(data.summary.monthExpense) +
       (data.largest ? '. Самая крупная в месяце — ' + data.largest.title + ', ' + money(data.largest.amount) : '') + '.';
   }
+  /* Ответ на read-only просмотр расходов: человеческий текст с обычным денежным
+     форматом. Сумма НЕ пересчитывается здесь заново — она берётся из того же
+     общего запроса итогов, что и карточки раздела «Финансы». */
+  const PERIOD_LABEL = { today: 'за сегодня', week: 'за неделю', month: 'за этот месяц', all: 'за всё время' };
+  function expenseListText(data) {
+    const C = Core();
+    const period = PERIOD_LABEL[data.period] || PERIOD_LABEL.month;
+    if (data.unknownCat) {
+      return 'Категории ' + quote(data.unknownCat) + ' у вас нет, поэтому показать расходы по ней не могу. ' +
+        'Категории есть такие: ' + (C.finance.categories() || []).map((x) => quote(x)).join(', ') + '.';
+    }
+    const items = data.items || [];
+    const where = data.cat ? ' по категории ' + quote(data.cat) : '';
+    if (!items.length) return 'Расходов ' + period + where + ' пока нет.';
+    const shown = items.slice(0, 5).map((o) => (o.title || o.cat) + ' — ' + C.money.exact(o.amount) +
+      ' (' + C.dates.dateLabel(C.finance.dateISO(o)) + ')');
+    const rest = items.length - shown.length;
+    return 'Расходы ' + period + where + ': ' + plural(items.length, 'операция', 'операции', 'операций') +
+      ' на ' + C.money.exact(data.totals.expense) + '. ' + shown.join('; ') +
+      (rest > 0 ? ' и ещё ' + rest : '') + '. Все они видны в разделе «Финансы».';
+  }
   function capabilitiesText() {
     const list = supported();
     return 'Сейчас я понимаю короткие команды о задачах, событиях, заметках и обзоре дня. Вопросы: ' +
@@ -853,10 +1189,19 @@ window.AvenCommand = (function () {
             ? 'Сейчас предлагаю: ' + res.data.items.map((x) => x.title + ' (почему: ' + x.reason + ')').join('; ') + '.'
             : 'Сейчас предложений нет: по вашим записям я не вижу полезного следующего шага.';
         case 'finance.summary': return financeText(res.data);
+        case 'finance.expense.create':
+          return 'Расход ' + C.money.exact(res.data.amount) + ' записан: категория ' + quote(res.data.cat) +
+            ', счёт ' + quote(res.data.accountName) + ', дата ' + whenPhrase(res.data.dateISO, '') +
+            '. Он уже виден в «Финансах» и учтён в итогах; отменить можно в «Истории».';
+        case 'finance.list': return expenseListText(res.data);
         case 'auto.status': return autoText(res.data);
         case 'help.capabilities': return capabilitiesText();
         default: return 'Готово.';
       }
+    }
+    if (res.status === 'ambiguous' && res.slot) {
+      return (res.question || 'Уточните выбор.') + ' Варианты: ' +
+        (res.candidates || []).map((x, i) => (i + 1) + '. ' + x.title).join('; ') + '. Пока ничего не изменилось.';
     }
     if (res.status === 'ambiguous') {
       return 'Нашла несколько задач: ' + listTitles(res.candidates) +
@@ -864,6 +1209,7 @@ window.AvenCommand = (function () {
     }
     if (res.status === 'confirmation_required') return res.summary || 'Подтвердить это действие?';
     if (res.status === 'stale') return res.message || 'Эта запись уже недоступна. Ничего не изменилось.';
+    if (res.status === 'not_found' && res.slot) return res.message;
     if (res.status === 'not_found') {
       return 'Не нашла подходящую открытую задачу ' + quote(p.query || res.query || '') +
         '. Проверьте название в разделе «Задачи» — я ничего не меняла.';
@@ -907,6 +1253,7 @@ window.AvenCommand = (function () {
         { action: 'auto.status', example: 'Какой пробег?', about: 'автомобиль, пробег и ближайшее ТО' },
         { action: 'note.search', example: 'Покажи заметки про отпуск', about: 'ищет заметки по тексту' },
         { action: 'reminder.search', example: 'Покажи напоминания', about: 'показывает или ищет напоминания' },
+        { action: 'finance.list', example: 'Покажи расходы за сегодня', about: 'список расходов за сегодня, неделю или месяц' },
         { action: 'help.capabilities', example: 'Что ты умеешь?', about: 'список понятных команд' }
       ],
       mutations: [
@@ -915,11 +1262,16 @@ window.AvenCommand = (function () {
         { action: 'task.complete', example: 'Отметь купить масло выполненной', about: 'отмечает задачу выполненной' },
         { action: 'task.reschedule', example: 'Перенеси задачу купить масло на пятницу', about: 'меняет дату задачи' },
         { action: 'note.create', example: 'Создай заметку купить фильтр для машины', about: 'создаёт заметку с этим текстом' },
-        { action: 'reminder.create', example: 'Напомни купить масло на завтра', about: 'создаёт напоминание на указанную дату' }
+        { action: 'reminder.create', example: 'Напомни купить масло на завтра', about: 'создаёт напоминание на указанную дату' },
+        { action: 'finance.expense.create', example: 'Запиши расход 850 ₽ на продукты', about: 'записывает расход — всегда после вашего подтверждения' }
       ],
       notYet: [
         'удаление записей текстом',
-        'расходы и заправки текстом',
+        'доходы текстом (расходы уже умею)',
+        'изменение и удаление уже записанной финансовой операции текстом',
+        'создание новых категорий и счетов текстом',
+        'сокращения сумм вроде «5к» и пересчёт валют',
+        'заправки и обслуживание авто текстом',
         'изменение, архивирование и удаление уже существующих заметок текстом',
         'изменение, откладывание, скрытие и удаление уже существующих напоминаний текстом',
         'перенос событий текстом',
