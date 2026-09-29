@@ -552,6 +552,22 @@
   финансах») либо по отдельно документированному обязательному product rule. Молчаливой связи нет.
 - Любой реальный Auto + Finance link требует confirmation ALWAYS. До Confirm и после Cancel нет Auto,
   Finance и History. Confirm/Undo должны быть атомарны через существующий Common Action contract.
-- Для будущего Shopping действует тот же принцип: цена покупки сама по себе не создаёт Finance
-  operation; реальная Finance mutation требует confirmation ALWAYS. Shopping text commands этим
-  решением не реализованы.
+- Для Shopping действует тот же принцип: цена покупки сама по себе не создаёт Finance
+  operation; реальная Finance mutation требует confirmation ALWAYS. Решением от 2026-09-29
+  Shopping text commands реализованы ровно в этих рамках (см. следующий раздел).
+
+## Product Decision — Shopping text commands (2026-09-29)
+
+**Статус:** Product Decision, утверждено владельцем. Уточняет рамки предыдущего решения
+(«Auto/Shopping cost and Finance-link policy») тем, что фиксирует реализованный объём Shopping
+text commands; указанные там принципы не меняются.
+
+- Цена покупки сама по себе не создаёт Finance operation и никогда не создаёт её молчаливо.
+- Shopping-only create — safe mutation: EXACT выполняется сразу, без подтверждения.
+- Явный Finance link («и добавь в расходы», «и учти в финансах» со ссылкой на существующий счёт)
+  всегда показывает подтверждение (ALWAYS, даже EXACT); до Confirm и после Cancel — нет Shopping,
+  Finance и History; Undo общий и атомарный (batch).
+- Finance категории и счета только из существующих; без счёта уточняем, неизвестный счёт — честный
+  отказ, без умолчательных подстановок молча.
+- В объём итерации НЕ входят: изменение/статус покупки текстом, ремонты покупки, удаление,
+  чеки/файлы/OCR — честные отказы.

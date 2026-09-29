@@ -1969,14 +1969,24 @@ window.AvenActions = (function () {
       return acc;
     }, []);
   }
-  function purchaseFinancePayload(p) {
+  /* Единственное правило выбора финансовой категории для связанного расхода
+     покупки: та же категория, если она есть в «Финансах», авто-категория для
+     авто-покупок, иначе «Другое»/первая существующая. Новая категория никогда
+     не создаётся. Этим правилом пользуются и UI-связь, и текстовая команда —
+     второй копии маппинга в Command Engine нет. */
+  function purchaseFinanceCategory(purchaseCategory) {
     const finCats = finCategoriesList();
-    const cat = finCats.indexOf(p.category) >= 0 ? p.category
-      : (/авто/i.test(p.category || '') && finCats.indexOf('Авто') >= 0) ? 'Авто'
-        : (finCats.indexOf('Другое') >= 0 ? 'Другое' : (finCats[0] || 'Другое'));
+    if (finCats.indexOf(purchaseCategory) >= 0) return purchaseCategory;
+    if (/авто/i.test(purchaseCategory || '') && finCats.indexOf('Авто') >= 0) return 'Авто';
+    return finCats.indexOf('Другое') >= 0 ? 'Другое' : (finCats[0] || '');
+  }
+  function purchaseFinancePayload(p, finance) {
+    finance = finance || {};
     const iso = purchaseDateISO(p) || todayISO();
     return {
-      type: 'expense', cat, account: ((finAccountsList()[0] || {}).id || 'card'),
+      type: 'expense',
+      cat: finance.cat || purchaseFinanceCategory(p.category || '') || 'Другое',
+      account: finance.account || ((finAccountsList()[0] || {}).id || 'card'),
       title: 'Покупка: ' + (p.name || 'Покупка'), amount: Number(p.price) || 0,
       dateISO: iso, comment: 'Связано с покупкой/имуществом: ' + (p.name || 'Покупка')
     };
@@ -1991,13 +2001,35 @@ window.AvenActions = (function () {
     const clean = Object.assign({}, fields);
     delete clean.rawPrice;
     const item = Object.assign({ id: S.id('p'), repairs: [], financeOpId: '' }, clean);
-    purchasesList().unshift(item);
+    /* Явно запрошенная связь с «Финансами» — часть единого действия, а не
+       опция «если получится»: для пользователя linked create атомарен. Сначала
+       безопасно создаётся обычная Finance operation через тот же Common Action
+       и только после её успеха покупка попадает в список; ошибка счёта/
+       категории не оставляет ни покупку, ни половину расхода. Запрошенная
+       связь без цены — честный отказ, а не молчаливое «покупка без расхода»
+       (тот же урок, что атомарность Auto + Finance в PR #32). */
     let link = null;
-    if ((params || {}).linkFinance && item.price > 0) {
-      const res = createOperation(purchaseFinancePayload(item), { silent: true, link: { purchaseId: item.id } });
-      if (res.ok) { item.financeOpId = res.entity.id; link = res.entity; }
+    if ((params || {}).linkFinance) {
+      if (!(item.price > 0)) return err('purchase.create', 'PRICE_REQUIRED_FOR_LINK', 'Для связанного расхода нужна цена больше нуля');
+      const res = createOperation(purchaseFinancePayload(item, (params || {}).finance), { silent: true, link: { purchaseId: item.id } });
+      if (!res.ok) return err('purchase.create', res.code || 'FINANCE_LINK_FAILED', res.message || 'Не удалось создать связанный расход — покупка не создана');
+      item.financeOpId = res.entity.id;
+      link = res.entity;
     }
-    save();
+    /* Finance Common Action уже мог успешно изменить ops и баланс. Сбой
+       следующего Shopping-шага обязан компенсировать эту часть до возврата
+       ошибки: orphan expense и ложная History entry невозможны. */
+    try {
+      purchasesList().unshift(item);
+      save();
+    } catch (failure) {
+      const list = purchasesList();
+      const inserted = indexOfId(list, item.id);
+      if (inserted >= 0) list.splice(inserted, 1);
+      item.financeOpId = '';
+      if (link) deleteOperation(link.id, { silent: true });
+      return err('purchase.create', 'PURCHASE_CREATE_FAILED', 'Не удалось добавить покупку — связанный расход отменён');
+    }
     const entry = log({
       action: 'purchase.create', title: 'Покупка добавлена', object: purchaseObject(item) + ' · ' + money(item.price),
       objectType: 'purchase', source: opts.source || 'ui', undoable: true,
@@ -2247,7 +2279,7 @@ window.AvenActions = (function () {
       statusKey: purchaseStatusKey, statusLabel: purchaseStatusLabel, warrantyKind: purchaseWarrantyKind,
       warrantyState, dateISO: purchaseDateISO, warrantyISO: purchaseWarrantyISO,
       repairs: purchaseRepairs, repairTotal: purchaseRepairTotal, snapshot: purchaseSnapshot,
-      linkedOp: purchaseLinkedOp },
+      linkedOp: purchaseLinkedOp, financeCategory: purchaseFinanceCategory },
     reminders: { create: createReminder, update: updateReminder, delete: deleteReminder,
       get: getReminder, list: getReminders,
       markRead: (key) => notificationAction('notification.read', (N) => N.markRead(key)),

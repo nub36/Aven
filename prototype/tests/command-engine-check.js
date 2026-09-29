@@ -401,7 +401,7 @@ function partA() {
     ok('A143 список возможностей честно перечисляет и то, чего движок не умеет',
       /Пока не умею/.test(cap.response) && /удаление записей текстом/.test(cap.response));
     ok('A144 перечень возможностей доступен как данные для интерфейса и справки',
-      K9.supported().queries.length >= 6 && K9.supported().mutations.length === 9 &&
+      K9.supported().queries.length >= 6 && K9.supported().mutations.length === 10 &&
       K9.supported().notYet.length >= 4 && K9.examples().length >= 6);
   }
 
@@ -1128,6 +1128,109 @@ function partA() {
       /C\.auto\.createRecord\(kind, params, opts\)/.test(src) && !/AutoCommandSession|AutoCommandStore/.test(src));
   }
 
+
+  /* ---- A13. Покупки текстом (Stage 2, итерация 7) ----
+     Политика владельца: цена покупки НЕ является Finance mutation; явный Finance
+     link — всегда подтверждение, атомарный Common Action, cancel безопасен. */
+  {
+    const env = coreSandbox();
+    const K = env.K, C = env.C;
+
+    const c1 = K.parse('Добавь покупку холодильник за 50000 рублей', { source: 'test' });
+    ok('A400 «добавь покупку …» разбирается как Shopping create', c1.ok && c1.action === 'shopping.purchase.create' && c1.kind === 'mutation');
+    ok('A401 название покупки определяется без служебных слов', c1.params.name === 'Холодильник');
+    ok('A402 цена извлекается общим money parser в целых копейках', c1.params.priceMinor === 5000000);
+    const noPriceParse = K.parse('Добавь покупку стул');
+    ok('A403 цена необязательна по контракту модели: «Добавь покупку стул» — валидная команда', noPriceParse.ok && noPriceParse.params.priceMinor === 0);
+    const c2 = K.parse('Запиши покупку телефон 45000 рублей в магазине Техно вчера', { source: 'test' });
+    ok('A404 магазин только в явной конструкции «в магазине …», дата — общим парсером',
+      c2.params.store === 'Техно' && c2.params.dateISO === '2026-09-27' && c2.params.name === 'Телефон');
+    const c3 = K.parse('Добавь покупку ноутбук за 80000 гарантия до 12.05.2028', { source: 'test' });
+    ok('A405 гарантия только в явной конструкции «до <дата>»', c3.params.warrantyISO === '2028-05-12' && c3.params.name === 'Ноутбук');
+    const pureBefore = JSON.stringify(env.state);
+    ['Добавь покупку блендер за 3000', 'Покажи покупки', 'Найди покупку телефон', 'Какие гарантии заканчиваются?',
+      'Добавь покупку пылесос за 15000 и добавь в расходы'].forEach((x) => K.parse(x, { source: 'test' }));
+    ok('A406 parse остаётся чистым: ноль Shopping/Finance/History мутаций', JSON.stringify(env.state) === pureBefore);
+    ok('A407 пустое название отклоняется без мутаций',
+      K.parse('Добавь покупку').error.code === 'PURCHASE_NAME_REQUIRED' &&
+      K.parse('Добавь покупку за 1000').error.code === 'PURCHASE_NAME_REQUIRED');
+    ok('A408 «5к» в цене покупки — честный отказ, а не догадка', K.parse('Добавь покупку телефон за 5к').error.code === 'AMOUNT_UNSUPPORTED');
+    ok('A409 невалидная дата покупки отклоняется', K.parse('Добавь покупку чайник 31.02').error.code === 'DATE_INVALID');
+    ok('A410 гарантия без понятной даты — честный отказ', K.parse('Добавь покупку чайник гарантия до скоро').error.code === 'WARRANTY_DATE_UNSUPPORTED');
+
+    const ops0 = env.state.ops.length, hist0 = env.state.history.length;
+    const cr = K.run('Добавь покупку холодильник за 50000 рублей', { source: 'assistant' });
+    ok('A411 EXACT Shopping-only выполняется сразу', cr.ok && cr.result.action === 'shopping.purchase.create');
+    ok('A412 цена покупки НЕ создаёт Finance operation', env.state.ops.length === ops0 && !env.state.purchases[0].financeOpId);
+    ok('A413 Shopping-only пишет ровно одну History entry', env.state.history.length === hist0 + 1 && env.state.history[0].action === 'purchase.create');
+    ok('A414 Undo spec убирает покупку без какой-либо Finance стороны', env.state.history[0].undo.type === 'remove' && env.state.history[0].undo.list === 'purchases' && !env.state.history[0].undo.adjust);
+    ok('A415 ответ честно говорит, что расход не создавался', /Расход в «Финансах» не создавался/.test(cr.response) && !/счёт «/.test(cr.response), cr.response);
+    const noPrice = K.run('Запиши покупку стул', { source: 'assistant' });
+    ok('A416 покупка без цены создаётся как обычная Shopping entity', noPrice.ok && env.state.purchases[0].name === 'Стул' && env.state.history.length === hist0 + 2);
+
+    const listReply = K.run('Покажи покупки', { source: 'assistant' });
+    ok('A417 «покажи покупки» — read-only без History', listReply.ok && env.state.history.length === hist0 + 2 && /Холодильник|Стул/.test(listReply.response));
+    const one = K.run('Найди покупку стул', { source: 'assistant' });
+    ok('A418 поиск одной покупки даёт человеческое описание без id/JSON', /«Стул»/.test(one.response) && !/(\{|\"id\")/.test(one.response), one.response);
+    const zero = K.run('Найди покупку грампластинку', { source: 'assistant' });
+    ok('A419 пустой поиск честно говорит «не нашла» и ничего не меняет', /Не нашла/.test(zero.response) && env.state.purchases.length === 2);
+    const multi = K.run('Найди покупку', { source: 'assistant' });
+    ok('A420 несколько совпадений показываются списком, выбор наугад не делается', /Стул/.test(multi.response) && /Холодильник/.test(multi.response));
+
+    const lk = K.run('Добавь покупку телефон за 80000 рублей и учти в финансах со счета карта', { source: 'assistant' });
+    ok('A421 явный Finance qualifier включает linked flow', lk.result.status === 'confirmation_required' && lk.intent.params.linkFinance);
+    ok('A422 linked Finance подтверждается ВСЕГДА, даже при EXACT', lk.intent.requiresConfirmation && lk.result.code === 'CONFIRMATION_REQUIRED');
+    ok('A423 сводка показывает ОБЕ части: покупку и расход со счётом/категорией',
+      /Добавить покупку/.test(lk.response) && /добавить расход/i.test(lk.response) && /Карта/.test(lk.response) && /«Другое»/.test(lk.response), lk.response);
+    const before = { p: env.state.purchases.length, o: env.state.ops.length, h: env.state.history.length };
+    ok('A424 до Confirm нет Shopping/Finance/History мутаций', env.state.purchases.length === 2 && env.state.history.length === hist0 + 2 && env.state.ops.length === 0);
+    const done = K.execute(lk.intent, { source: 'assistant', confirmed: true });
+    ok('A425 Confirm создаёт ровно одну покупку и одну операцию', done.ok && env.state.purchases.length === before.p + 1 && env.state.ops.length === before.o + 1);
+    ok('A426 связь целостна в обе стороны: financeOpId ↔ purchaseId',
+      env.state.purchases[0].financeOpId === env.state.ops[0].id && env.state.ops[0].purchaseId === env.state.purchases[0].id);
+    ok('A427 linked действие пишет одну batch History entry', env.state.history.length === before.h + 1 && env.state.history[0].action === 'purchase.create' && env.state.history[0].undo.type === 'batch');
+    ok('A428 undo spec связанного действия убирает обе сущности и поправляет счёт',
+      env.state.history[0].undo.steps.filter((x) => x.type === 'remove').length === 2 && Array.isArray(env.state.history[0].undo.adjust));
+    ok('A429 linked Finance привязан к существующему счёту и существующей категории',
+      env.state.ops[0].account === 'card' && env.state.finCategories.indexOf(env.state.ops[0].cat) >= 0);
+
+    const miss = K.run('Добавь покупку чайник за 3000 и добавь в расходы', { source: 'assistant' });
+    ok('A430 linked flow без счёта уточняет счёт, не выбирая молча', miss.result.status === 'ambiguous' && miss.result.slot === 'account');
+    const counts430 = { p: env.state.purchases.length, o: env.state.ops.length };
+    const unknown = K.run('Добавь покупку чайник за 3000 и добавь в расходы со счета банк', { source: 'assistant' });
+    ok('A431 неизвестный счёт безопасно отклоняется без мутаций', unknown.result.status === 'not_found' && env.state.purchases.length === counts430.p && env.state.ops.length === counts430.o);
+    const noAmount = K.run('Запиши покупку ваза и учти в финансах', { source: 'assistant' });
+    ok('A432 qualifier без цены — безопасная ошибка без мутаций', noAmount.ok === false && noAmount.intent.error.code === 'AMOUNT_REQUIRED' && env.state.purchases.length === counts430.p && env.state.ops.length === counts430.o);
+
+    const staleIntent = K.parse('Добавь покупку чайник за 3000 и добавь в расходы со счета карта');
+    env.state.finAccounts = env.state.finAccounts.filter((x) => x.id !== 'card');
+    const stale = K.execute(staleIntent, { source: 'assistant', confirmed: true, slots: { account: 'card' } });
+    ok('A433 stale счёт не оставляет partial Shopping/Finance', stale.status === 'stale' && env.state.purchases.length === counts430.p && env.state.ops.length === counts430.o);
+
+    ok('A434 domain: «Запиши расход 50000 на телефон» остаётся Finance', K.parse('Запиши расход 50000 на телефон').action === 'finance.expense.create');
+    ok('A435 domain: «Создай заметку купить телефон» остаётся Note', K.parse('Создай заметку купить телефон').action === 'note.create');
+    ok('A436 domain: «Напомни купить телефон завтра» остаётся Reminder', K.parse('Напомни купить телефон завтра').action === 'reminder.create');
+    ok('A437 domain: «Добавь покупку телефон за 50000» остаётся Shopping', K.parse('Добавь покупку телефон за 50000').action === 'shopping.purchase.create');
+    ok('A438 Auto не перехватывается Shopping grammar',
+      K.parse('Запиши заправку 40 л на 2000 рублей').action === 'auto.fuel.create' &&
+      K.parse('Запиши обслуживание замена масла на 3500 рублей').action === 'auto.service.create');
+
+    ok('A439 update/статус покупки текстом — честный отказ без мутаций',
+      K.parse('Отметь покупку купленной').error.code === 'UNSUPPORTED_PURCHASE_UPDATE' &&
+      K.parse('Измени покупку телефон').error.code === 'UNSUPPORTED_PURCHASE_UPDATE' &&
+      K.parse('Поставь гарантию до 12.05').error.code === 'UNSUPPORTED_PURCHASE_UPDATE');
+    ok('A440 ремонт покупки текстом — честный отказ без мутаций', K.parse('Запиши ремонт покупки').error.code === 'UNSUPPORTED_PURCHASE_REPAIR');
+    ok('A441 удаление покупки текстом — общий честный отказ', K.parse('Удали покупку').error.code === 'UNSUPPORTED_DELETE');
+    ok('A442 файлы/чеки/OCR к покупкам — честный отказ',
+      K.parse('Приложи чек к покупке').error.code === 'UNSUPPORTED_PURCHASE_FILE' &&
+      K.parse('Распознай чек').error.code === 'UNSUPPORTED_PURCHASE_FILE');
+    ok('A443 Shopping command идёт только через существующие Common Actions/Queries',
+      /C\.shopping\.createPurchase\(/.test(src) && /C\.shopping\.getPurchases\(/.test(src) &&
+      !/C\.shopping\.(updatePurchase|deletePurchase|setStatus|addService|linkFinance)\(/.test(src.replace(/\/\*[\s\S]*?\*\//g, '')) &&
+      !/ShoppingCommandSession|ShoppingPendingStore|PurchaseCommand/.test(src));
+  }
+
+
   /* ---- A12. Второго слоя действий и своей истории не появилось ---- */
   ok('A150 движок не пишет в состояние напрямую',
     !/AvenState|\.save\s*\(\)|state\s*\./.test(src.replace(/\/\*[\s\S]*?\*\//g, '')));
@@ -1724,6 +1827,114 @@ async function partB() {
     p.dom.window.close();
   }
 
+  /* ---- B3f. Покупка командой через настоящий Assistant adapter (Stage 2, итерация 7) ----
+     Политика владельца: цена покупки НЕ создаёт расход; явный Finance link —
+     всегда сводка + подтверждение, атомарно, cancel безопасен. */
+  {
+    const p = await load('#/assistant');
+    const C = p.C();
+    const pur0 = p.st().purchases.length, ops0 = p.st().ops.length, hist0 = p.H().length;
+
+    const reply = await p.say('Добавь покупку холодильник за 50000 рублей в магазине Техно');
+    ok('B74 команда создала покупку сразу, без подтверждения',
+      p.st().purchases.length === pur0 + 1 && !p.q('[data-action="command-confirm"]'), reply);
+    ok('B75 ответ честно говорит, что расход не создавался; Finance не изменились',
+      /не создавался/.test(reply) && p.st().ops.length === ops0 && !p.st().purchases[0].financeOpId, reply);
+    ok('B76 создание попало в общую «Историю» одной строкой',
+      p.H().length === hist0 + 1 && p.H()[0].action === 'purchase.create' && p.H()[0].source === 'assistant');
+    await p.go('#/shopping');
+    ok('B77 покупка из команды видна в обычном разделе «Покупки»',
+      p.text().indexOf('Холодильник') >= 0 && p.text().indexOf('Техно') >= 0 && !p.broken());
+    ok('B78 общие итоги Shopping видят созданную покупку',
+      C.shopping.summary().owned >= 1 && C.money.minor(C.shopping.summary().value) >= 5000000);
+    p.w.Aven.undoAction(p.H().filter((e) => e.action === 'purchase.create')[0].id);
+    await sleep(300);
+    ok('B79 отмена командной покупки работает через общую «Историю»',
+      p.st().purchases.length === pur0 && !p.broken());
+    await p.go('#/shopping');
+    ok('B80 после отмены раздел «Покупки» не показывает запись', p.text().indexOf('Холодильник') < 0);
+
+    await p.go('#/assistant');
+    const h0 = p.H().length;
+    const listReply = await p.say('Покажи покупки');
+    ok('B81 список покупок не меняет данные и не пишет «Историю»',
+      p.H().length === h0 && p.st().purchases.length === pur0 && /в собственности|покупок/i.test(listReply), listReply);
+    const zeroReply = await p.say('Найди покупку грампластинку');
+    ok('B82 пустой поиск — честный ответ без выдуманных покупок',
+      /Не нашла/.test(zeroReply) && p.st().purchases.length === pur0 && p.H().length === h0, zeroReply);
+    const warrReply = await p.say('Какие гарантии скоро закончатся?');
+    ok('B83 гарантийный вопрос — read-only честный показ',
+      p.H().length === h0 && /гаранти/i.test(warrReply), warrReply);
+
+    const linkedAsk = await p.say('Добавь покупку планшетник за 80000 рублей и учти в финансах со счета основная карта');
+    const pur1 = p.st().purchases.length, ops1 = p.st().ops.length;
+    const balBeforeLink = C.finance.balance();
+    ok('B84 linked покупка всегда показывает сводку обеих частей перед подтверждением',
+      !!p.q('[data-action="command-confirm"]') && /Добавить покупку/.test(linkedAsk) &&
+      /расход/i.test(linkedAsk) && /Основная карта/.test(linkedAsk), linkedAsk);
+    ok('B85 до подтверждения ни Shopping, ни Finance, ни History не изменились',
+      p.st().purchases.length === pur1 && p.st().ops.length === ops1 && p.H().length === h0);
+    p.click(p.q('[data-action="command-cancel"]'));
+    await sleep(260);
+    ok('B86 cancel linked не создаёт ни покупку, ни расход, ни History',
+      p.st().purchases.length === pur1 && p.st().ops.length === ops1 && p.H().length === h0 &&
+      !p.q('[data-action="command-confirm"]'));
+    await p.say('Добавь покупку планшетник за 80000 рублей и учти в финансах со счета основная карта');
+    const btn = p.q('[data-action="command-confirm"]');
+    p.click(btn); p.click(btn);
+    await sleep(320);
+    const pTel = p.st().purchases.filter((x) => x.name === 'Планшетник');
+    ok('B87 linked confirm создаёт ровно одну покупку и одну операцию; двойной клик не дублирует',
+      pTel.length === 1 && p.st().purchases.length === pur1 + 1 && p.st().ops.length === ops1 + 1);
+    const op = p.st().ops[0];
+    ok('B88 целостность связи: financeOpId ↔ purchaseId, без висячих ссылок',
+      pTel[0].financeOpId === op.id && op.purchaseId === pTel[0].id);
+    ok('B89 linked History — одна batch запись, отменяемая',
+      p.H().length === h0 + 1 && p.H()[0].action === 'purchase.create' && p.H()[0].undo.type === 'batch');
+    ok('B90 баланс счёта пересчитан общим слоем на ровно одну цену покупки',
+      C.finance.balance() === C.money.sum(balBeforeLink, -80000));
+    await p.go('#/finance');
+    ok('B91 связанный расход виден в «Финансах» и учтён в итогах', !p.broken() &&
+      C.finance.totals({ period: 'month', type: 'expense' }).expense >= 80000);
+
+    await p.go('#/assistant');
+    const finR = await p.say('Запиши расход 50000 на планшетник');
+    ok('B92 «запиши расход… на телефон» остаётся финансовой командой, покупок не плодит',
+      /не создаю|Записать расход|уточните/i.test(finR) && p.st().purchases.filter((x) => x.name === 'Планшетник').length === 1, finR);
+    await p.say('отмена');
+    const upd = await p.say('Отметь покупку планшетник купленной');
+    ok('B93 статус покупки текстом — честный отказ без мутаций',
+      /не умею/i.test(upd) && p.st().purchases.filter((x) => x.name === 'Планшетник').length === 1, upd);
+
+    await p.say('Добавь покупку миксер за 5000 гарантия до ' + C.dates.todayISO(30));
+    ok('B94 покупка из команды с гарантией — обычная Shopping entity, читаемая общими запросами',
+      C.shopping.getPurchases({ q: 'миксер' }).count === 1 &&
+      C.shopping.warrantyKind(C.shopping.getPurchases({ q: 'миксер' }).items[0]) === 'warn');
+    const sugg = p.w.AvenSuggestions.getSuggestions({ surface: 'home', dateISO: C.dates.todayISO() });
+    ok('B95 «Предложения» видят ту же истекающую гарантию (общие запросы, без command-specific rule)',
+      sugg.some((s) => /гаранти/i.test(s.title + ' ' + (s.reason || ''))), sugg.map((s) => s.title).join(';'));
+
+    const opId = op.id, purchId = pTel[0].id;
+    p.w.Aven.undoAction(p.H().filter((e) => e.action === 'purchase.create' && JSON.stringify(e.undo).indexOf(purchId) >= 0)[0].id);
+    await sleep(300);
+    ok('B96 linked Undo удаляет покупку и расход атомарно, висячих ссылок нет',
+      !p.st().purchases.some((x) => x.id === purchId) && !p.st().ops.some((o) => o.id === opId) &&
+      !p.st().ops.some((o) => o.purchaseId === purchId) && !p.broken());
+    ok('B97 после linked Undo баланс точно вернулся к значению до связи', C.finance.balance() === balBeforeLink);
+    p.dom.window.close();
+
+    for (const width of [320, 360, 390, 412, 430]) {
+      const m = await load('#/assistant', width);
+      const rep = await m.say('Добавь покупку ноутбук Lenovo ThinkPad X1 Carbon 14 для удалённой работы за 250000 рублей в магазине ТехноСити и учти в финансах со счета основная карта');
+      const box = m.q('.command-confirm');
+      ok('B98 ширина ' + width + ': длинная linked сводка показана без горизонтального выхода',
+        !!box && !m.broken() && m.d.documentElement.scrollWidth <= width + 1,
+        box ? m.d.documentElement.scrollWidth : 'нет блока');
+      m.click(m.q('[data-action="command-cancel"]'));
+      m.dom.window.close();
+    }
+  }
+
   /* ---- B6. Справка и обучение ---- */
   {
     const p = await load('#/help');
@@ -1813,6 +2024,22 @@ async function partB() {
     ok('B67z tutorial включает Auto-only и linked confirmation',
       p.w.AvenTutorial.definitions.commands.steps.some((x) => /Запишите заправку/.test(x.title)) &&
       p.w.AvenTutorial.definitions.commands.steps.some((x) => /Связанное действие безопасно/.test(x.title)));
+    /* Stage 2, итерация 7: покупки текстом — справка объясняет, что цена покупки
+       не создаёт расход, что явный финансовый link ждёт подтверждения и отменяется безопасно. */
+    const shopArticle = (p.w.AvenHelp.articles.find((a) => a.id === 'cmd-shopping') || {}).body || '';
+    ok('B99a в справке есть отдельная статья о покупках текстом',
+      shopArticle.length > 200 && /«Добавь покупку холодильник за 50000 рублей»/.test(shopArticle));
+    ok('B99b справка честно разделяет «данные покупки» и «расход в финансах»',
+      /не создаёт расход в «Финансах»/i.test(shopArticle), shopArticle.length);
+    ok('B99c справка объясняет explicit link, подтверждение и общую отмену',
+      /учти в финансах/.test(shopArticle) && /«Подтвердить»/.test(shopArticle) && /«Истории»/.test(shopArticle) && /вместе отменяются/.test(shopArticle));
+    ok('B99d раздел «Покупки» в справке тоже упоминает текстовые команды',
+      /текстовой командой/.test((p.w.AvenHelp.articles.find((a) => a.id === 'shopping-items') || {}).body || ''));
+    ok('B99e статья о покупках находится поиском по «покупк»',
+      p.w.AvenHelp.search('покупк').some((a) => a.id === 'cmd-shopping'));
+    ok('B99f обучение по командам включает шаг про (не)связь покупки с финансами',
+      p.w.AvenTutorial.definitions.commands.steps.some((x) => /Запишите покупку/.test(x.title)) &&
+      p.w.AvenTutorial.definitions.commands.steps.some((x) => /не одно и то же/.test(x.title) && /Покупка/.test(x.title)));
     ok('B67l раздел «Уведомления» тоже упоминает создание текстом',
       /текстовой командой/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'notif-reminders') || {}).body || ''));
     p.dom.window.close();

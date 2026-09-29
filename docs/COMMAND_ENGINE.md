@@ -709,3 +709,47 @@ linkFinance: true)`: Common Action сначала безопасно созда�
 Review hardening: failure Auto insertion после успешного Finance Common Action теперь запускает
 компенсацию Finance operation, account balance и mileage в `AvenActions.auto.createRecord`; R5d
 поведенчески проверяет отсутствие orphan expense и ложной History entry. Полный regression — 1489/1489.
+
+## 15. Седьмая итерация: Shopping text commands (Stage 2, 2026-09-29)
+
+Итерация закрывает четыре сознательных действия над покупками: создание покупки, read-only
+список/поиск и вопросы о гарантии — через существующие `AvenActions.shopping.createPurchase` и
+`getPurchases`. Изменение/статус, ремонты, удаление, чеки/файлы/OCR не входят (честные отказы
+`UNSUPPORTED_PURCHASE_UPDATE/REPAIR/FILE`, `UNSUPPORTED_DELETE`).
+
+Грамматика детерминирована:
+
+```
+shopping.purchase.create   — «Добавь/Запиши покупку <название> [за <цена> рублей]
+                              [в магазине <магазин>] [<дата>] [гарантия до <дата>]
+                              [и добавь в расходы | и учти в финансах [со счёта <счёт>]]»
+shopping.purchase.search   — «Покажи покупки» / «Найди покупку <текст>»
+shopping.purchase.warranty — «Какие гарантии скоро закончатся?», «Покажи покупки
+                              с гарантией», «Когда закончится гарантия на <вещь>?»
+```
+
+Название обязательно (`PURCHASE_NAME_REQUIRED без мутаций`), цена необязательна и извлекается общим
+`findAmount` (форматы ровно как у расхода, `5к` — `AMOUNT_UNSUPPORTED`); магазин и гарантия — только
+в явных конструкциях «в магазине …» / «гарантия до <дата>», даты — общий парсер (`DATE_INVALID`,
+`WARRANTY_DATE_UNSUPPORTED` без догадок). Parse чист: ноль Shopping/Finance/History.
+
+**Цена покупки сама по себе не создаёт Finance operation.** EXACT Shopping-only выполняется сразу,
+ответ честно говорит «расход не создавался», действие пишет одну History entry с Undo типа remove.
+Явный Finance qualifier всегда показывает сводку ОБЕИХ частей (покупка + расход с категорией «Другое»
+и существующим счётом) и ждёт Confirm — даже при EXACT; до Confirm и после Cancel/«нет»/Escape —
+0 покупок, 0 операций, 0 History. Confirm один раз вызывает атомарный
+`shopping.createPurchase(..., linkFinance: true)`: Common Action сначала создаёт Finance operation,
+затем покупку, при сбое компенсирует расход/баланс и не пишет History (код `PURCHASE_CREATE_FAILED`);
+одна batch History entry отменяет обе сущности и поправляет счёт. Без счёта — уточнение account-слота,
+неизвестный счёт — честный отказ без мутаций, счёт перечитывается перед execute (stale — безопасный
+отказ). linked без цены — `AMOUNT_REQUIRED` без мутаций.
+
+Read-only ответы не пишут History, не выбирают наугад: пустой поиск честно говорит «не нашла»,
+несколько совпадений показываются списком. Гарантийные статусы и цвета считаются общей логикой
+Shopping; вопрос про конкретную вещь при полном промахе прямого поиска пробует один мягкий
+suffix-strip финали кириллицы одного слова (документированная read-only деградация, не морфология).
+
+Проверка итерации 7: `command-engine-check.js` — **527/527** (+79), `command-session-check.js` —
+**125/125** (+9), `stage13-entities-check.js` — **124/124** (+5, включая поведенческую инъекцию
+сбоя вставки покупки после успешного Finance шага с проверкой компенсации); полный regression —
+**14 suites, 1582/1582, 0 failures**. `node --check` и `git diff --check` чисты.

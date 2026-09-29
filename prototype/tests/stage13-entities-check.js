@@ -250,6 +250,38 @@ function partA() {
     C.shopping.setStatus(p2.entity.id, 'выдумка').code === 'STATUS_INVALID');
   ok('S7 итоги раздела считаются из записей',
     C.shopping.summary().owned === 1 && C.money.minor(C.shopping.summary().value) === 9000000);
+  /* Stage 2, итерация 7: явный Finance link покупки — атомарность на уровне
+     Common Action, как у Auto (R5a-R5d): ни orphan расхода, ни orphan покупки. */
+  const purCnt = C.shopping.getPurchases({}).count, opCnt = C.finance.getOperations({}).count;
+  const noPrice = C.shopping.createPurchase({ name: 'Ваза', linkFinance: true });
+  ok('S8 запрошенная связь без цены — честная ошибка без мутаций',
+    !noPrice.ok && noPrice.code === 'PRICE_REQUIRED_FOR_LINK' &&
+    C.shopping.getPurchases({}).count === purCnt && C.finance.getOperations({}).count === opCnt);
+  const badAcc = C.shopping.createPurchase({ name: 'Планшет', price: '30000',
+    linkFinance: true, finance: { cat: 'Другое', account: 'missing-account' } });
+  ok('S8a ошибка счёта в linked покупке не оставляет ни покупку, ни расход',
+    !badAcc.ok && C.shopping.getPurchases({}).count === purCnt && C.finance.getOperations({}).count === opCnt);
+  const linkedP = C.shopping.createPurchase({ name: 'Планшет', price: '30000', dateISO: FIXED,
+    linkFinance: true, finance: { cat: 'Другое', account: 'card' } });
+  const linkedOp = linkedP.ok && C.finance.getOperation(linkedP.entity.financeOpId);
+  ok('S8b linked Common Action создаёт обе сущности с одной batch History entry и целостными ссылками',
+    linkedP.ok && !!linkedP.entity.financeOpId &&
+    linkedOp.ok && linkedOp.entity.purchaseId === linkedP.entity.id && linkedOp.entity.account === 'card' &&
+    H()[0].action === 'purchase.create' && H()[0].undo.type === 'batch');
+  const rollbackPur = C.shopping.getPurchases({}).count, rollbackOps2 = C.finance.getOperations({}).count;
+  const rollbackBal = C.finance.account('card').balance, rollbackHist = H().length;
+  const originalPurUnshift = state.purchases.unshift;
+  state.purchases.unshift = function () { throw new Error('controlled Shopping insertion failure'); };
+  const failedLinked = C.shopping.createPurchase({ name: 'Монитор', price: '25000', dateISO: FIXED,
+    linkFinance: true, finance: { cat: 'Другое', account: 'card' } });
+  state.purchases.unshift = originalPurUnshift;
+  ok('S8c failure ПОСЛЕ успешного Finance шага компенсирует expense/balance и не пишет History',
+    !failedLinked.ok && failedLinked.code === 'PURCHASE_CREATE_FAILED' &&
+    C.finance.getOperations({}).count === rollbackOps2 && C.finance.account('card').balance === rollbackBal &&
+    C.shopping.getPurchases({}).count === rollbackPur && H().length === rollbackHist);
+  ok('S8d общий маппинг категории связанного расхода покупки — без второй копии',
+    C.shopping.financeCategory('Дом') === 'Другое' && C.shopping.financeCategory('Авто') === 'Авто' &&
+    C.shopping.financeCategory('Другое') === 'Другое');
 
   /* ---------- напоминания ---------- */
   ok('M0 без движка уведомлений слой честно сообщает об этом, а не притворяется',
