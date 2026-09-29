@@ -27,6 +27,13 @@ async function load(hash, width) {
       Object.defineProperty(w, 'innerWidth', { configurable: true, value: width || 1280 });
       Object.defineProperty(w, 'innerHeight', { configurable: true, value: 780 });
       w.HTMLElement.prototype.scrollIntoView = function () {};
+      const viewportListeners = { resize: new Set(), scroll: new Set() };
+      w.visualViewport = {
+        width: width || 1280, height: 780, offsetLeft: 0, offsetTop: 0,
+        addEventListener(type, fn) { if (viewportListeners[type]) viewportListeners[type].add(fn); },
+        removeEventListener(type, fn) { if (viewportListeners[type]) viewportListeners[type].delete(fn); }
+      };
+      w.__tutorialViewportListeners = viewportListeners;
       w.matchMedia = (q) => ({
         matches: /prefers-reduced-motion/.test(q) || (/max-width:\s*(\d+)px/.test(q) && (width || 1280) <= Number(/max-width:\s*(\d+)px/.exec(q)[1])),
         media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}
@@ -80,8 +87,10 @@ async function load(hash, width) {
     p.w.AvenTutorial.prev(); await sleep(20);
     ok('E13 Previous returns to action instruction', p.w.AvenTutorial.current().step === 1);
     ok('E14 completed action is represented honestly', /уже выполнено/.test(p.text('.tour-turn')));
+    ok('E14a visualViewport resize/scroll listeners are registered', p.w.__tutorialViewportListeners.resize.size === 1 && p.w.__tutorialViewportListeners.scroll.size === 1);
     p.w.AvenTutorial.close(false);
     ok('E15 close removes layer/body lock', !p.q('.tour-layer') && !p.d.body.classList.contains('tour-open'));
+    ok('E15a visualViewport listeners are removed on close', p.w.__tutorialViewportListeners.resize.size === 0 && p.w.__tutorialViewportListeners.scroll.size === 0);
     ok('E16 close restores prior focus', p.d.activeElement === trigger || p.d.activeElement === p.d.body);
     p.w.AvenTutorial.start('engine2', { restart: true });
     ok('E17 restart resets to first step and feedback', p.w.AvenTutorial.current().step === 0 && !p.text('.tour-feedback').trim());
@@ -89,7 +98,7 @@ async function load(hash, width) {
     ok('E18 Escape closes tutorial', !p.w.AvenTutorial.isActive() && !p.q('.tour-layer'));
     p.w.AvenTutorial.start('engine2', { restart: true }); p.w.AvenTutorial.skip();
     ok('E19 Skip closes without completing', !p.w.AvenTutorial.isActive() && !p.st().tutorials.completed.engine2);
-    p.w.AvenTutorial.start('engine2', { restart: true }); p.w.AvenTutorial.next(true); p.w.AvenTutorial.next(true); p.w.AvenTutorial.finish();
+    p.w.AvenTutorial.start('engine2', { restart: true }); p.w.AvenTutorial.next(); p.click(btn); await sleep(150); p.w.AvenTutorial.finish();
     ok('E20 Finish uses backward-compatible completed map', p.st().tutorials.completed.engine2 === true && p.st().tutorials.progress.engine2 === 0);
     p.st().tutorials.progress.home = 2; p.w.AvenTutorial.start('home');
     ok('E20a persisted informational progress remains backward-compatible', p.w.AvenTutorial.current().step === 2);
@@ -123,6 +132,49 @@ async function load(hash, width) {
     ok('E26 missing required target can continue safely', p.w.AvenTutorial.current().step === 1);
     ok('E27 reduced-motion class remains effective', p.d.documentElement.classList.contains('reduce-motion'));
     ok('E28 spotlight root does not capture pointer events', /\.tour-layer[^}]*pointer-events:\s*none/.test(fs.readFileSync(path.join(ROOT, 'css/style.css'), 'utf8')));
+
+    /* Delayed validation/success callbacks belong only to their originating run. */
+    const race = p.d.createElement('button'); race.id = 'race-target'; p.d.body.appendChild(race);
+    p.w.AvenTutorial.definitions.race2 = { id: 'race2', route: 'home', title: 'Race', steps: [
+      { target: () => race, title: 'Delayed', text: 'Click.', interaction: { event: 'click', delay: 60, validate: () => true } },
+      { target: 'home-summary', title: 'Old end', text: 'Old run.' }
+    ] };
+    p.w.AvenTutorial.start('race2', { restart: true }); p.click(race);
+    p.w.AvenTutorial.close(false); p.w.AvenTutorial.start('engine2', { restart: true }); await sleep(170);
+    ok('E29 delayed validation cannot advance a restarted tutorial', p.w.AvenTutorial.current().id === 'engine2' && p.w.AvenTutorial.current().step === 0);
+    p.w.AvenTutorial.definitions.successRace2 = { id: 'successRace2', route: 'home', title: 'Success race', steps: [
+      { target: () => race, title: 'Success', text: 'Click.', interaction: { event: 'click', validate: () => true } },
+      { target: 'home-summary', title: 'Old end', text: 'Old run.' }
+    ] };
+    p.w.AvenTutorial.start('successRace2', { restart: true }); p.click(race); await sleep(20);
+    p.w.AvenTutorial.close(false); p.w.AvenTutorial.start('engine2', { restart: true }); await sleep(130);
+    ok('E29a delayed success transition cannot advance a restarted tutorial', p.w.AvenTutorial.current().id === 'engine2' && p.w.AvenTutorial.current().step === 0);
+
+    /* A final required action cannot be completed via button or public API. */
+    p.w.AvenTutorial.definitions.final2 = { id: 'final2', route: 'home', title: 'Final action', steps: [
+      { target: () => race, title: 'Required final action', text: 'Click.', interaction: { event: 'click', validate: () => true } }
+    ] };
+    p.w.AvenTutorial.start('final2', { restart: true });
+    ok('E30 final action Finish is disabled', p.q('[data-action="tour-finish"]').disabled);
+    ok('E31 API finish cannot bypass final required action', p.w.AvenTutorial.finish() === false && p.w.AvenTutorial.isActive() && !p.st().tutorials.completed.final2);
+    p.click(race); await sleep(250);
+    ok('E32 real final action completes normally', !p.w.AvenTutorial.isActive() && p.st().tutorials.completed.final2 === true, JSON.stringify(p.w.AvenTutorial.current()));
+    p.w.AvenTutorial.definitions.missingFinal2 = { id: 'missingFinal2', route: 'home', title: 'Missing final', steps: [
+      { target: 'never-present', title: 'Unavailable', text: 'Continue safely.', interaction: { event: 'click', validate: () => false } }
+    ] };
+    p.w.AvenTutorial.start('missingFinal2', { restart: true }); p.click(p.q('[data-action="tour-continue"]'));
+    ok('E32a missing final target can complete through explicit safe Continue', !p.w.AvenTutorial.isActive() && p.st().tutorials.completed.missingFinal2 === true);
+
+    /* Targets already inside the usable viewport must not be scrolled. */
+    let scrollCalls = 0;
+    const visible = p.d.querySelector('[data-tour="home-hero"]') || p.q('#home-summary');
+    visible.getBoundingClientRect = () => ({ top: 120, bottom: 220, left: 20, right: 500, width: 480, height: 100 });
+    visible.scrollIntoView = () => { scrollCalls++; };
+    p.w.AvenTutorial.definitions.visible2 = { id: 'visible2', route: 'home', title: 'Visible', steps: [
+      { target: () => visible, title: 'Visible', text: 'No scroll.' }
+    ] };
+    p.w.AvenTutorial.start('visible2', { restart: true });
+    ok('E33 visible target suppresses unnecessary scrolling', scrollCalls === 0, scrollCalls);
     p.w.AvenTutorial.close(false); p.dom.window.close();
   }
 

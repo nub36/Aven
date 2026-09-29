@@ -25,7 +25,12 @@
 - Required action нельзя пролистать; неверный click безопасен; missing/re-render/double action обработаны;
   Skip/Back/Close/Escape, focus cleanup, keyboard, mobile structure 320–430, light/dark и reduced motion сохранены.
 - Остальные tours совместимы и остаются информационными. TTS необязателен; voice/provider/3D не менялись.
-- Новая suite: 81 behavioral checks; итоговый regression — 16 suites, 1891/1891 (после финального прогона).
+- Независимый review дополнительно привязал delayed validation/success/route callbacks к конкретному запуску,
+  запретил прежнему timer влиять на закрытый или перезапущенный tutorial, добавил реакцию на
+  `visualViewport` resize/scroll и убрал ненужный scroll уже видимой цели.
+- Finish на финальном action-шаге теперь нельзя вызвать до настоящего действия ни кнопкой, ни публичным API;
+  безопасный Continue остаётся доступен только когда required target действительно отсутствует.
+- Новая suite: 90 behavioral checks; итоговый regression — 16 suites, 1900/1900 (после финального прогона).
 
 ## 2026-09-29 — Data Integrity Hardening: невозможные даты и слишком большие суммы
 

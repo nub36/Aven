@@ -8,6 +8,19 @@
 
 ## 2026-09-29 — Tutorial 2.0 / Interactive Guided Learning
 
+### Независимый review PR #36
+
+- Повторно проверены Git/GitHub baseline, полный diff и обязательная документация; PR #8 и #15 не менялись.
+- Устранены cross-run races: delayed validation, success transition и route render теперь проверяют identity
+  запуска; transition timer очищается на Close/Skip/Finish/Escape/restart.
+- Добавлены `visualViewport` resize/scroll listeners с симметричным cleanup; видимая внутри usable viewport
+  цель больше не получает ненужный `scrollIntoView`.
+- Финальный required action защищён disabled Finish и проверкой внутри публичного `finish()`; публичный
+  `next(true)` больше не является обходом, а missing-target Continue проверяет фактическое отсутствие цели.
+- Regression усилен lifecycle/final-action/viewport/scroll сценариями: Tutorial **90/90**, полный набор
+  **16 suites, 1900/1900**, TTS **42/42**. `git diff --check` и JS syntax checks — clean.
+- Chromium/Chrome/Playwright/Puppeteer в окружении не обнаружены: **real-browser validation not performed.**
+
 - **Git/GitHub baseline:** fresh `origin/main` = `fdae577d47ed78721a1a9e4efcb794ba2121264b`
   (`git rev-parse` = `git ls-remote`), PR #35 MERGED этим commit; working tree до работы чистый.
   Open PR только #8 Natural Voice и #15 Female Aven 3D — не тронуты. Pages run `36599549517` и
@@ -57,12 +70,12 @@
 
 ### Проверки и ограничения
 
-- Новый `prototype/tests/tutorial2-interactive-check.js`: **81/81** behavioral checks — engine lifecycle,
+- Новый `prototype/tests/tutorial2-interactive-check.js`: **90/90** behavioral checks — engine lifecycle,
   old info compatibility, required action/wrong/success/double/replacement/missing/previous/skip/finish/
   close/Escape/restart/cleanup/progress/persistence/reduced motion; Tasks + correlation + History/Undo;
   Commands read-only/retry/no mutation; mobile structure 320/360/390/412/430 и a11y semantics/focus.
 - Existing `help-tutorial-check.js`: 33/33 после deliberate wording update (`Шаг N из M`), assertions не
-  ослаблены. Финальный full regression: **16 suites, 1891/1891, 0 failures** (1810 existing + 81 new).
+  ослаблены. Финальный full regression: **16 suites, 1900/1900, 0 failures** (1810 existing + 90 new).
   `node --check` всех `prototype/js/*.js` и `prototype/tests/*.js` — OK; `git diff --check` — clean.
 - **Real browser:** в базовом окружении Chromium/Playwright не обнаружены; временная установка Puppeteer
   в `/tmp` не смогла скачать Chrome из-за сетевого TLS disconnect. Поэтому real-browser validation не

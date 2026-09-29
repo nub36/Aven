@@ -338,12 +338,18 @@ window.AvenTutorial = (function () {
   function cleanup(removeCompletion) {
     stopVoice(); detachInteraction(); clearTarget();
     if (active && active.observer) active.observer.disconnect();
+    if (active && active.transitionTimer) clearTimeout(active.transitionTimer);
+    if (active && active.routeTimer) clearTimeout(active.routeTimer);
     clearTimeout(resizeTimer);
     if (els && els.layer && els.layer.parentNode) els.layer.remove();
     document.body.classList.remove('tour-open');
     els = null;
     window.removeEventListener('resize', onResize);
     window.removeEventListener('scroll', onScroll, true);
+    if (window.visualViewport && window.visualViewport.removeEventListener) {
+      window.visualViewport.removeEventListener('resize', onResize);
+      window.visualViewport.removeEventListener('scroll', onScroll);
+    }
     document.removeEventListener('keydown', onKey, true);
     const prev = active && active.previousFocus;
     active = null;
@@ -363,8 +369,14 @@ window.AvenTutorial = (function () {
   window.addEventListener('hashchange', () => {
     if (!active) return;
     if (active.navigating) {
-      active.navigating = false;
-      setTimeout(() => { evaluateInteraction(); render(); }, 180);
+      const run = active;
+      clearTimeout(active.routeTimer);
+      active.routeTimer = setTimeout(() => {
+        if (active !== run) return;
+        active.routeTimer = null;
+        active.navigating = false;
+        evaluateInteraction(); render();
+      }, 180);
       return;
     }
     close();
@@ -409,7 +421,16 @@ window.AvenTutorial = (function () {
   }
   function scrollToTarget(target) {
     if (!target) return;
-    try { target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' }); } catch (e) { /* jsdom */ }
+    try {
+      const r = target.getBoundingClientRect();
+      const vv = window.visualViewport;
+      const vh = (vv && vv.height) || document.documentElement.clientHeight || window.innerHeight;
+      const oy = (vv && vv.offsetTop) || 0;
+      const topOffset = oy + (isMobile() ? 70 : 82);
+      const fullyVisible = r.top >= topOffset && r.bottom <= oy + vh - 16;
+      if (fullyVisible) return;
+      target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' });
+    } catch (e) { /* jsdom / old browser */ }
   }
   function interactionComplete(step) {
     if (!isAction(step)) return true;
@@ -440,7 +461,10 @@ window.AvenTutorial = (function () {
       active.preparedSteps[active.step] = true;
       try { spec.before({ event, target, context: active.context, state: s() }); } catch (e) { /* safe */ }
     }
-    setTimeout(() => evaluateInteraction(event), Number(spec.delay || 0));
+    const run = active, stepIndex = active.step;
+    setTimeout(() => {
+      if (active === run && active.step === stepIndex) evaluateInteraction(event);
+    }, Number(spec.delay || 0));
   }
   function evaluateInteraction(event) {
     if (!active || active.transitioning) return false;
@@ -470,8 +494,10 @@ window.AvenTutorial = (function () {
     const box = els && els.pop.querySelector('.tour-feedback');
     if (box) { box.className = 'tour-feedback tour-feedback-success'; box.textContent = text; }
     const delay = reducedMotion() ? 80 : 650;
-    setTimeout(() => {
-      if (!active) return;
+    const run = active;
+    active.transitionTimer = setTimeout(() => {
+      if (active !== run) return;
+      active.transitionTimer = null;
       active.transitioning = false;
       const def = defs[active.id];
       if (active.step < def.steps.length - 1) { active.step++; active.successStep = -1; render(); }
@@ -484,7 +510,10 @@ window.AvenTutorial = (function () {
     const def = defs[active.id], step = def && def.steps[active.step];
     if (!def || !step) return close();
     if (step.route && currentRoute() !== step.route) {
-      active.navigating = true; location.hash = '#/' + step.route; setTimeout(render, 260); return;
+      const run = active;
+      active.navigating = true; location.hash = '#/' + step.route;
+      setTimeout(() => { if (active === run) render(); }, 260);
+      return;
     }
     const ui = ensureEls();
     if (typeof step.prepare === 'function') { try { step.prepare(); } catch (e) { /* presentation only */ } }
@@ -505,7 +534,7 @@ window.AvenTutorial = (function () {
       ${missing ? '<div class="tour-missing">Элемент сейчас не виден. Повторите поиск или продолжите без этого шага — обучение не заблокирует страницу.</div>' : ''}
       <div class="tour-controls" aria-label="Управление обучением">
         <button class="btn small" data-action="tour-prev" ${canPrev ? '' : 'disabled'}>← Назад</button>
-        ${isLast ? '<button class="btn primary small" data-action="tour-finish">Готово</button>' : `<button class="btn primary small" data-action="tour-next" ${action && !done ? 'disabled aria-disabled="true"' : ''}>Далее →</button>`}
+        ${isLast ? `<button class="btn primary small" data-action="tour-finish" ${action && !done ? 'disabled aria-disabled="true"' : ''}>Готово</button>` : `<button class="btn primary small" data-action="tour-next" ${action && !done ? 'disabled aria-disabled="true"' : ''}>Далее →</button>`}
         ${missing ? '<button class="btn small" data-action="tour-retry">Повторить поиск</button>' + (action ? '<button class="btn small" data-action="tour-continue">Продолжить без действия</button>' : '') : ''}
         <button class="btn small" data-action="tour-skip">Пропустить</button>
       </div>
@@ -537,29 +566,51 @@ window.AvenTutorial = (function () {
        a stale modal/entity correlation. Informational progress remains compatible. */
     if (!restart && isAction(def.steps[initialStep])) initialStep = 0;
     active = { id, step: initialStep, previousFocus: document.activeElement,
-      navigating: false, transitioning: false, successStep: -1, hint: '', context: {}, preparedSteps: {}, completedSteps: {}, boundEvents: [], observer: null };
+      navigating: false, transitioning: false, transitionTimer: null, routeTimer: null, successStep: -1, hint: '', context: {}, preparedSteps: {}, completedSteps: {}, boundEvents: [], observer: null };
     window.addEventListener('resize', onResize); window.addEventListener('scroll', onScroll, true);
+    if (window.visualViewport && window.visualViewport.addEventListener) {
+      window.visualViewport.addEventListener('resize', onResize);
+      window.visualViewport.addEventListener('scroll', onScroll);
+    }
     document.addEventListener('keydown', onKey, true);
     if (window.MutationObserver) {
       active.observer = new MutationObserver(() => { if (active && !active.transitioning) refreshPosition(); });
       active.observer.observe(document.getElementById('page') || document.body, { childList: true, subtree: true });
     }
-    if (def.route && currentRoute() !== def.route) { active.navigating = true; location.hash = '#/' + def.route; setTimeout(render, 260); }
-    else render();
+    if (def.route && currentRoute() !== def.route) {
+      const run = active;
+      active.navigating = true; location.hash = '#/' + def.route;
+      setTimeout(() => { if (active === run) render(); }, 260);
+    } else render();
     return true;
   }
-  function next(force) {
-    if (!active || active.transitioning) return false;
-    const def = defs[active.id], step = stepDef();
-    if (isAction(step) && !interactionComplete(step) && force !== true) { showHint('Сначала выполните действие на подсвеченном элементе.'); return false; }
+  function advance() {
+    const def = defs[active.id];
     stopVoice(); detachInteraction(); active.step = Math.min(active.step + 1, def.steps.length - 1); active.successStep = -1; render(); return true;
+  }
+  function next() {
+    if (!active || active.transitioning) return false;
+    const step = stepDef();
+    if (isAction(step) && !interactionComplete(step)) { showHint('Сначала выполните действие на подсвеченном элементе.'); return false; }
+    return advance();
+  }
+  function continueMissing() {
+    if (!active || active.transitioning || resolveTarget(stepDef())) return false;
+    const def = defs[active.id];
+    if (active.step >= def.steps.length - 1) {
+      active.completedSteps[active.step] = true;
+      return finish();
+    }
+    return advance();
   }
   function prev() {
     if (!active || active.transitioning) return false;
     stopVoice(); detachInteraction(); active.step = Math.max(active.step - 1, 0); active.successStep = -1; render(); return true;
   }
   function finish() {
-    if (!active) return;
+    if (!active || active.transitioning) return false;
+    const step = stepDef();
+    if (isAction(step) && !interactionComplete(step)) { showHint('Сначала выполните действие на подсвеченном элементе.'); return false; }
     const st = store(); st.completed[active.id] = true; st.progress[active.id] = 0; save();
     A && A.toast && A.toast('Обучение завершено: ' + (defs[active.id] && defs[active.id].title)); close(false);
   }
@@ -597,7 +648,7 @@ window.AvenTutorial = (function () {
     'tour-repeat': () => repeat(),
     'tour-stop': () => stopVoice(),
     'tour-retry': () => render(),
-    'tour-continue': () => next(true)
+    'tour-continue': () => continueMissing()
   });
 
   return {
