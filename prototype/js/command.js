@@ -229,6 +229,12 @@ window.AvenCommand = (function () {
     UNSUPPORTED_NOTE_UPDATE: 'Изменять текст уже существующей заметки текстовой командой я пока не умею. Откройте заметку в разделе «Заметки» — там можно отредактировать текст.',
     UNSUPPORTED_NOTE_ARCHIVE: 'Отправлять заметку в архив или возвращать её текстом я пока не умею. Это делается в разделе «Заметки».',
     REMINDER_CONTENT_REQUIRED: 'Не поняла, о чём напомнить. Напишите так: «Напомни купить масло на завтра».',
+    PURCHASE_NAME_REQUIRED: 'Не поняла название покупки. Напишите, например: «Добавь покупку холодильник за 50000 рублей».',
+    PURCHASE_QUERY_REQUIRED: 'Не поняла, о какой покупке спрашиваете. Напишите, например: «Когда закончится гарантия на телефон».',
+    UNSUPPORTED_PURCHASE_UPDATE: 'Изменять уже созданную покупку, отмечать её купленной/проданной, менять статус или гарантию текстовой командой я пока не умею — это делается в разделе «Покупки», с записью в «Историю». Создать покупку и спросить про гарантию я уже умею: «Добавь покупку телефон за 45000 рублей», «Покажи покупки».',
+    UNSUPPORTED_PURCHASE_REPAIR: 'Записывать ремонт и обслуживание покупки текстовой командой я пока не умею. Откройте покупку в разделе «Покупки» — там есть кнопка «Сервис». Это не ТО автомобиля: заправка и обслуживание авто записываются как «Запиши обслуживание замена масла».',
+    UNSUPPORTED_PURCHASE_FILE: 'Прикладывать чеки, фото и файлы к покупкам я пока не умею и не имитирую это — для настоящих вложений нужен отдельный сервис хранения, который ещё не выбран.',
+    WARRANTY_DATE_UNSUPPORTED: 'Не поняла дату окончания гарантии. Напишите, например: «Добавь покупку телефон гарантия до 12.05.2027».',
     AMOUNT_REQUIRED: 'Не поняла сумму расхода. Напишите её цифрами — например: «Запиши расход 850 ₽ на продукты», «Потратил 1 250,50 руб на продукты».',
     AMOUNT_UNSUPPORTED: 'Такую запись суммы я пока не понимаю: сокращения вроде «5к» или «1,2к» и пересчёт валют не поддерживаются. Напишите сумму полностью цифрами — например «5000», «500,50» или «1 250,50 ₽».',
     AMOUNT_INVALID: 'Сумма расхода должна быть больше нуля и записана цифрами — например «850» или «1 250,50 ₽».',
@@ -510,6 +516,120 @@ window.AvenCommand = (function () {
     return out;
   }
 
+  /* ---------- Покупки текстом (Stage 2, итерация 7) ----------
+     Цена — поле записи «Покупки», а НЕ команда создать расход (Product Decision —
+     Auto/Shopping cost and Finance-link policy, docs/DECISIONS.md): Finance link
+     включается только явной фразой («и добавь в расходы», «и учти в финансах»)
+     через тот же FINANCE_LINK_RX, что у Auto, и тогда всегда требует подтверждения.
+     Второй схемы покупки здесь нет: все поля уходят в единственный существующий
+     Common Action `AvenActions.shopping.createPurchase`, запросы — в
+     `getPurchases`/`warrantyState` того же слоя. */
+  const PURCHASE_WORD = '(?:покупк(?:а|у|ой|е|и|ок|ам|ами)?)';
+  const WARRANTY_WORD_RX = /(гаранти[а-яе]*)/;
+
+  /* «Добавь покупку холодильник за 50000 рублей», «Запиши покупку телефон 45000
+     рублей в магазине Техно», «Добавь покупку ноутбук за 80000 гарантия до
+     12.05.2027 и учти в финансах со счёта карта».
+     Порядок извлечения: финансовая связь → гарантия → дата → магазин → цена →
+     название. Магазин и цена только в явных конструкциях («в магазине …», сумма
+     тем же findAmount, что расходы): выдумывать поля по контексту нельзя. */
+  function parsePurchaseCreate(n, raw, context) {
+    const rx = new RegExp('^' + CREATE_VERB + '\\s+(?:нов(?:ую|ое|ый)\\s+)?' + PURCHASE_WORD + NOT_AFTER + '\\s*(.*)$', 'i');
+    if (!rx.test(n)) return null;
+    const rawRest = (rx.exec(n) || [])[1] || '';
+    let parts = autoFinanceParts(rawRest);
+    let rest = parts.rest;
+    /* Гарантия — только явной конструкцией «(с) гарантия до <дата>». Дата
+       окончания разбирается тем же общим парсером; «два года» и слова — честный
+       отказ, а не догадка. */
+    let warrantyISO = '';
+    const warrRx = new RegExp(NOT_BEFORE + '(?:с\\s+)?гаранти[а-яе]*\\s+(?:действует\\s+)?до\\s+(.+)$', 'i');
+    const wm = warrRx.exec(rest);
+    if (wm) {
+      const wd = findDate(wm[1], context);
+      if (wd.found && wd.error) return fail(wd.error, 'shopping.purchase.create');
+      if (!wd.found) return fail('WARRANTY_DATE_UNSUPPORTED', 'shopping.purchase.create');
+      warrantyISO = wd.dateISO;
+      rest = tidy(rest.replace(wm[0], ' '));
+    }
+    const when = extractWhen(rest, context);
+    if (when.error) return fail(when.error, 'shopping.purchase.create');
+    rest = tidy(when.rest || '');
+    /* Магазин отделяется от названия только явным «в/из магазине …»; без этой
+       конструкции текст остаётся частью названия, а не угадывается местом. */
+    let store = '';
+    const storeRx = new RegExp(NOT_BEFORE + '(?:в|из)\\s+магазин[а-яе]*\\s+(.+?)(?=\\s+за\\s+\\d|$)', 'i');
+    const sm = storeRx.exec(rest);
+    if (sm) { store = capitalize(tidy(sm[1])); rest = tidy(rest.replace(sm[0], ' ')); }
+    /* Цена — тем же проверенным findAmount, второго денежного парсера нет.
+       Цена необязательна (модель покупки это допускает), но для явной связи
+       с «Финансами» она обязательна — иначе связь была бы на нулевую сумму. */
+    const amount = findAmount(rest);
+    if (amount.error) return fail(amount.error, 'shopping.purchase.create');
+    let name = rest;
+    if (amount.found) {
+      name = tidy(cut(rest, amount.source));
+      for (let i = 0; i < 2; i++) {
+        name = tidy(name.replace(new RegExp('\\s+' + CURRENCY_TAIL + NOT_AFTER + '\\s*$', 'i'), ''))
+          .replace(/(?:^|\s)(?:за|на|по)\s*$/i, '').trim();
+      }
+    }
+    if (parts.linked && !amount.found) return fail('AMOUNT_REQUIRED', 'shopping.purchase.create');
+    name = capitalize(tidy(name.replace(/^[,;:\-—–]+/, '')));
+    if (!name) return fail('PURCHASE_NAME_REQUIRED', 'shopping.purchase.create');
+    const out = intent('shopping.purchase.create', 'mutation', {
+      name, priceMinor: amount.found ? amount.minor : 0,
+      dateISO: when.dateISO || '', store, warrantyISO,
+      linkFinance: parts.linked, accountQuery: parts.accountQuery
+    }, 'shopping.purchase.create');
+    /* Явная связь с «Финансами» ВСЕГДА требует подтверждения — до Confirm не
+       создаётся ни покупка, ни расход. Shopping-only команда остаётся обычной
+       EXACT safe mutation по общей policy: цена сама по себе ничего не меняет. */
+    if (parts.linked) out.requiresConfirmation = true;
+    return out;
+  }
+
+  /* «Покажи покупки», «Найди покупку телефон» — read-only через существующий
+     Common Query `getPurchases`. Пустой запрос — показ вещей в собственности
+     (тот же default, что у раздела «Покупки»), запрос — поиск по всем статусам. */
+  function parsePurchaseSearch(n, raw) {
+    const rx = new RegExp('^(?:' + SHOW_VERB + '\\s+(?:мои\\s+)?|как[а-яе]*\\s+(?:у\\s+меня\\s+(?:есть\\s+)?)?)(?:все\\s+)?' +
+      PURCHASE_WORD + NOT_AFTER + '\\s*(?:про|о|об|на тему)?\\s*(.*)$', 'i');
+    if (!rx.test(n)) return null;
+    const m = rx.exec(raw) || rx.exec(n);
+    const q = tidy(String(m[1] || '').replace(/^(?:про|о|об|на тему)\s+/i, ''));
+    return intent('shopping.purchase.search', 'query', { q }, 'shopping.purchase.search');
+  }
+
+  /* Гарантийные вопросы — только показ: «Какие гарантии заканчиваются?»,
+     «Покажи покупки с гарантией», «Какие покупки с истекшей гарантией?»,
+     «Когда закончится гарантия на телефон?». Разборы «установи гарантию» сюда
+     не доходят: они отклонены guard-ом ниже. */
+  function parsePurchaseWarranty(n, raw, context) {
+    if (!WARRANTY_WORD_RX.test(n)) return null;
+    const itemRx = new RegExp(NOT_BEFORE + '(?:когда|до\\s+когда)\\s+(?:истекает|истечет|заканчивается|закончится|кончается|действует)?\\s*' +
+      'гаранти[а-яе]*\\s+на\\s+(.+?)(?:\\s+(?:закончится|заканчивается|истекает|истечет))?$', 'i');
+    const im = itemRx.exec(n);
+    if (im) {
+      const q = tidy(String(im[1] || ''));
+      if (!q) return fail('PURCHASE_QUERY_REQUIRED', 'shopping.purchase.warranty');
+      return intent('shopping.purchase.warranty', 'query', { mode: 'item', q }, 'shopping.purchase.warranty');
+    }
+    if (/(истекл[а-яе]*|просроченн[а-яе]*)\s+гаранти[а-яе]*|гаранти[а-яе]*\s+(?:истекл[а-яе]*|просроченн[а-яе]*)/.test(n)) {
+      return intent('shopping.purchase.warranty', 'query', { mode: 'expired' }, 'shopping.purchase.warranty');
+    }
+    if (/(скоро|заканчива(?:ется|ются)|законч(?:ится|атся)|истекающ[а-яе]*|истекает)/.test(n)) {
+      return intent('shopping.purchase.warranty', 'query', { mode: 'soon' }, 'shopping.purchase.warranty');
+    }
+    if (new RegExp('^(?:' + SHOW_VERB + '\\s+(?:мои\\s+)?|как[а-яе]*\\s+(?:у\\s+меня\\s+(?:есть\\s+)?)?)(?:все\\s+)?гаранти[а-яе]*\\s*$', 'i').test(n)) {
+      return intent('shopping.purchase.warranty', 'query', { mode: 'present' }, 'shopping.purchase.warranty');
+    }
+    if (new RegExp(NOT_BEFORE + '(?:с|на)\\s+(?:действующ[а-яе]*\\s+)?гаранти[еяюий]|действующ[а-яе]*\\s+гаранти[а-яе]*|гаранти[а-яе]*\\s+действует').test(n)) {
+      return intent('shopping.purchase.warranty', 'query', { mode: 'present' }, 'shopping.purchase.warranty');
+    }
+    return null;
+  }
+
   /* «Запиши расход 850 ₽ на продукты», «Добавь расход 1 250,50 ₽ на бензин»,
      «Потратил 500 рублей на продукты», «Расход 500 ₽ на продукты вчера».
      Категория и счёт только СВЯЗЫВАЮТСЯ с уже существующими — их разрешение
@@ -628,6 +748,12 @@ window.AvenCommand = (function () {
     if (!rx.test(n)) return null;
     const m = rx.exec(raw) || rx.exec(n);
     const query = tidy(String(m[1] || '').replace(DONE_TAIL, ' '));
+    /* «Отметь покупку купленной» — это НЕ задача «покупку купленной»: статусы
+       покупок текстом сознательно не поддержаны, отвечать «не нашла такую
+       задачу» было бы нечестно (урок доменных коллизий PR #27). */
+    if (new RegExp('^' + PURCHASE_WORD + NOT_AFTER).test(normalize(query))) {
+      return fail('UNSUPPORTED_PURCHASE_UPDATE', 'guard.purchase.status');
+    }
     if (!query) return fail('TASK_QUERY_REQUIRED', 'task.complete');
     return intent('task.complete', 'mutation', { query }, 'task.complete');
   }
@@ -727,13 +853,33 @@ window.AvenCommand = (function () {
       if (hasWord(n, 'измени|изменить|переименуй|переименовать|отредактируй|отредактировать|обнови|обновить|допиши|дополни|дополнить'))
         return fail('UNSUPPORTED_NOTE_UPDATE', 'guard.note.update');
     }
+    /* Покупки: создание/поиск/гарантийные вопросы разобраны правилами выше.
+       Здесь остаются честные отказы для того, что сознательно не поддержано:
+       файлы/чеки/OCR (ждут StorageProvider), ремонты/сервис и любые изменения
+       уже созданной покупки (update/status). Без мутации и без History. */
+    if (/(распозна[йть]|сканиру[йть]|сфотографиру[йть])/.test(n) &&
+        /(чек|квитанци[а-яе]*|фото|фотографи[а-яе]*|документ[а-яе]*)/.test(n)) {
+      return fail('UNSUPPORTED_PURCHASE_FILE', 'guard.purchase.ocr');
+    }
+    if (/покупк|гаранти/.test(n)) {
+      if (/(чек|чеки|квитанци[а-яе]*|фото|фотографи[а-яе]*|скан[а-яе]*|файл[а-яе]*|прилож[иь]|прикрепи|прикрепить|приклад)/.test(n)) {
+        return fail('UNSUPPORTED_PURCHASE_FILE', 'guard.purchase.file');
+      }
+      if (/(ремонт[а-яе]*|обслуживани[а-яе]*|сервис[а-яе]*)/.test(n)) {
+        return fail('UNSUPPORTED_PURCHASE_REPAIR', 'guard.purchase.repair');
+      }
+      if (hasWord(n, 'измени|изменить|обнови|обновить|отредактируй|отредактировать|перенос|перенеси|перенести|отметь|отметить|заверши|продай|продать|продал|продала|продли|продлить|установи|установить|поставь')) {
+        return fail('UNSUPPORTED_PURCHASE_UPDATE', 'guard.purchase.update');
+      }
+    }
     if (new RegExp('^(?:' + MOVE_VERB + ')').test(n) && EVENT_WORD.test(n)) return fail('UNSUPPORTED_EVENT_UPDATE', 'guard.event.update');
     return null;
   }
 
   const RULES = [
     parseTaskCreate, parseNoteCreate, parseNoteSearch, parseReminderCreate, parseReminderSearch,
-    parseFuelCreate, parseServiceCreate, parseExpenseCreate, parseExpenseList, parseIncomeUnsupported,
+    parseFuelCreate, parseServiceCreate, parseExpenseCreate, parseExpenseList,
+    parsePurchaseCreate, parsePurchaseWarranty, parsePurchaseSearch, parseIncomeUnsupported,
     parseEventCreate, parseTaskComplete, parseTaskReschedule,
     parseCapabilities, parseFinanceQuery, parseAutoQuery, parseOverdueQuery,
     parseSuggestionsQuery, parseDayQuery, parseUnsupported
@@ -859,6 +1005,21 @@ window.AvenCommand = (function () {
       return { ok: true, status: 'resolved', resolution: acc.resolution,
         entity: { cat: cat.item.title, account: acc.item.title } };
     }
+    if (intentObj.action === 'shopping.purchase.create' && (intentObj.params || {}).linkFinance) {
+      const p = intentObj.params || {};
+      /* Категория связанного расхода определяется единственным правилом общего
+         слоя (shopping.financeCategory), а не догадкой Command Engine; счёт —
+         только существующий, по тем же дискретным правилам. */
+      const mapped = Core().shopping.financeCategory((p.category || '') || 'Другое') || 'Другое';
+      const cat = resolveFinanceSlot('cat', mapped, context.slots.cat);
+      if (!cat.ok) return { ok: false, status: cat.status === 'stale' ? 'not_found' : cat.status,
+        resolution: cat.status === 'not_found' ? 'UNSUPPORTED' : 'AMBIGUOUS', slot: 'cat', candidates: cat.candidates || cat.items || [] };
+      const acc = resolveFinanceSlot('account', p.accountQuery, context.slots.account);
+      if (!acc.ok) return { ok: false, status: acc.status === 'stale' || acc.status === 'not_found' ? 'not_found' : 'ambiguous',
+        resolution: acc.status === 'not_found' ? 'UNSUPPORTED' : 'AMBIGUOUS', slot: 'account', candidates: acc.candidates || acc.items || [] };
+      return { ok: true, status: 'resolved', resolution: acc.resolution,
+        entity: { cat: cat.item.title, account: acc.item.title } };
+    }
     if (intentObj.action === 'finance.expense.create') {
       const p = intentObj.params || {};
       const cat = resolveFinanceSlot('cat', p.catQuery, context.slots.cat);
@@ -918,6 +1079,20 @@ window.AvenCommand = (function () {
       ' · счёт ' + quote(preview.accountName) +
       ' · дата ' + whenPhrase(preview.dateISO, '') +
       '. Подтвердите — пока ничего не изменилось.';
+  }
+  /* Текст подтверждения linked Shopping + Finance: пользователь обязан увидеть
+     ОБЕ будущие сущности — покупку со всеми её полями и расход с суммой,
+     категорией и счётом — прежде чем что-то изменится. */
+  function purchaseLinkedSummary(preview) {
+    const C = Core();
+    return 'Добавить покупку ' + quote(preview.name) +
+      (preview.price ? ': ' + C.money.exact(preview.price) : '') +
+      (preview.dateISO ? ', дата ' + whenPhrase(preview.dateISO, '') : '') +
+      (preview.store ? ', магазин ' + quote(preview.store) : '') +
+      (preview.warrantyISO ? ', гарантия до ' + C.dates.humanDate(preview.warrantyISO) : '') +
+      '. И добавить расход ' + C.money.exact(preview.price) + ' в «Финансы»: категория ' +
+      quote(preview.cat) + ', счёт ' + quote(preview.accountName) +
+      '. Продолжить? Пока ничего не изменилось.';
   }
   function autoSummary(kind, preview) {
     const C = Core();
@@ -1043,6 +1218,88 @@ window.AvenCommand = (function () {
             amount: kind === 'fuel' ? res.entity.sum : res.entity.cost, mileage: res.entity.km,
             dateISO: C.auto.dateISO(res.entity), linked: !!res.entity.financeOpId }
         });
+      }
+      /* --------- Покупки: создание / поиск / гарантия (Stage 2, итерация 7) ---------
+         Shopping-only EXACT выполняется сразу — цена сама по себе не является
+         Finance mutation. Явный Finance link — всегда через сводку и Confirm:
+         до него ноль Shopping/Finance/History. Выполнение — только общим
+         `AvenActions.shopping.createPurchase`, который делает связанное
+         действие атомарным и компенсирует расход при сбое. */
+      case 'shopping.purchase.create': {
+        const priceMinor = Math.round(Number(p.priceMinor) || 0);
+        const price = priceMinor > 0 ? priceMinor / 100 : '';
+        const dateISO = ISO_RE.test(String(p.dateISO || '')) ? p.dateISO : '';
+        const warrantyISO = ISO_RE.test(String(p.warrantyISO || '')) ? p.warrantyISO : '';
+        const store = tidy(p.store || '');
+        const name = tidy(p.name || '');
+        if (!name) return result(false, 'invalid', 'shopping.purchase.create', {
+          code: 'PURCHASE_NAME_REQUIRED', message: PARSE_MESSAGES.PURCHASE_NAME_REQUIRED, intent: intentObj
+        });
+        let cat = null, acc = null;
+        if (p.linkFinance) {
+          if (!(price > 0)) return result(false, 'invalid', 'shopping.purchase.create', {
+            code: 'AMOUNT_REQUIRED', message: 'Для связи с «Финансами» у покупки должна быть цена больше нуля — укажите её цифрами или уберите «и добавь в расходы».', intent: intentObj
+          });
+          const mapped = Core().shopping.financeCategory((p.category || '') || 'Другое') || 'Другое';
+          cat = resolveFinanceSlot('cat', mapped, context.slots.cat);
+          if (!cat.ok) return financeSlotProblem('cat', cat, intentObj);
+          acc = resolveFinanceSlot('account', p.accountQuery, context.slots.account);
+          if (!acc.ok) return financeSlotProblem('account', acc, intentObj);
+          const preview = { name, price, priceMinor, dateISO, store, warrantyISO,
+            cat: cat.item.title, accountId: acc.item.id, accountName: acc.item.title };
+          if (!context.confirmed) return result(false, 'confirmation_required', 'shopping.purchase.create', {
+            code: 'CONFIRMATION_REQUIRED', resolution: acc.resolution, intent: intentObj,
+            preview, summary: purchaseLinkedSummary(preview)
+          });
+        }
+        const params = { name, price, linkFinance: !!p.linkFinance };
+        if (dateISO) params.dateISO = dateISO;
+        if (warrantyISO) params.warrantyISO = warrantyISO;
+        if (store) params.store = store;
+        if (p.linkFinance) params.finance = { cat: cat.item.title, account: acc.item.id };
+        const res = C.shopping.createPurchase(params, opts);
+        if (!res.ok) return actionFailed('shopping.purchase.create', res, intentObj);
+        return result(true, 'done', 'shopping.purchase.create', {
+          intent: intentObj, entity: res.entity, historyId: res.entry && res.entry.id,
+          data: { name: res.entity.name, price: res.entity.price, dateISO: C.shopping.dateISO(res.entity),
+            store: res.entity.store || '', warrantyISO: C.shopping.warrantyISO(res.entity),
+            category: res.entity.category || 'Другое', linked: !!res.entity.financeOpId,
+            opCat: p.linkFinance ? cat.item.title : '', accountName: p.linkFinance ? acc.item.title : '' }
+        });
+      }
+      case 'shopping.purchase.search': {
+        const q = tidy(p.q || '');
+        const items = q ? (C.shopping.getPurchases({ q }).items || [])
+          : (C.shopping.getPurchases({ status: 'owned' }).items || []);
+        const others = q ? 0 : Math.max(0, (C.shopping.getPurchases({}).count || 0) - items.length);
+        return result(true, 'info', 'shopping.purchase.search', { intent: intentObj, data: { q, items, list: !q, others } });
+      }
+      case 'shopping.purchase.warranty': {
+        const mode = ['present', 'soon', 'expired', 'item'].indexOf(p.mode) >= 0 ? p.mode : 'present';
+        if (mode === 'item') {
+          const q = tidy(p.q || '');
+          const found = C.shopping.getPurchases({ q });
+          let items = found.items || [];
+          /* Падеж вопроса («на микроволновку») не тот, что в названии («Микроволновка»).
+             НЕ морфология: только единичная финальная гласная последнего слова
+             снимается, и только когда прямой поиск пуст — read-only, без догадок. */
+          if (!items.length) {
+            const words = q.split(/\s+/).filter(Boolean);
+            const last = words[words.length - 1] || '';
+            const stemmed = last.toLowerCase().replace(/(ую|юю|ое|ой|ою|её|[аеиоуыюяё])$/, '');
+            if (stemmed.length >= 3 && stemmed !== last.toLowerCase()) {
+              words[words.length - 1] = stemmed;
+              items = C.shopping.getPurchases({ q: words.join(' ') }).items || [];
+            }
+          }
+          return result(true, 'info', 'shopping.purchase.warranty', { intent: intentObj,
+            data: { mode, q, items: items.slice(0, 5), total: items.length } });
+        }
+        const owned = (filter) => C.shopping.getPurchases(Object.assign({ status: 'owned' }, filter)).items || [];
+        const items = mode === 'expired' ? owned({ warranty: 'expired' })
+          : mode === 'soon' ? owned({ warranty: 'warn' })
+            : owned({ warranty: 'active' }).concat(owned({ warranty: 'warn' }));
+        return result(true, 'info', 'shopping.purchase.warranty', { intent: intentObj, data: { mode, items } });
       }
       case 'finance.expense.create': {
         const amountMinor = Math.round(Number(p.amountMinor) || 0);
@@ -1314,6 +1571,88 @@ window.AvenCommand = (function () {
       shown.join(', ') + (rest > 0 ? ' и ещё ' + rest : '') + '. Откройте «Уведомления», чтобы увидеть все.';
   }
 
+  /* Ответ на создание покупки: честно говорим, что добавлено и куда — и что
+     расход НЕ создавался, если пользователь не просил (политика владельца:
+     цена покупки ≠ Finance mutation). */
+  function purchaseCreateText(data) {
+    const C = Core();
+    return 'Покупка ' + quote(data.name) + ' добавлена' +
+      (data.price > 0 ? ': ' + C.money.exact(data.price) : '') +
+      (data.dateISO ? ', дата ' + whenPhrase(data.dateISO, '') : '') +
+      (data.store ? ', магазин ' + quote(data.store) : '') +
+      (data.warrantyISO ? ', гарантия до ' + C.dates.humanDate(data.warrantyISO) : '') +
+      (data.linked
+        ? '. Связанный расход создан в «Финансах»: категория ' + quote(data.opCat) + ', счёт ' + quote(data.accountName)
+        : '. Расход в «Финансах» не создавался — цена остаётся данными покупки') +
+      '. Покупка видна в разделе «Покупки»; отменить можно в «Истории».';
+  }
+  function purchaseSearchText(data) {
+    const C = Core();
+    const items = data.items || [];
+    const priceText = (p) => (Number(p.price) > 0 ? ' — ' + C.money.exact(p.price) : '');
+    const dateText = (p) => {
+      const iso = C.shopping.dateISO(p);
+      return iso ? ' (' + C.dates.dateLabel(iso) + ')' : '';
+    };
+    if (!items.length) {
+      if (data.q) {
+        return 'Не нашла покупок про ' + quote(data.q) + '. Проверьте название в разделе «Покупки» — я ничего не меняла.';
+      }
+      return data.others > 0
+        ? 'В собственности покупок нет, но заархивировано или продано — ' + data.others + '. Их видно в разделе «Покупки» с фильтром статуса.'
+        : 'Покупок пока нет. Добавьте покупку в разделе «Покупки» или командой «Добавь покупку …».';
+    }
+    if (items.length === 1) {
+      const p0 = items[0];
+      const w = C.shopping.warrantyState(C.shopping.warrantyISO(p0));
+      return 'Нашла покупку ' + quote(p0.name) + priceText(p0) + dateText(p0) +
+        (p0.store ? ', магазин ' + quote(p0.store) : '') +
+        '. Статус: ' + C.shopping.statusLabel(p0) + ', ' + w.label +
+        '. Подробности — в разделе «Покупки».';
+    }
+    const shown = items.slice(0, 5).map((p) => quote(p.name) + priceText(p) + dateText(p));
+    const rest = items.length - shown.length;
+    const head = data.q
+      ? 'Нашла ' + plural(items.length, 'покупка', 'покупки', 'покупок') + ': '
+      : 'У вас в собственности ' + plural(items.length, 'покупка', 'покупки', 'покупок') + ': ';
+    return head + shown.join('; ') + (rest > 0 ? ' и ещё ' + rest : '') +
+      (data.others ? '; кроме них продано или в архиве — ' + data.others : '') +
+      '. Откройте «Покупки», чтобы посмотреть подробности.';
+  }
+  /* Гарантийный ответ: только пересказ общего warrantyState того же слоя, что
+     «Главная», «Уведомления» и «Предложения» — второго расчёта гарантий нет. */
+  function purchaseWarrantyText(data) {
+    const C = Core();
+    const items = data.items || [];
+    if (data.mode === 'item') {
+      if (!items.length) {
+        return 'Не нашла покупок про ' + quote(data.q) + '. Проверьте название в разделе «Покупки» — я ничего не меняла.';
+      }
+      if (items.length === 1 || data.total === 1) {
+        const p0 = items[0];
+        const st = C.shopping.warrantyState(C.shopping.warrantyISO(p0));
+        if (st.kind === 'none') return 'У покупки ' + quote(p0.name) + ' гарантия не указана. Указать её можно в карточке вещи в «Покупках».';
+        if (st.kind === 'expired') return 'Гарантия на ' + quote(p0.name) + ' истекла (была до ' + C.dates.humanDate(st.untilISO) + '). Подробности — в «Покупках».';
+        return 'Гарантия на ' + quote(p0.name) + ' действует до ' + C.dates.humanDate(st.untilISO) + '. Подробности — в разделе «Покупки».';
+      }
+      return 'По запросу ' + quote(data.q) + ' подходит несколько покупок: ' +
+        items.map((x) => quote(x.name)).join(', ') + '. Уточните название или откройте «Покупки» — я не выбираю наугад.';
+    }
+    const line = (p) => quote(p.name) + ' — до ' + C.dates.humanDate(C.shopping.warrantyISO(p));
+    if (!items.length) {
+      return data.mode === 'expired' ? 'Покупок с истекшей гарантией нет.'
+        : data.mode === 'soon' ? 'Гарантий, которые скоро закончатся, сейчас нет.'
+          : 'Покупок с действующей гарантией нет. Указать гарантию можно в карточке вещи в «Покупках».';
+    }
+    const intro = data.mode === 'expired' ? 'Покупки с истекшей гарантией: '
+      : data.mode === 'soon' ? 'Гарантия скоро закончится: '
+        : 'Покупки с действующей гарантией сейчас: ';
+    const shown = items.slice(0, 5).map(line);
+    const rest = items.length - shown.length;
+    return intro + shown.join('; ') + (rest > 0 ? ' и ещё ' + rest : '') +
+      '. Эти же пункты «требуют внимания» показаны на «Главной» и в «Уведомлениях»; фильтр по гарантии есть и в «Покупках».';
+  }
+
   /* respond(result) → обычный текст. Ни JSON, ни имён действий, ни внутренних номеров записей. */
   function respond(res) {
     if (!res) return PARSE_MESSAGES.UNKNOWN_COMMAND + ' ' + examplesLine();
@@ -1335,6 +1674,9 @@ window.AvenCommand = (function () {
           return 'Напоминание ' + quote(res.data.title) + ' создано на ' + whenPhrase(res.data.dateISO, res.data.time) +
             '. Оно уже видно в разделе «Уведомления»; отменить создание можно в «Истории».';
         case 'reminder.search': return reminderSearchText(res.data);
+        case 'shopping.purchase.create': return purchaseCreateText(res.data);
+        case 'shopping.purchase.search': return purchaseSearchText(res.data);
+        case 'shopping.purchase.warranty': return purchaseWarrantyText(res.data);
         case 'task.complete':
           return 'Задача ' + quote(res.data.title) + ' отмечена выполненной. Вернуть её можно в «Задачах» или отменить в «Истории».';
         case 'task.reschedule':
@@ -1426,6 +1768,8 @@ window.AvenCommand = (function () {
         { action: 'note.search', example: 'Покажи заметки про отпуск', about: 'ищет заметки по тексту' },
         { action: 'reminder.search', example: 'Покажи напоминания', about: 'показывает или ищет напоминания' },
         { action: 'finance.list', example: 'Покажи расходы за сегодня', about: 'список расходов за сегодня, неделю или месяц' },
+        { action: 'shopping.purchase.search', example: 'Покажи покупки', about: 'вещи в собственности или поиск покупки по названию' },
+        { action: 'shopping.purchase.warranty', example: 'Какие гарантии скоро закончатся?', about: 'покупки с истекающей, действующей или истекшей гарантией' },
         { action: 'help.capabilities', example: 'Что ты умеешь?', about: 'список понятных команд' }
       ],
       mutations: [
@@ -1437,7 +1781,8 @@ window.AvenCommand = (function () {
         { action: 'reminder.create', example: 'Напомни купить масло на завтра', about: 'создаёт напоминание на указанную дату' },
         { action: 'finance.expense.create', example: 'Запиши расход 850 ₽ на продукты', about: 'записывает расход — всегда после вашего подтверждения' },
         { action: 'auto.fuel.create', example: 'Запиши заправку 45 л на 2500 рублей', about: 'создаёт заправку в разделе «Авто»' },
-        { action: 'auto.service.create', example: 'Запиши обслуживание замена масла на 3500 рублей', about: 'создаёт обслуживание в разделе «Авто»' }
+        { action: 'auto.service.create', example: 'Запиши обслуживание замена масла на 3500 рублей', about: 'создаёт обслуживание в разделе «Авто»' },
+        { action: 'shopping.purchase.create', example: 'Добавь покупку телефон за 45000 рублей', about: 'создаёт покупку в «Покупках»; связанный расход — только по явной просьбе и после подтверждения' }
       ],
       notYet: [
         'удаление записей текстом',
@@ -1447,6 +1792,8 @@ window.AvenCommand = (function () {
         'сокращения сумм вроде «5к» и пересчёт валют',
         'изменение, архивирование и удаление уже существующих заметок текстом',
         'изменение, откладывание, скрытие и удаление уже существующих напоминаний текстом',
+        'изменение, ведение ремонтов, смена статуса и удаление покупок текстом (создание, поиск и гарантии уже умею)',
+        'чеки, фото и файлы к покупкам — ждут сервис хранения',
         'перенос событий текстом',
         'свободный разговор за пределами перечисленных уточнений'
       ]

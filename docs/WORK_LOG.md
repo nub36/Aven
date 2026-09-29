@@ -2425,3 +2425,54 @@ engine — `settings.voice.engine`, голос — `settings.voice.natural.voice
   не пишет History; orphan expense после post-Finance failure невозможен.
 - Behavioral regression R5d принудительно вызывает этот failure path и проверяет operations, balance,
   mileage и History. Итоговый полный regression: 14 suites, 1489/1489.
+
+### 2026-09-29 — Stage 2 / Iteration 7: Shopping text commands
+
+- **Задача (scope владельца, зафиксирован в сообщении сессии):** ровно один блок — Shopping text
+  commands: (A) create purchase, (B) read-only list/search, (C) warranty query, (D) optional explicit
+  Shopping→Finance link. Всё поверх существующего `AvenCommand`/`AvenCommandSession`/
+  `AvenActions.shopping`/History-Undo. Вне scope и не начинались: update/status/repairs/delete покупок,
+  чеки/файлы/OCR, Event update, destructive/bulk, morphology/fuzzy, Voice/STT/LLM, StorageProvider,
+  TTS/PR#8, 3D/PR#15. Working-tree файл `research/tts/runtime/vps/deploy-vps.sh` не трогался.
+- **Политика:** см. DECISIONS.md «Auto/Shopping cost and Finance-link policy» (расширена записью от
+  2026-09-29) — цена покупки не создаёт Finance operation; explicit link → confirmation ALWAYS, обе
+  сущности в сводке; Cancel → ноль всех сущностей; Confirm/Undo атомарны.
+- **Сделано в коде:**
+  - `command.js`: grammar `shopping.purchase.create` (название обязательно; цена — общий `findAmount`;
+    «в магазине …»; «гарантия до <дата>»; собственные коды отказов `PURCHASE_NAME_REQUIRED`,
+    `PURCHASE_QUERY_REQUIRED`, `WARRANTY_DATE_UNSUPPORTED`), `shopping.purchase.search`,
+    `shopping.purchase.warranty` (режимы present/soon/expired/item; суффиксная попытка только для
+    item-поиска при полном промахе — read-only, задокументирована); порядок в `RULES` — после
+    Finance, до Event, чтобы «Запиши расход … на телефон» оставался расходом; guards
+    `UNSUPPORTED_PURCHASE_UPDATE/REPAIR/FILE` (+ «Отметь покупку купленной» в parseTaskComplete);
+    execute/resolve с общими `resolveFinanceSlot`/`financeSlotProblem` и постоянным confirmation для
+    linked; `purchaseLinkedSummary`, честные тексты ответов; `supported()` пополнен.
+  - `actions.js`: из `purchaseFinancePayload` выделен единый маппинг категории
+    `purchaseFinanceCategory` (экспорт как `shopping.financeCategory` — Command Engine его вызывает,
+    своей копии нет); `purchaseFinancePayload(p, finance)` принимает явные cat/account;
+    **атомарный linked create**: Finance operation создаётся первой (silent) по проверенному шаблону
+    Auto (R5d), покупка вставляется второй, при сбое — компенсация `deleteOperation` + возврат
+    `financeOpId/price`, код `PURCHASE_CREATE_FAILED`, History не пишется; link без цены —
+    `PRICE_REQUIRED_FOR_LINK`; batch Undo (`remove` покупки и операции + `adjust` баланса).
+  - Help (`cmd-shopping`, обновления «Какие команды…», «Чего не умеют», «Что умеет помощник»,
+    «Покупки и имущество») и Tutorial (+3 шага командного тура о покупках, обновлён
+    «command-limits», +1 шаг тура раздела «Покупки»).
+- **Тесты:** section A (+44: grammar/purity/regressions доменов, linked confirmation/confirmation-ALWAYS,
+  slots/stale/unknown-account/no-price, batch Undo spec, read-only ответы, side-effect-free guards,
+  Common-Actions-only), jsdom section (+31: реальный Assistant adapter на 320–430, shopping page
+  видимость, Undo, domain collisions, Suggestions visibility гарантии, Help/Tutorial), session (+9:
+  EXACT-immediate, linked confirm/cancel/double-confirm/stale, slot flow), stage13 (+5: atomic linked
+  create, price-required, finance-link failure, компенсация при сбое покупки, единый
+  financeCategory). Полный regression: 14 suites, 1582/1582, 0 failures. `node --check`,
+  `git diff --check` чисты; jsdom не заменяет реальный браузер (нет Chromium).
+- **Дальше (не начато):** scope gate classification следующего блока — кандидаты: Event update текстом
+  (destructive-adjacent, «confirmation always» уже утверждено владельцем), настройки текстом,
+  доходы текстом; решение — за владельцем.
+
+### Какие файлы изменены (Iteration 7)
+
+- `prototype/js/command.js`, `prototype/js/actions.js`, `prototype/js/help.js`, `prototype/js/tutorial.js`
+- `prototype/tests/command-engine-check.js`, `prototype/tests/command-session-check.js`,
+  `prototype/tests/stage13-entities-check.js`
+- `docs/CHANGELOG.md`, `docs/MVP_SCOPE.md`, `docs/COMMAND_ENGINE.md`, `docs/DECISIONS.md`,
+  `docs/WORK_LOG.md` (этот файл), `prototype/README.md`

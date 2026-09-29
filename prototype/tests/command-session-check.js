@@ -460,6 +460,50 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
     }
   }
 
+  {
+    /* Shopping iteration 7: тот же общий session — EXACT Shopping-only сразу,
+       цена не создаёт Finance; explicit link — всегда подтверждение обеих частей. */
+    {
+      const e = sandbox(); clearHistory(e);
+      const r = e.session.submit('Добавь покупку холодильник за 50000 рублей');
+      ok('S132 Shopping-only EXACT выполняется сразу без pending',
+        r.ok && r.status === 'done' && e.session.pending() === null && e.state.purchases.length === 1);
+      ok('S133 цена покупки не создаёт Finance operation, общая History — одна строка',
+        e.state.ops.length === 0 && e.state.history.length === 1 && e.state.history[0].action === 'purchase.create');
+    }
+    {
+      const e = sandbox(); clearHistory(e);
+      const r = e.session.submit('Добавь покупку телефон за 80000 рублей и учти в финансах со счета карта');
+      ok('S134 linked Shopping всегда ждёт confirmation', r.status === 'confirmation_required' && e.session.pending().type === 'confirmation');
+      ok('S135 до linked confirm нет Shopping/Finance/History', e.state.purchases.length === 0 && e.state.ops.length === 0 && e.state.history.length === 0);
+      const done = e.session.confirm();
+      ok('S136 linked confirm атомарно создаёт покупку и расход с batch Undo',
+        done.ok && e.state.purchases.length === 1 && e.state.ops.length === 1 &&
+        e.state.purchases[0].financeOpId === e.state.ops[0].id && e.state.ops[0].purchaseId === e.state.purchases[0].id &&
+        e.state.history.length === 1 && e.state.history[0].undo.type === 'batch');
+      ok('S137 repeat linked confirm безопасен', e.session.confirm().status === 'no_pending' &&
+        e.state.purchases.length === 1 && e.state.ops.length === 1 && e.state.history.length === 1);
+    }
+    {
+      const e = sandbox(); clearHistory(e);
+      e.session.submit('Добавь покупку телефон за 80000 рублей и учти в финансах со счета карта');
+      const no = e.session.submit('отмена');
+      ok('S138 cancel linked Shopping — ни покупки, ни расхода, ни History',
+        no.status === 'cancelled' && e.state.purchases.length === 0 && e.state.ops.length === 0 && e.state.history.length === 0);
+    }
+    {
+      const e = sandbox(); clearHistory(e);
+      const slot = e.session.submit('Добавь покупку чайник за 3000 и добавь в расходы');
+      ok('S139 linked Shopping без счёта уточняет через общий slot flow',
+        slot.status === 'clarification_required' && e.session.pending().slot === 'account' && e.state.purchases.length === 0);
+      e.state.finAccounts.length = 0;
+      const chosen = e.session.choose(0);
+      const stale = chosen.status === 'confirmation_required' ? e.session.confirm() : chosen;
+      ok('S140 stale счёт при confirm не оставляет partial Shopping/Finance',
+        stale.status === 'stale' && e.state.purchases.length === 0 && e.state.ops.length === 0 && e.state.history.length === 0);
+    }
+  }
+
   ['первую', 'вторая', 'вторую', 'отмена', 'нет', 'подтвердить'].forEach((word, i) => {
     const e = sandbox(); const a = task(e, 'Тест один'), b = task(e, 'Тест два'); clearHistory(e);
     e.session.submit('Отметь тест выполненным');
