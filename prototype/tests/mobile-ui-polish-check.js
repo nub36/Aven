@@ -1,4 +1,4 @@
-/* Mobile UX + Design System & Motion regression checks.
+/* Mobile UX + Design System, Motion & Finance regression checks.
    jsdom validates state/cleanup, style contracts and DOM structure. */
 let JSDOM;
 try { JSDOM = require('jsdom').JSDOM; }
@@ -58,7 +58,11 @@ async function load(hash, width) {
   ok('Character CSS: covers reduced-motion for floating avatar and recording indicator', /prefers-reduced-motion:\s*reduce[\s\S]*\.float-btn\s*\{[\s\S]*animation:\s*none/.test(charCss) && /html\.reduce-motion\s+\.float-btn/.test(charCss));
   ok('Admin: wide tables have explicit mobile card semantics', /tbl adm-table/.test(admin) && /data-label="Действия"/.test(admin) && /data-label="Результат"/.test(admin));
 
-  /* 2. Responsive DOM Smoke across mobile breakpoints */
+  /* 2. Finance Defect A & B CSS Contracts */
+  ok('CSS Defect A: Finance monthly chart has bounded horizontal scroll region', /\.bars-scroll\s*\{[^}]*overflow-x:\s*auto/s.test(css) && /\.bars-scroll\s*\{[^}]*overscroll-behavior-inline:\s*contain/s.test(css));
+  ok('CSS Defect B: Finance operations table has responsive mobile card semantics', /\.fin-table tr\.fin-row\s*\{[^}]*grid-template-areas:/s.test(css) && /\.fin-table\s*\{[^}]*display:\s*block/s.test(css));
+
+  /* 3. Responsive DOM Smoke across mobile breakpoints */
   const routes = ['home', 'day', 'calendar', 'tasks', 'notes', 'finance', 'auto', 'shopping', 'tools', 'help', 'assistant', 'automation', 'history', 'admin', 'settings', 'profile'];
   for (const width of [320, 360, 390, 412, 430]) {
     const m = await load('#/home', width);
@@ -72,7 +76,7 @@ async function load(hash, width) {
     m.dom.window.close();
   }
 
-  /* 3. Mobile Navigation Drawer & Stacking Contract */
+  /* 4. Mobile Navigation Drawer & Stacking Contract */
   const p = await load('#/home');
   const button = p.q('#mobile-menu-btn');
   p.click(button); await sleep(30);
@@ -85,29 +89,37 @@ async function load(hash, width) {
   ok('Navigation click / route change cleans drawer', p.w.location.hash === '#/admin' && !p.d.body.classList.contains('nav-open') && !p.q('.main').hasAttribute('inert'));
   ok('Admin route renders local tabs and responsive tables', !!p.q('.set-nav') && !!p.q('.adm-table') && !!p.q('.table-scroll'));
 
-  /* 4. Modal Bottom Sheet & Dialog */
+  /* 5. Modal Bottom Sheet & Dialog */
   p.w.Aven.openModal({ title: 'Test', body: '<input name="x">', submitText: null }); await sleep(40);
   ok('Modal open locks background and exposes dialog', p.d.body.classList.contains('modal-open') && p.q('.app').hasAttribute('inert') && !!p.q('.modal[role="dialog"]'));
   p.click(p.q('.modal [data-x]')); await sleep(30);
   ok('Modal close restores page and removes overlay', !p.d.body.classList.contains('modal-open') && !p.q('.app').hasAttribute('inert') && !p.q('.modal-overlay'));
 
-  /* 5. Tutorial 2.0 Sheet & Preservation */
+  /* 6. Tutorial 2.0 Sheet & Preservation */
   p.w.AvenTutorial.start('help', { restart: true }); await sleep(420);
   ok('Tutorial open has mobile sheet and lock', p.d.body.classList.contains('tour-open') && p.q('.tour-pop').classList.contains('tour-pop-mobile'));
   p.click(p.q('[data-action="tour-close"]')); await sleep(40);
   ok('Tutorial close control restores body without a click-blocking backdrop', !p.q('.tour-layer') && !p.d.body.classList.contains('tour-open'));
 
-  /* 6. Home Hierarchy & Action Affordances */
+  /* 7. Home Hierarchy & Action Affordances */
   p.w.location.hash = '#/home'; await sleep(120);
   ok('Home hero renders greeting and date', !!p.q('[data-tour="home-hero"] h1') && !!p.q('.hero-sign'));
   ok('Home command bar has input, mic and go buttons', !!p.q('[data-tour="command-bar"] input') && !!p.q('[data-tour="command-bar"] .mic') && !!p.q('[data-tour="command-bar"] .go'));
   ok('Home suggestions panel is accessible', !!p.q('[data-tour="home-suggestions"]'));
   ok('Home summary grid renders distinct entity cards', !!p.q('[data-tour="home-summary"]') && p.qa('[data-tour="home-summary"] .card').length >= 4);
 
-  /* 7. Assistant Mode & Keyboard Polish */
+  /* 8. Assistant Mode & Keyboard Polish */
   p.w.location.hash = '#/assistant'; await sleep(120);
   ok('Assistant container has proper viewport mode and chat log', p.d.body.classList.contains('assistant-mode') && !!p.q('#chat') && !!p.q('#chat-input'));
   ok('Assistant send button and example command pills present', !!p.q('[data-tour="command-send"]') && !!p.q('[data-tour="command-examples"]'));
+
+  /* 9. Finance Screen Defect A & B DOM Validation */
+  p.w.location.hash = '#/finance'; await sleep(120);
+  const finScroll = p.q('.bars-scroll');
+  ok('Finance DOM Defect A: Monthly chart renders in bounded scroll container', !!finScroll && finScroll.querySelectorAll('.bar-wrap').length === 12);
+  const finRows = p.qa('.fin-table tr.fin-row');
+  ok('Finance DOM Defect B: Operations list renders with semantic card structure', finRows.length > 0 && !!p.q('.fin-td-what') && !!p.q('.fin-td-sum') && !!p.q('.fin-td-cat') && !!p.q('.fin-td-account') && !!p.q('.fin-td-date') && !!p.q('.fin-td-actions'));
+  ok('Finance DOM Defect B: Edit and delete controls preserved', !!p.q('[data-action="fin-edit"]') && !!p.q('[data-action="fin-del"]'));
 
   p.dom.window.close();
   console.log('\nвсего проверок: ' + (pass + fail) + ', провалено: ' + fail);

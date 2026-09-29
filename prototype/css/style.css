@@ -650,8 +650,14 @@ html[data-theme="dark"] .cmdbar {
 
 /* Finance */
 .fin-filters { margin-bottom: 16px; min-width: 0; }
-.bars { display: flex; align-items: flex-end; gap: 12px; height: 160px; padding-top: 10px; }
-.bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+.bars-scroll {
+  width: 100%; max-width: 100%; min-width: 0;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  overscroll-behavior-inline: contain; scrollbar-width: thin;
+  padding-bottom: 4px;
+}
+.bars { display: flex; align-items: flex-end; gap: 12px; height: 160px; padding-top: 10px; min-width: 0; }
+.bar-wrap { flex: 1; min-width: 28px; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
 .bar { width: 70%; max-width: 46px; background: var(--accent); opacity: .85; border-radius: 7px 7px 3px 3px; transition: height .3s; }
 .bar-wrap .bl { font-size: .74rem; color: var(--muted); }
 .bar-wrap .bv { font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -661,6 +667,9 @@ html[data-theme="dark"] .cmdbar {
 .cat-bar > div { height: 100%; background: var(--accent); border-radius: 999px; }
 .pos { color: var(--ok); }
 .neg { color: var(--danger); }
+.fin-op-title { font-weight: 600; color: var(--text); }
+.fin-op-comment { color: var(--muted); font-size: .82rem; margin-top: 2px; }
+.fin-op-subdate { font-size: .76rem; color: var(--muted); }
 
 /* Auto */
 .car-head { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
@@ -1151,6 +1160,53 @@ body.auth-mode .content { max-width: 480px; padding: 0 16px; margin: 6vh auto; }
   .adm-table td[data-label=""]::before { display: none; }
   .adm-table select { width: 100%; max-width: 100%; }
   .adm-table .btn-row { justify-content: flex-start; }
+
+  /* Finance Monthly Chart on mobile (Defect A fix) */
+  .bars-scroll {
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    overscroll-behavior-inline: contain; scrollbar-width: thin;
+    padding-bottom: 6px;
+  }
+  .bars { min-width: 440px; gap: 10px; }
+  .bar-wrap { min-width: 32px; }
+
+  /* Finance Operations responsive card layout (Defect B fix) */
+  .fin-table { display: block; width: 100%; border: none; }
+  .fin-table thead { display: none; }
+  .fin-table tbody { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+  .fin-table tr.fin-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "what sum"
+      "cat account"
+      "date actions";
+    gap: 6px 10px;
+    align-items: center;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm, 12px);
+    background: var(--panel-2, var(--surface-subtle));
+    border: 1px solid var(--border);
+    min-width: 0;
+    width: 100%;
+  }
+  .fin-table tr.fin-row td {
+    border: none;
+    padding: 0;
+    min-width: 0;
+    overflow-wrap: break-word;
+  }
+  .fin-table tr.fin-row td::before { display: none; }
+  .fin-table .fin-td-what { grid-area: what; font-size: .95rem; line-height: 1.35; }
+  .fin-table .fin-op-title { font-weight: 600; color: var(--text); overflow-wrap: break-word; }
+  .fin-table .fin-op-comment { color: var(--muted); font-size: .8rem; margin-top: 2px; font-weight: 400; }
+  .fin-table .fin-td-sum { grid-area: sum; text-align: right; font-weight: 700; font-size: 1.05rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .fin-table .fin-td-cat { grid-area: cat; display: flex; align-items: center; }
+  .fin-table .fin-td-account { grid-area: account; text-align: right; color: var(--muted); font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fin-table .fin-td-date { grid-area: date; color: var(--muted); font-size: .82rem; line-height: 1.3; }
+  .fin-table .fin-td-actions { grid-area: actions; display: flex; justify-content: flex-end; }
+  .fin-table .fin-td-actions .btn-row { display: flex; gap: 6px; justify-content: flex-end; }
+  .fin-table .fin-td-actions .btn { min-height: 38px; padding: 6px 12px; font-size: .84rem; }
 
   /* Toasts on mobile */
   #toasts { left: 12px; right: 12px; bottom: 12px; }

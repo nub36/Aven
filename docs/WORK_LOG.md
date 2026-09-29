@@ -46,15 +46,21 @@
    - Полная поддержка `@media (prefers-reduced-motion: reduce)` и пользовательского переключателя `html.reduce-motion`.
    - При активации все анимации и переходы отключаются или сводятся к 0.001ms, убираются эффекты трансформаций при hover/active, останавливается покачивание плавающего персонажа и пульсация ореола, а визуальный и текстовый фидбек сохраняются полностью.
 
-7. **Сохранение Tutorial 2.0:**
+7. **Исправление мобильных дефектов Finance (Android feedback):**
+   - **График расходов (Defect A):** контейнер `.bars-scroll` с `overflow-x: auto` и `overscroll-behavior-inline: contain` изолирует 12-месячный график внутри карточки на экранах 320–430px, предотвращая горизонтальный оверфлоу документа.
+   - **Операции (Defect B):** таблица `.fin-table` на мобильных экранах адаптируется в карточную структуру через CSS Grid, сохраняя читаемость названий, сумм, категорий, счетов, дат и действий без сужения до 30px и переноса букв.
+   - **Владельческий контекст:** дефекты были предоставлены владельцем со скриншотов реального Android production (в песочнице реальный Android/Chromium не запускался, валидация проведена структурно через jsdom и CSS-контракты).
+
+8. **Сохранение Tutorial 2.0:**
    - Все `data-tour` хуки сохранены без изменений.
    - Spotlight cutout, интерактивные action-шаги, сценарии Tasks, Assistant, History и Help работают штатно.
 
 ### Изменённые файлы
 
-- `prototype/css/style.css` — консолидированная система дизайн-токенов, motion contract, мобильная эргономика, safe areas, dynamic viewport, стили карточек/кнопок/форм/модальных окон, reduced-motion.
+- `prototype/js/pages2.js` — разметка для графика `.bars-scroll` и таблицы операций `.fin-table` с семантическими ячейками.
+- `prototype/css/style.css` — консолидированная система дизайн-токенов, motion contract, мобильная эргономика, safe areas, dynamic viewport, стили карточек/кнопок/форм/модальных окон, reduced-motion, адаптивные стили Finance.
 - `prototype/css/character.css` — дизайн-токены для плавающего персонажа, halo-свечение, reduced-motion.
-- `prototype/tests/mobile-ui-polish-check.js` — расширен тестовый набор мобильной регрессии (33 проверки: дизайн-токены, motion tokens, touch targets, safe area, dynamic viewport, reduced motion, responsive smoke 320–430px, drawer stacking, modal, tutorial, home hierarchy, assistant mode).
+- `prototype/tests/mobile-ui-polish-check.js` — расширен тестовый набор мобильной регрессии (38 проверок: дизайн-токены, motion tokens, touch targets, safe area, dynamic viewport, reduced motion, responsive smoke 320–430px, drawer stacking, modal, tutorial, home hierarchy, assistant mode, Finance Defect A/B).
 - `docs/UI_UX.md` — добавлен раздел §14 (UI/UX + Mobile Design & Motion).
 - `docs/PROJECT_PLAN.md` — зафиксировано завершение этапа UI/UX + Mobile Design & Motion.
 - `docs/CHANGELOG.md` — добавлена запись о пользовательских улучшениях этапа.
@@ -63,7 +69,7 @@
 
 ### Что проверено
 
-- **Регрессионный baseline:** 16 тестовых наборов, **1913 проверок, 0 провалов**:
+- **Регрессионный baseline:** 16 тестовых наборов, **1918 проверок, 0 провалов**:
   - `prototype/tests/actions-core-check.js` → 18/18
   - `prototype/tests/aven3d-viewer-check.js` → 43/43
   - `prototype/tests/command-engine-check.js` → 613/613
@@ -71,7 +77,7 @@
   - `prototype/tests/daily-check.js` → 139/139
   - `prototype/tests/data-integrity-check.js` → 127/127
   - `prototype/tests/help-tutorial-check.js` → 33/33
-  - `prototype/tests/mobile-ui-polish-check.js` → 33/33
+  - `prototype/tests/mobile-ui-polish-check.js` → 38/38
   - `prototype/tests/navigation-check.js` → 63/63
   - `prototype/tests/notifications-check.js` → 49/49
   - `prototype/tests/settings-profile-check.js` → 121/121
@@ -80,7 +86,7 @@
   - `prototype/tests/suggestions-check.js` → 46/46
   - `prototype/tests/tts-proto-check.js` → 42/42
   - `prototype/tests/tutorial2-interactive-check.js` → 90/90
-- **Браузерная среда:** реальные браузерные движки (Chromium/Playwright/Puppeteer/Firefox) недоступны в песочнице: **real-browser validation not performed** (jsdom за реальный браузер не выдаётся).
+- **Браузерная среда:** реальные браузерные движки (Chromium/Playwright/Puppeteer/Firefox) недоступны в песочнице: **real-browser validation not performed** (дефекты Android Finance предоставлены владельцем со скриншотов реального Android).
 - **PR #8 и PR #15 не затрагивались.**
 - **Known Natural Voice 404 не затрагивался.**
 - **deploy-vps.sh не затрагивался.**
