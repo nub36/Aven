@@ -95,13 +95,15 @@
     <div class="grid cols-2">
       <div class="card">
         <h3>Расходы по месяцам</h3>
-        ${monthly.length ? `<div class="bars">
-          ${monthly.map((x) => `
-          <div class="bar-wrap" title="${A.esc(x.full)}: ${A.esc(A.money(x.v))}">
-            <div class="bv">${A.esc(shortSum(x.v))}</div>
-            <div class="bar" style="height:${Math.max(8, Math.round(x.v / maxV * 100))}%"></div>
-            <div class="bl">${A.esc(x.m)}</div>
-          </div>`).join('')}
+        ${monthly.length ? `<div class="bars-scroll" data-tour="finance-chart">
+          <div class="bars">
+            ${monthly.map((x) => `
+            <div class="bar-wrap" title="${A.esc(x.full)}: ${A.esc(A.money(x.v))}">
+              <div class="bv">${A.esc(shortSum(x.v))}</div>
+              <div class="bar" style="height:${Math.max(8, Math.round(x.v / maxV * 100))}%"></div>
+              <div class="bl">${A.esc(x.m)}</div>
+            </div>`).join('')}
+          </div>
         </div>
         <div class="s" style="color:var(--muted);font-size:.8rem;margin-top:6px">Считается по вашим операциям: показаны последние ${monthly.length} месяцев подряд, включая месяцы без расходов (у них столбик нулевой). Сравнение периодов и отчёты — отдельный этап.</div>`
       : '<div class="empty">Пока нет операций, по которым можно посчитать расходы по месяцам.</div>'}
@@ -118,17 +120,21 @@
       </div>
       <div class="card">
         <h3 data-tour="finance-list">Операции <span class="pill">${ops.length}</span></h3>
-        ${ops.length ? `<table class="tbl">
-          <tr><th>Что</th><th>Категория</th><th>Счёт</th><th>Когда</th><th class="num">Сумма</th><th title="Редактирование / удаление с Undo">⋯</th></tr>
+        ${ops.length ? `<table class="tbl fin-table">
+          <thead>
+            <tr><th>Что</th><th>Категория</th><th>Счёт</th><th>Когда</th><th class="num">Сумма</th><th title="Редактирование / удаление с Undo">⋯</th></tr>
+          </thead>
+          <tbody>
           ${ops.map((o) => `
           <tr class="fin-row" data-id="${A.esc(o.id)}">
-            <td>${A.esc(o.title)}${o.comment ? `<div class="s" style="color:var(--muted)">${A.esc(o.comment)}</div>` : ''}</td>
-            <td><span class="pill">${A.esc(o.cat)}</span></td>
-            <td class="s" style="color:var(--muted)">${A.esc(opAccount(st, o.account).name)}</td>
-            <td class="s" style="color:var(--muted)">${A.esc(humanDate(opDateISO(o)))}${o.date && !/^\d{4}-/.test(o.date) ? `<div>${A.esc(o.date)}</div>` : ''}</td>
-            <td class="num ${o.type === 'income' ? 'pos' : 'neg'}">${o.type === 'income' ? '+' : '−'}${A.money(o.amount)}</td>
-            <td><span class="btn-row"><button class="btn small" data-action="fin-edit" data-id="${A.esc(o.id)}">Ред.</button><button class="btn small" data-action="fin-del" data-id="${A.esc(o.id)}" title="Удалить операцию: подтверждение + Undo, итоги пересчитаются">Удалить</button></span></td>
+            <td data-label="Что" class="fin-td-what"><div class="fin-op-title">${A.esc(o.title)}</div>${o.comment ? `<div class="fin-op-comment s" style="color:var(--muted)">${A.esc(o.comment)}</div>` : ''}</td>
+            <td data-label="Категория" class="fin-td-cat"><span class="pill">${A.esc(o.cat)}</span></td>
+            <td data-label="Счёт" class="fin-td-account s" style="color:var(--muted)">${A.esc(opAccount(st, o.account).name)}</td>
+            <td data-label="Когда" class="fin-td-date s" style="color:var(--muted)">${A.esc(humanDate(opDateISO(o)))}${o.date && !/^\d{4}-/.test(o.date) ? `<div class="fin-op-subdate">${A.esc(o.date)}</div>` : ''}</td>
+            <td data-label="Сумма" class="fin-td-sum num ${o.type === 'income' ? 'pos' : 'neg'}">${o.type === 'income' ? '+' : '−'}${A.money(o.amount)}</td>
+            <td data-label="Действия" class="fin-td-actions"><span class="btn-row compact"><button class="btn small" data-action="fin-edit" data-id="${A.esc(o.id)}">Ред.</button><button class="btn small" data-action="fin-del" data-id="${A.esc(o.id)}" title="Удалить операцию: подтверждение + Undo, итоги пересчитаются">Удалить</button></span></td>
           </tr>`).join('')}
+          </tbody>
         </table>` : '<div class="empty">Нет операций по текущему фильтру</div>'}
         <div style="color:var(--muted);font-size:.82rem;margin-top:10px">Категории: ${cats.map(A.esc).join(' · ')}</div>
         <div class="tts-priv" style="margin-top:12px"><span>🧮</span>
@@ -208,21 +214,33 @@
       tab = `
       <div class="card">
         <h3>Заправки</h3>
-        <table class="tbl">
-          <tr><th>Дата</th><th class="num">Литры</th><th class="num">Сумма</th><th class="num">Цена/л</th><th class="num">Пробег</th><th>Связь</th><th></th></tr>
-          ${(car.fuel || []).map((f) => `
-          <tr><td>${A.esc(f.date || autoDateLabel(autoDateISO(f)))}</td><td class="num">${A.esc(f.liters)} л</td><td class="num">${A.money(f.sum)}</td>
-          <td class="num">${f.liters ? (f.sum / f.liters).toFixed(1) : '—'} ₽</td><td class="num">${(f.km || 0).toLocaleString('ru-RU')} км</td><td>${autoLinkedPill(st, f)}</td><td>${autoRowActions('fuel', f)}</td></tr>`).join('')}
-        </table>
+        <div class="table-scroll">
+          <table class="tbl">
+            <thead>
+              <tr><th>Дата</th><th class="num">Литры</th><th class="num">Сумма</th><th class="num">Цена/л</th><th class="num">Пробег</th><th>Связь</th><th></th></tr>
+            </thead>
+            <tbody>
+              ${(car.fuel || []).map((f) => `
+              <tr><td>${A.esc(f.date || autoDateLabel(autoDateISO(f)))}</td><td class="num">${A.esc(f.liters)} л</td><td class="num">${A.money(f.sum)}</td>
+              <td class="num">${f.liters ? (f.sum / f.liters).toFixed(1) : '—'} ₽</td><td class="num">${(f.km || 0).toLocaleString('ru-RU')} км</td><td>${autoLinkedPill(st, f)}</td><td>${autoRowActions('fuel', f)}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
       </div>`;
     } else if (autoTab === 'expenses') {
       tab = `
       <div class="card">
         <h3>Расходы</h3>
-        <table class="tbl">
-          <tr><th>Что</th><th>Категория</th><th>Когда</th><th class="num">Сумма</th><th>Связь</th><th></th></tr>
-          ${(car.expenses || []).map((e) => `<tr><td>${A.esc(e.title)}</td><td>${A.esc(e.category || 'Другое')}</td><td style="color:var(--muted)">${A.esc(e.date || autoDateLabel(autoDateISO(e)))}</td><td class="num neg">${A.money(e.amount)}</td><td>${autoLinkedPill(st, e)}</td><td>${autoRowActions('expense', e)}</td></tr>`).join('')}
-        </table>
+        <div class="table-scroll">
+          <table class="tbl">
+            <thead>
+              <tr><th>Что</th><th>Категория</th><th>Когда</th><th class="num">Сумма</th><th>Связь</th><th></th></tr>
+            </thead>
+            <tbody>
+              ${(car.expenses || []).map((e) => `<tr><td>${A.esc(e.title)}</td><td>${A.esc(e.category || 'Другое')}</td><td style="color:var(--muted)">${A.esc(e.date || autoDateLabel(autoDateISO(e)))}</td><td class="num neg">${A.money(e.amount)}</td><td>${autoLinkedPill(st, e)}</td><td>${autoRowActions('expense', e)}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
       </div>`;
     } else if (autoTab === 'service') {
       tab = `
