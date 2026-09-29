@@ -412,10 +412,10 @@ function reload(savedRaw, hash) {
       !!p.q('[data-action="help-topic"][data-topic="settings"]') && !!p.q('[data-action="tutorial-start"][data-tour-id="settings"]'));
     p.w.AvenTutorial.start('settings', { restart: true });
     await sleep(500);
-    ok('I12 обучение запускается и показывает шаг', !!p.q('.tour-pop') && /шаг 1\//.test(p.q('.tour-pop').textContent));
+    ok('I12 обучение запускается и показывает шаг', !!p.q('.tour-pop') && /Шаг 1 из/.test(p.q('.tour-pop').textContent));
     ok('I13 обучение подсвечивает настоящий элемент экрана', !!p.q('.tour-target-active'));
     p.w.AvenTutorial.next(); await sleep(250);
-    ok('I14 переход к следующему шагу работает', /шаг 2\//.test(p.q('.tour-pop').textContent));
+    ok('I14 переход к следующему шагу работает', /Шаг 2 из/.test(p.q('.tour-pop').textContent));
     p.w.AvenTutorial.skip(); await sleep(150);
     ok('I15 обучение закрывается и не оставляет наложений', !p.q('.tour-pop') && !p.d.body.classList.contains('tour-open'));
     p.dom.window.close();

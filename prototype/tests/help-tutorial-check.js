@@ -103,11 +103,11 @@ async function load(hash, opts) {
     const p = await load('#/home');
     ok('T1 Tutorial engine is loaded with definitions', !!p.w.AvenTutorial && !!p.w.AvenTutorial.definitions.tasks);
     p.w.AvenTutorial.start('home', { restart: true }); await sleep(250);
-    ok('T2 Tutorial start renders overlay/popover', !!p.q('.tour-layer') && /шаг 1\/4/.test(p.text('.tour-pop')), p.text('.tour-pop'));
+    ok('T2 Tutorial start renders overlay/popover', !!p.q('.tour-layer') && /Шаг 1 из 4/.test(p.text('.tour-pop')), p.text('.tour-pop'));
     p.click(p.q('[data-action="tour-next"]')); await sleep(160);
-    ok('T3 Tutorial next advances and persists progress', /шаг 2\/4/.test(p.text('.tour-pop')) && p.st().tutorials.progress.home === 1, p.text('.tour-pop'));
+    ok('T3 Tutorial next advances and persists progress', /Шаг 2 из 4/.test(p.text('.tour-pop')) && p.st().tutorials.progress.home === 1, p.text('.tour-pop'));
     p.click(p.q('[data-action="tour-prev"]')); await sleep(160);
-    ok('T4 Tutorial previous returns to first step', /шаг 1\/4/.test(p.text('.tour-pop')));
+    ok('T4 Tutorial previous returns to first step', /Шаг 1 из 4/.test(p.text('.tour-pop')));
     p.click(p.q('[data-action="tour-skip"]')); await sleep(160);
     ok('T5 Tutorial skip closes overlay without blocking page', !p.q('.tour-layer') && !/Ошибка отрисовки/.test(p.text('#page')));
     p.dom.window.close();
@@ -121,7 +121,7 @@ async function load(hash, opts) {
     p.click(p.q('[data-action="tour-finish"]')); await sleep(160);
     ok('T6 Tutorial finish stores completion', p.st().tutorials.completed.help === true && !p.q('.tour-layer'));
     p.w.AvenTutorial.start('help', { restart: true }); await sleep(160);
-    ok('T7 Tutorial restart begins from step one', /шаг 1\/3/.test(p.text('.tour-pop')), p.text('.tour-pop'));
+    ok('T7 Tutorial restart begins from step one', /Шаг 1 из 3/.test(p.text('.tour-pop')), p.text('.tour-pop'));
     p.w.AvenTutorial.close(false);
     p.dom.window.close();
   }

@@ -395,15 +395,15 @@ async function load(hash, width) {
       /Завтра/.test(defs.evening.steps[4].title) && /Завершение/.test(defs.evening.steps[5].title));
 
     p.w.AvenTutorial.start('morning', { restart: true }); await sleep(500);
-    ok('T14 обучение открывает экран утра и первый шаг', p.w.location.hash === '#/morning' && /шаг 1\/6/.test((p.q('.tour-pop') || {}).textContent || ''));
+    ok('T14 обучение открывает экран утра и первый шаг', p.w.location.hash === '#/morning' && /Шаг 1 из 6/.test((p.q('.tour-pop') || {}).textContent || ''));
     ok('T15 обучение подсвечивает реальный элемент сценария', !!p.q('.tour-target-active'));
     p.click(p.q('[data-action="tour-next"]')); await sleep(300);
     ok('T16 следующий шаг обучения переключает шаг сценария',
-      /шаг 2\/6/.test((p.q('.tour-pop') || {}).textContent || '') && p.q('.daily-bar').getAttribute('aria-valuenow') === '2');
+      /Шаг 2 из 6/.test((p.q('.tour-pop') || {}).textContent || '') && p.q('.daily-bar').getAttribute('aria-valuenow') === '2');
     p.d.dispatchEvent(new p.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await sleep(120);
     ok('T17 Escape закрывает обучение и не ломает сценарий', !p.q('.tour-layer') && !!p.q('.daily-flow'));
     p.w.AvenTutorial.start('evening', { restart: true }); await sleep(600);
-    ok('T18 обучение «Итоги дня» открывает свой экран', p.w.location.hash === '#/evening' && /Итоги дня · шаг 1\/6/.test((p.q('.tour-pop') || {}).textContent || ''));
+    ok('T18 обучение «Итоги дня» открывает свой экран', p.w.location.hash === '#/evening' && /Итоги дня/.test((p.q('.tour-pop') || {}).textContent || '') && /Шаг 1 из 6/.test((p.q('.tour-pop') || {}).textContent || ''));
     p.w.AvenTutorial.close(false); await sleep(80);
     await p.go('#/morning');
     ok('T19 на экране сценария есть контекстная справка и кнопка обучения',

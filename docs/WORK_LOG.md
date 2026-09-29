@@ -6,6 +6,92 @@
 
 ---
 
+## 2026-09-29 — Tutorial 2.0 / Interactive Guided Learning
+
+### Независимый review PR #36
+
+- Повторно проверены Git/GitHub baseline, полный diff и обязательная документация; PR #8 и #15 не менялись.
+- Устранены cross-run races: delayed validation, success transition и route render теперь проверяют identity
+  запуска; transition timer очищается на Close/Skip/Finish/Escape/restart.
+- Добавлены `visualViewport` resize/scroll listeners с симметричным cleanup; видимая внутри usable viewport
+  цель больше не получает ненужный `scrollIntoView`.
+- Финальный required action защищён disabled Finish и проверкой внутри публичного `finish()`; публичный
+  `next(true)` больше не является обходом, а missing-target Continue проверяет фактическое отсутствие цели.
+- Regression усилен lifecycle/final-action/viewport/scroll сценариями: Tutorial **90/90**, полный набор
+  **16 suites, 1900/1900**, TTS **42/42**. `git diff --check` и JS syntax checks — clean.
+- Chromium/Chrome/Playwright/Puppeteer в окружении не обнаружены: **real-browser validation not performed.**
+
+- **Git/GitHub baseline:** fresh `origin/main` = `fdae577d47ed78721a1a9e4efcb794ba2121264b`
+  (`git rev-parse` = `git ls-remote`), PR #35 MERGED этим commit; working tree до работы чистый.
+  Open PR только #8 Natural Voice и #15 Female Aven 3D — не тронуты. Pages run `36599549517` и
+  deployment `6740244309` на том же SHA — success.
+- **Baseline regression:** все найденные 15 suite перепрогнаны с jsdom@30 только в `/tmp/lab`:
+  **1810/1810**, 0 провалов. Зависимости проекта не менялись.
+
+### Инвентаризация до изменения
+
+- **Информационные tours:** Home (4), Calendar (5), Day (5), Suggestions (7), Notifications (6),
+  Notes (4), Finance (5), Auto (4), Shopping (5), Morning (6), Evening (6), Settings (6), Profile (4),
+  Help (3). Их targets уже следовали `data-tour`; Morning/Evening дополнительно имели safe `prepare`
+  только для переключения представления. Все шаги продвигались кнопкой «Далее».
+- **Tasks до 2.0:** 4 информационных шага (create/tabs/filters/list); пользователь не обязан был открыть
+  форму или создать задачу. **Commands:** 25 информационных шагов вокруг input/examples/chat/limits,
+  включая потенциальные mutations, но без ожидания/проверки. Отдельного History tutorial не было.
+- Settings/Profile были definition и contextual entry point, но не входили в короткий список launcher Help;
+  Tools/Automation/Admin/Auth отдельного tutorial definition не имели. Их искусственно не добавляли.
+
+### Реализация
+
+- Существующий `prototype/js/tutorial.js` расширен, второй framework не создан. Старый info-contract
+  `target/title/text[/prepare]` полностью совместим. Новый optional `interaction` описывает event,
+  accept/validate, before snapshot, delay и success; target может быть существующим `data-tour` либо
+  definition-level resolver для динамической entity/History entry. Business logic в engine отсутствует.
+- Engine: waiting state и disabled Next; friendly wrong-action hint; causal success feedback; semantic
+  progress; double-transition lock; delegated capture listeners с cleanup; re-resolve после render через
+  MutationObserver; missing target retry/continue; route-aware steps; scroll with reduced-motion path;
+  visualViewport/dvh/safe-area placement; Escape перехватывается до modal Escape, cleanup возвращает focus.
+- Spotlight — root-layer cut-out через shadow, `pointer-events:none`; target остаётся кликабельным даже при
+  modal/stacking contexts. Только instruction card принимает pointer events. Existing drawer > backdrop
+  порядок не менялся.
+- **Tasks vertical:** intro → настоящая «Новая задача» → настоящий title input → обычный Save/Common Action
+  → correlation by before/after new ID (не title) + matching History ID → task visible → настоящий route в
+  History → настоящий Undo строго matching entry → проверка, что созданная Task удалена, а чужие остались.
+  Double-submit guard добавлен в существующую форму. Skip/Close не удаляет созданную задачу.
+- **Commands vertical:** настоящий input → только поддерживаемая read-only фраза «Что у меня сегодня?» →
+  Enter/Send → настоящий Command Engine response → проверка query и отсутствия изменений Tasks/History.
+  Unsupported phrase не засчитывается и может быть исправлена. Уже обещанные справочные шаги про mutations,
+  confirmations, Auto/Shopping/Finance/Event сохранены после интерактивного урока как info-steps.
+- Help получил пользовательское объяснение real action, waiting Next, wrong click, Skip/Close, сохранения
+  реальных действий, Undo и необязательности голоса. Остальные tours остаются информационными.
+- Persistence schema не менялась: `tutorials.voice/progress/completed`; context/listeners/DOM/waiting ephemeral.
+  Informational progress восстанавливается как раньше, а stale interactive checkpoint после reload безопасно
+  перезапускает сценарий с первого шага. Previous не откатывает business state; повторно
+  показывает выполненность в рамках текущего запуска. Restart создаёт чистый context.
+
+### Проверки и ограничения
+
+- Новый `prototype/tests/tutorial2-interactive-check.js`: **90/90** behavioral checks — engine lifecycle,
+  old info compatibility, required action/wrong/success/double/replacement/missing/previous/skip/finish/
+  close/Escape/restart/cleanup/progress/persistence/reduced motion; Tasks + correlation + History/Undo;
+  Commands read-only/retry/no mutation; mobile structure 320/360/390/412/430 и a11y semantics/focus.
+- Existing `help-tutorial-check.js`: 33/33 после deliberate wording update (`Шаг N из M`), assertions не
+  ослаблены. Финальный full regression: **16 suites, 1900/1900, 0 failures** (1810 existing + 90 new).
+  `node --check` всех `prototype/js/*.js` и `prototype/tests/*.js` — OK; `git diff --check` — clean.
+- **Real browser:** в базовом окружении Chromium/Playwright не обнаружены; временная установка Puppeteer
+  в `/tmp` не смогла скачать Chrome из-за сетевого TLS disconnect. Поэтому real-browser validation не
+  выполнена; jsdom не считается pixel/touch проверкой, Android validation не заявляется.
+- **Known limits:** остальные tours не мигрированы без продуктовой причины; layout/touch/keyboard viewport на
+  реальном Android требует owner/browser validation. TTS provider/404, Voice/STT/LLM, VPS/nginx, 3D,
+  StorageProvider/Admin/Auth и Event timezone не менялись.
+- **Изменённые файлы:** `prototype/js/tutorial.js`, `help.js`, `app.js`, `pages1.js`, `pages2.js`, `ui.js`,
+  `css/style.css`, новый `tests/tutorial2-interactive-check.js`; wording assertions намеренно обновлены в
+  `tests/help-tutorial-check.js`, `daily-check.js`, `mobile-ui-polish-check.js`, `notifications-check.js`,
+  `settings-profile-check.js`; а также `docs/PROJECT_PLAN.md`, `FEATURES.md`, `ARCHITECTURE.md`,
+  `UI_UX.md`, `MVP_SCOPE.md`, `CHANGELOG.md`,
+  `WORK_LOG.md`, `prototype/README.md`. DATA_MODEL и persistence schema не менялись.
+- **Следующий этап:** UI/UX + Mobile Design & Motion. В этой сессии не начат. Новая функциональная итерация
+  Command Engine также не начата.
+
 ## 2026-09-29 — Data Integrity Hardening: невозможные даты и небезопасные деньги
 
 - **Дата и база:** 2026-09-29. Состояние проверено самостоятельно, без доверия к handoff:

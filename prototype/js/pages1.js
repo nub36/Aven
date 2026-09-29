@@ -942,6 +942,7 @@
 
   /* ---------- формы (общие) ---------- */
   function taskForm(existing, dateHint) {
+    let submitting = false;
     const ex = existing ? Core().tasks.snapshot(existing) : { title: '', description: '', date: dateHint || todayISO(), time: '', deadline: dateHint || todayISO(), priority: 'средний', project: 'Личное', tags: [], completed: false, archived: false, reminder: null };
     const projects = ['Личное', 'Дом', 'Авто', 'Работа', 'Здоровье', 'Покупки'];
     if (ex.project && projects.indexOf(ex.project) < 0) projects.push(ex.project);
@@ -949,8 +950,9 @@
     A.openModal({
       title: existing ? 'Редактировать задачу' : 'Новая задача',
       wide: true,
+      submitTour: 'task-submit',
       body: `
-        <div class="field"><label>Название</label><input type="text" name="title" value="${A.esc(ex.title || '')}" placeholder="Что нужно сделать?"></div>
+        <div class="field"><label>Название</label><input type="text" name="title" data-tour="task-title" value="${A.esc(ex.title || '')}" placeholder="Что нужно сделать?"></div>
         <div class="field"><label>Описание</label><textarea name="description" style="min-height:60px">${A.esc(ex.description || '')}</textarea></div>
         <div class="field-row">
           <div class="field"><label>Дата</label><input type="date" name="date" value="${A.esc(ex.date || '')}"></div>
@@ -978,6 +980,8 @@
         <label class="check-row" style="margin-bottom:12px"><input type="checkbox" name="archived" ${ex.archived ? 'checked' : ''}><span class="label">Архивировать</span></label>
         <div class="s" style="color:var(--muted);font-size:.8rem">Напоминание появится в разделе «Уведомления». При закрытой вкладке писем и push пока нет — это появится позже.</div>`,
       onSubmit: (v) => {
+        if (submitting) return;
+        submitting = true;
         const payload = {
           title: v.title,
           description: v.description,
@@ -992,7 +996,7 @@
           reminder: v.reminder === 'none' ? null : v.reminder
         };
         const res = existing ? Core().tasks.updateTask(existing.id, payload) : Core().tasks.createTask(payload);
-        if (!res.ok) { A.toast(res.message || 'Не удалось сохранить задачу'); return; }
+        if (!res.ok) { submitting = false; A.toast(res.message || 'Не удалось сохранить задачу'); return; }
         A.closeModal(); A.render(); A.toast(existing ? 'Задача сохранена · запись в истории' : 'Задача добавлена · запись в истории, можно отменить');
       }
     });

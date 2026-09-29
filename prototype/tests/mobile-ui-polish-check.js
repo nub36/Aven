@@ -81,8 +81,8 @@ async function load(hash, width) {
 
   p.w.AvenTutorial.start('help', { restart: true }); await sleep(420);
   ok('Tutorial open has mobile sheet and lock', p.d.body.classList.contains('tour-open') && p.q('.tour-pop').classList.contains('tour-pop-mobile'));
-  p.click(p.q('.tour-scrim')); await sleep(40);
-  ok('Tutorial backdrop closes and restores body', !p.q('.tour-layer') && !p.d.body.classList.contains('tour-open'));
+  p.click(p.q('[data-action="tour-close"]')); await sleep(40);
+  ok('Tutorial close control restores body without a click-blocking backdrop', !p.q('.tour-layer') && !p.d.body.classList.contains('tour-open'));
 
   p.dom.window.close();
   console.log('\nвсего проверок: ' + (pass + fail) + ', провалено: ' + fail);

@@ -644,11 +644,11 @@
           <span class="dc-label">Примеры — нажмите, чтобы подставить в поле</span>
           ${examples.map((q) => `<button class="btn small" type="button" data-action="cmd-example" data-q="${A.esc(q)}">${A.esc(q)}</button>`).join('')}
         </div>
-        <form class="a-input" id="cmd-form" data-tour="command-input" autocomplete="off">
+        <form class="a-input" id="cmd-form" autocomplete="off">
           <button class="icon-btn" type="button" data-action="mic-stt" title="Голосовой ввод (экспериментально)" aria-label="Голосовой ввод (экспериментально)">🎤</button>
           <label class="sr-only" for="chat-input">Команда для Aven</label>
-          <input type="text" id="chat-input" name="command" placeholder="Например: что у меня сегодня?" aria-describedby="cmd-hint">
-          <button class="btn primary" type="button" data-action="chat-send" title="Отправить" aria-label="Отправить команду">→</button>
+          <input type="text" id="chat-input" name="command" data-tour="command-input" placeholder="Например: что у меня сегодня?" aria-describedby="cmd-hint">
+          <button class="btn primary" type="button" data-action="chat-send" data-tour="command-send" title="Отправить" aria-label="Отправить команду">→</button>
         </form>
         <div class="s" id="cmd-hint" data-tour="command-limits" style="color:var(--muted);font-size:.78rem;text-align:center;padding:8px 0 14px">
           Команды разбираются по понятным правилам на вашем устройстве: это не свободный разговор и не внешний AI.
