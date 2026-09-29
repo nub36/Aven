@@ -2546,3 +2546,58 @@ engine — `settings.voice.engine`, голос — `settings.voice.natural.voice
 - `prototype/tests/command-engine-check.js`, `prototype/tests/command-session-check.js`
 - `docs/COMMAND_ENGINE.md`, `docs/DECISIONS.md`, `docs/MVP_SCOPE.md`, `docs/PROJECT_PLAN.md`,
   `docs/FEATURES.md`, `docs/CHANGELOG.md`, `docs/WORK_LOG.md`, `prototype/README.md`
+
+## 2026-09-29 — Review-сессия PR #34 (Stage 2 / Iteration 8) + фиксация следующего этапа
+
+- **Что проверялось:** независимая review-проверка всего PR #34 перед merge. Состояние определено
+  самостоятельно: `origin/main = 017f871fc1aa640f7ad5d524d467f289197cba4c`, PR #33 — MERGED, его
+  merge commit = этот же SHA, Shopping-код итерации 7 фактически присутствует в main; PR #34 —
+  OPEN / MERGEABLE / `mergeStateStatus = CLEAN`, base `main`, HEAD `fb4dbc621f6e5a44fc293e1c510b933d33cff9d9`,
+  1 коммит, 15 файлов, +1075/−35, без review-комментариев. `merge-base(main, PR HEAD)` равен tip main —
+  base НЕ устарел, rebase/update не требовался. Последний deployment github-pages — `017f871f…` (success).
+- **Независимая проверка поведения (не тестами из PR):** отдельная песочница `AvenCommand` +
+  `AvenCommandSession` + `AvenActions` (64 проверки) и отдельный jsdom-прогон настоящего прототипа
+  (57 проверок) — **121 проверка, 0 провалов**. Покрыто: confirmation ALWAYS при EXACT; ноль мутаций и
+  History до Confirm; сохранение длительности (10:00–10:45 → 12:00–12:45) и обратный Undo; перенос
+  только даты (время неизменно); дата+время (10:00–10:45 → пт 15:30–16:15, одна History entry);
+  midnight overflow (отказ, без обрезки до 23:59 и без переноса на следующий день); all-day (дата — да,
+  время — нет, all-day сохраняется); невалидные `31.02`/`30.02`/`32.01`/`25:00`/`10:75`; same-value
+  no-op без фиктивной History; cancel кнопкой/«нет»/«отмена»/Escape; double confirm = один update;
+  stale (удалён / переименован / изменены дата-время извне) — safe failure, свежие данные не
+  перетираются; not found не создаёт событие; ambiguity → кандидаты (title+date+time, без внутренних
+  id) → выбор ≠ Confirm; доменные приоритеты (create события, перенос задачи, заметка, напоминание,
+  покупка, расход, заправка, запросы); delete и остальные поля события — честные отказы; общие часы
+  вместо системных; Shopping F1 в обеих формах + сохранность `soon`/`present`/`item` и read-only;
+  Calendar/Day/Home/AvenDaily/History/Undo-согласованность; Home-строка использует тот же движок;
+  Assistant a11y (кнопки, `aria-live`, `aria-label` «Выберите событие», возврат фокуса); ширины
+  320/360/390/412/430/768/1280, тёмная тема, reduced-motion; Tutorial (шаги, next/prev/Escape).
+- **Полный regression на фактическом PR HEAD:** 14 suites, **1683/1683**, 0 провалов (совпало с
+  заявленным). `node --check` по всем изменённым JS — чисто; `git diff --check` — чисто; в диффе нет
+  `console.*`/`debugger`/`Date.now()`/`new Date()`/прямых записей в `AvenState`/`logAction`, изменений
+  зависимостей, временных файлов и изменений Voice/TTS/VPS/3D. `actions.js` и `data.js` не менялись —
+  Event schema и Common Actions те же.
+- **Честно не проверено:** реальный браузер (Chromium/Playwright в окружении нет) и ручной прогон на
+  Android; jsdom не проверяет настоящий layout, поэтому «нет горизонтального переполнения» на узких
+  ширинах подтверждено только структурно (кнопки/разметка/отсутствие `nowrap`), а не измерением.
+- **Итог review:** замечаний, блокирующих merge, не найдено. PR #34 одобрен и вмержен.
+
+### Зафиксированные системные дефекты для следующего этапа — DATA INTEGRITY HARDENING
+
+Оба дефекта **существовали до PR #34** и воспроизведены одинаково и на `origin/main`, и на PR HEAD
+(PR их не вносит и не обязан чинить; Event-команда сама невозможные даты отклоняет на разборе):
+
+- **A) Невозможные ISO-даты проходят общий слой.** Воспроизведение (DOM-free песочница с
+  `actions.js`): `AvenActions.events.updateEvent(id, { date: '2026-02-30' })` → `ok = true`, в состоянии
+  сохраняется `2026-02-30`; `AvenActions.tasks.createTask({ date: '2026-02-30', deadline: '2026-02-30' })`
+  → `ok = true`. Ожидание после hardening: честный отказ с понятным сообщением, без записи в состояние
+  и «Историю».
+- **B) Слишком большая сумма ломает арифметику баланса.** Воспроизведение:
+  `AvenActions.finance.createOperation({ type: 'expense', amount: '99999999999999999999', cat: 'Продукты', account: 'card' })`
+  → `ok = true`, баланс счёта становится `-99999999999999900000`, `Number.isSafeInteger(balance) === false`.
+  Ожидание после hardening: граница допустимой суммы, честный отказ, отсутствие порчи баланса.
+
+**Следующий этап (обязательный, не начат в этой сессии): DATA INTEGRITY HARDENING.** Перед
+исправлением следующий агент обязан заново воспроизвести оба дефекта на свежем `main` (рецепты выше),
+и только потом чинить — с тестами на уровне общего слоя и без изменения UI-поведения там, где оно
+корректно. В этой сессии Data Integrity, Tutorial 2.0, UI/Mobile redesign и следующий Command Engine
+блок НЕ начинались.
