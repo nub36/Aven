@@ -62,6 +62,13 @@ async function load(hash, width) {
   ok('CSS Defect A: Finance monthly chart has bounded horizontal scroll region', /\.bars-scroll\s*\{[^}]*overflow-x:\s*auto/s.test(css) && /\.bars-scroll\s*\{[^}]*overscroll-behavior-inline:\s*contain/s.test(css));
   ok('CSS Defect B: Finance operations table has responsive mobile card semantics', /\.fin-table tr\.fin-row\s*\{[^}]*grid-template-areas:/s.test(css) && /\.fin-table\s*\{[^}]*display:\s*block/s.test(css));
 
+  /* 2b. Mobile Shell Stacking & Interaction Invariants (P0 hotfix) */
+  ok('CSS Stacking: Desktop hides drawer controls (.mobile-menu-btn, .nav-close, .nav-backdrop)', /\.mobile-menu-btn,\s*\.nav-close,\s*\.nav-backdrop\s*\{\s*display:\s*none;\s*pointer-events:\s*none;/s.test(css));
+  ok('CSS Stacking: Mobile closed backdrop is hidden and cannot intercept pointer events', /@media\s*\(max-width:\s*860px\)\s*\{[\s\S]*\.nav-backdrop\s*\{\s*display:\s*none;[\s\S]*pointer-events:\s*none;/s.test(css));
+  ok('CSS Stacking: Mobile open backdrop is displayed with pointer-events auto', /body\.nav-open\s+\.nav-backdrop\s*\{\s*display:\s*block;\s*opacity:\s*1;\s*pointer-events:\s*auto;/s.test(css));
+  ok('CSS Stacking: Mobile drawer sidebar (z:220) sits strictly above backdrop (z:210)', /z-index:\s*220/.test(css) && /z-index:\s*210/.test(css));
+  ok('CSS Stacking: Mobile menu button and close button are interactive', /@media\s*\(max-width:\s*860px\)\s*\{[\s\S]*\.mobile-menu-btn\s*\{[^}]*pointer-events:\s*auto;[\s\S]*\.nav-close\s*\{[^}]*pointer-events:\s*auto;/s.test(css));
+
   /* 3. Responsive DOM Smoke across mobile breakpoints */
   const routes = ['home', 'day', 'calendar', 'tasks', 'notes', 'finance', 'auto', 'shopping', 'tools', 'help', 'assistant', 'automation', 'history', 'admin', 'settings', 'profile'];
   for (const width of [320, 360, 390, 412, 430]) {
@@ -83,11 +90,18 @@ async function load(hash, width) {
   ok('Drawer open: class, aria, inert and lock contract', p.d.body.classList.contains('nav-open') && button.getAttribute('aria-expanded') === 'true' && p.q('#sidebar').getAttribute('aria-hidden') === 'false' && p.q('.main').hasAttribute('inert'));
   p.click(p.q('#nav-backdrop')); await sleep(30);
   ok('Backdrop close: all drawer state is restored', !p.d.body.classList.contains('nav-open') && button.getAttribute('aria-expanded') === 'false' && !p.q('.main').hasAttribute('inert') && p.q('#sidebar').getAttribute('aria-hidden') === 'true');
+  p.click(button); p.click(p.q('.nav-close')); await sleep(30);
+  ok('Nav close button (✕) closes drawer and restores state', !p.d.body.classList.contains('nav-open') && button.getAttribute('aria-expanded') === 'false' && !p.q('.main').hasAttribute('inert'));
   p.click(button); p.d.dispatchEvent(new p.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await sleep(30);
   ok('Escape close removes lock/inert', !p.d.body.classList.contains('nav-open') && !p.q('.main').hasAttribute('inert'));
   p.click(button); p.click(p.q('#sidebar [data-action="nav"][data-id="admin"]')); await sleep(250);
   ok('Navigation click / route change cleans drawer', p.w.location.hash === '#/admin' && !p.d.body.classList.contains('nav-open') && !p.q('.main').hasAttribute('inert'));
   ok('Admin route renders local tabs and responsive tables', !!p.q('.set-nav') && !!p.q('.adm-table') && !!p.q('.table-scroll'));
+
+  /* 4b. Desktop Drawer Visibility Invariants */
+  const dtop = await load('#/home', 1280);
+  ok('Desktop shell: sidebar is present and main is not inert', !!dtop.q('#sidebar') && !dtop.q('.main').hasAttribute('inert') && !dtop.d.body.classList.contains('nav-open'));
+  dtop.dom.window.close();
 
   /* 5. Modal Bottom Sheet & Dialog */
   p.w.Aven.openModal({ title: 'Test', body: '<input name="x">', submitText: null }); await sleep(40);

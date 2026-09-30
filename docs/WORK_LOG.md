@@ -6,6 +6,62 @@
 
 ---
 
+## 2026-09-29 — P0 Hotfix: Mobile Interaction Recovery (Android Touch & Click Blocker)
+
+### Задача
+Экстренное устранение критической P0-регрессии взаимодействия на мобильных устройствах, обнаруженной владельцем на реальном Android после PR #37 (мобильная версия сайта была полностью некликабельна).
+
+### Анализ первопричины (Root Cause)
+1. **Блокирующий элемент:** `<button class="nav-backdrop" id="nav-backdrop" data-action="menu-close" ...>` в `prototype/index.html`.
+2. **Механизм бага:** В ходе рефакторинга стилей в PR #37 глобальное базовое правило `.nav-close, .mobile-menu-btn, .nav-backdrop { display: none; }` было переработано. В медиазапросе `@media (max-width: 860px)` для `.nav-backdrop` было задано:
+   ```css
+   .nav-backdrop {
+     position: fixed; inset: 0; z-index: 210;
+     background: rgba(8, 10, 18, .42);
+     border: 0; padding: 0; margin: 0;
+     opacity: 0; transition: opacity .22s ease;
+   }
+   body.nav-open .nav-backdrop { display: block; opacity: 1; ... }
+   ```
+   При закрытом drawer (`body.nav-open` отсутствует) элементу не было назначено `display: none` или `pointer-events: none`. Поскольку тег `<button>` по умолчанию имеет `display: inline-block`, в мобильном окне (<= 860px) создавался невидимый (`opacity: 0`), фиксированный по всему экрану (`inset: 0`) оверлей с `z-index: 210`, лежащий выше всего контента страницы (`.app` на мобильных имеет `z-index: auto`, а `.topbar` — `z-index: 20`).
+3. **Почему пропустил jsdom:** В среде Node.js/jsdom нет графического движка и hit-testing (`document.elementFromPoint`). Синтетические вызовы `.click()` доставляются напрямую целевому DOM-узлу в обход CSS-слоёв наложения, поэтому все 1918 проверок были формально «зелёными».
+
+### Что конкретно сделано
+1. **Исправление CSS (`prototype/css/style.css`):**
+   - На десктопе (> 860px): `.mobile-menu-btn, .nav-close, .nav-backdrop { display: none; pointer-events: none; }`.
+   - На мобильных при закрытом drawer: `.nav-backdrop { display: none; position: fixed; inset: 0; z-index: 210; opacity: 0; pointer-events: none; transition: opacity .22s ease; }`.
+   - На мобильных при открытом drawer (`body.nav-open`): `body.nav-open .nav-backdrop { display: block; opacity: 1; pointer-events: auto; animation: backdrop-in .22s ease both; }`.
+   - Кнопкам `.mobile-menu-btn` и `.nav-close` на мобильных явно назначено `pointer-events: auto`.
+2. **Проверка инвариантов наложения:**
+   - Сайдбар-drawer на мобильных (`z-index: 220`) гарантированно находится над бэкдропом (`z-index: 210`).
+   - Декоративный фон `body::before` защищён `pointer-events: none`.
+   - Модальные окна (`#modal-root`, `z-index: 100`) и Tutorial 2.0 (`.tour-layer`, `z-index: 240`) корректно очищаются при закрытии.
+   - Все мобильные доработки Finance (Defect A: скролл помесячного графика `.bars-scroll`; Defect B: адаптивные карточки операций `.fin-table tr.fin-row`) сохранены в полном объёме.
+3. **Регрессионные тесты (`prototype/tests/mobile-ui-polish-check.js`):**
+   - Добавлены 7 новых проверок контракта видимости, порядка наложения (`z-index: 220 > 210`), интерактивности кнопок и восстановления состояния при закрытии через кнопку `✕`.
+
+### Какие файлы изменены
+- `prototype/css/style.css`
+- `prototype/tests/mobile-ui-polish-check.js`
+- `docs/CHANGELOG.md`
+- `docs/WORK_LOG.md`
+- `prototype/README.md`
+
+### Что проверено/протестировано
+- `node --check` по всем JS-файлам prototype и тестам — чисто.
+- `git diff --check` — без пробельных артефактов.
+- Полный регрессионный прогон всех 16 тест-сьютов: **1925 / 1925 проверок успешно (0 failures)**.
+- `mobile-ui-polish-check.js`: 45/45 pass.
+
+### Известные проблемы
+- jsdom не заменяет тестирование в реальном мобильном браузере; после деплоя требуется финальная валидация владельцем на реальном устройстве Android.
+
+### Что рекомендуется делать следующим
+- Развернуть hotfix через PR на main и дождаться подтверждения валидации на реальном Android от владельца.
+- После закрытия инцидента вернуться к плановому Stage 2 scope gate.
+
+---
+
 ## 2026-09-29 — UI/UX + Mobile Design & Motion (Mobile Polish, Motion System & Ergonomics)
 
 ### Что сделано

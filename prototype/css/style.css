@@ -257,6 +257,7 @@ html[data-theme="dark"] .nav-item.active { color: var(--accent-strong); }
   background: var(--warn-soft); color: var(--warn);
   border: 1px solid transparent; border-radius: 999px; padding: 4px 10px;
 }
+.mobile-menu-btn, .nav-close, .nav-backdrop { display: none; pointer-events: none; }
 .icon-btn {
   width: var(--touch-target, 44px); height: var(--touch-target, 44px); min-width: 40px; min-height: 40px;
   border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--panel);
@@ -1023,7 +1024,7 @@ body.auth-mode .content { max-width: 480px; padding: 0 16px; margin: 6vh auto; }
 
 @media (max-width: 860px) {
   :root { --space-page: 14px; --topbar-h: 58px; }
-  .mobile-menu-btn { display: inline-flex; flex: 0 0 42px; width: 42px; height: 42px; }
+  .mobile-menu-btn { display: inline-flex; flex: 0 0 42px; width: 42px; height: 42px; pointer-events: auto; }
   body.nav-open, body.modal-open, body.tour-open { overflow: hidden; }
 
   /* Drawer stacking contract: sidebar (220) > nav-backdrop (210) > app (auto) */
@@ -1060,13 +1061,16 @@ body.auth-mode .content { max-width: 480px; padding: 0 16px; margin: 6vh auto; }
   }
   body.nav-open .sidebar { transform: translateX(0); }
   .nav-backdrop {
+    display: none;
     position: fixed; inset: 0; z-index: 210;
     background: rgba(8, 10, 18, .42);
     border: 0; padding: 0; margin: 0;
-    opacity: 0; transition: opacity .22s ease;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .22s ease;
   }
-  body.nav-open .nav-backdrop { display: block; opacity: 1; animation: backdrop-in .22s ease both; }
-  .nav-close { display: inline-flex; margin-left: auto; width: 38px; height: 38px; flex: 0 0 38px; }
+  body.nav-open .nav-backdrop { display: block; opacity: 1; pointer-events: auto; animation: backdrop-in .22s ease both; }
+  .nav-close { display: inline-flex; margin-left: auto; width: 38px; height: 38px; flex: 0 0 38px; pointer-events: auto; }
   .side-logo { position: sticky; top: 0; z-index: 1; padding: 14px; background: var(--panel); }
   .side-scroll { display: block; flex: 0 0 auto; min-height: 0; padding: 4px 10px 10px; overflow: visible; }
   .side-group { display: block; }
