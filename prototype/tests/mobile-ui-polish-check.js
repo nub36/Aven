@@ -69,6 +69,84 @@ async function load(hash, width) {
   ok('CSS Stacking: Mobile drawer sidebar (z:220) sits strictly above backdrop (z:210)', /z-index:\s*220/.test(css) && /z-index:\s*210/.test(css));
   ok('CSS Stacking: Mobile menu button and close button are interactive', /@media\s*\(max-width:\s*860px\)\s*\{[\s\S]*\.mobile-menu-btn\s*\{[^}]*pointer-events:\s*auto;[\s\S]*\.nav-close\s*\{[^}]*pointer-events:\s*auto;/s.test(css));
 
+  /* 2c. P0 REOPEN (2026-09-30) — PR #38 was deployed and byte-verified in production
+     (fetched HTML/CSS matched source), yet the owner's real Android remained fully
+     unclickable. Static source/CSS review found no additional hit-testable full-screen
+     blocker beyond the nav-backdrop PR #38 already fixed. The best-evidenced explanation
+     consistent with "server content correct, device still broken": prototype/index.html
+     referenced css/js with NO cache-busting, and GitHub Pages sets a fixed, non-configurable
+     Cache-Control: max-age=600 on every asset (confirmed by GitHub Support; not
+     configurable from this repo) — https://webapps.stackexchange.com/questions/119286 .
+     A device that had already loaded the prototype earlier (e.g. testing the previous
+     PR) can keep serving the OLD cached css/js for up to that window (and longer on some
+     mobile networks/browsers) even after a fully correct new deploy, silently
+     reproducing the exact original bug. This is a genuine, provable delivery-pipeline
+     defect — not "advice to clear cache": the fix below is enforced in code/CI, not left
+     to a human to remember. See docs/WORK_LOG.md for the full writeup and the explicit
+     "real-browser validation not performed" caveat. */
+  const indexHtml = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const workflowYml = fs.readFileSync(path.join(ROOT, '..', '.github', 'workflows', 'prototype-pages.yml'), 'utf8');
+  const localAssetRefs = [...indexHtml.matchAll(/<(?:script src|link[^>]*href)="((?:css|js|assets)\/[^"]*)"/g)].map((m) => m[1]);
+  ok('P0 cache-busting: index.html references local css/js/assets at all (sanity)', localAssetRefs.length >= 25);
+  ok('P0 cache-busting: every local css/js/assets reference carries a ?v= version query',
+    localAssetRefs.length > 0 && localAssetRefs.every((t) => /\?v=/.test(t)),
+    'без версии: ' + localAssetRefs.filter((t) => !/\?v=/.test(t)).join(', '));
+  ok('P0 cache-busting: version is the workflow-substituted __ASSET_VERSION__ placeholder (not a hand-typed date that can be forgotten)',
+    localAssetRefs.length > 0 && localAssetRefs.every((t) => /\?v=__ASSET_VERSION__$/.test(t)));
+  const subStepIdx = workflowYml.indexOf('__ASSET_VERSION__');
+  const uploadStepIdx = workflowYml.indexOf('upload-pages-artifact');
+  ok('P0 cache-busting: Pages workflow substitutes __ASSET_VERSION__ with the commit SHA', /sed -i "s\/__ASSET_VERSION__\/\$\{GITHUB_SHA\}\/g"/.test(workflowYml));
+  ok('P0 cache-busting: substitution step runs BEFORE the Pages artifact is uploaded (order matters)',
+    subStepIdx > -1 && uploadStepIdx > -1 && subStepIdx < uploadStepIdx);
+  ok('P0 cache-busting: workflow fails the build if the placeholder is missing or not fully replaced',
+    /exit 1/.test(workflowYml) && /__ASSET_VERSION__.*не найден/.test(workflowYml));
+
+  /* 2d. P0 REOPEN — generic full-viewport hit-test blocker audit (not just nav-backdrop).
+     Parses actual CSS rules (media-query aware) and flags any selector whose OWN
+     declaration block combines `position: fixed` with `inset: 0` (a screen-covering
+     layer candidate). Every match must be an already-reviewed, explicitly safe pattern;
+     an unrecognised match fails loudly so a FUTURE invisible blocker (the PR #37 class of
+     bug) cannot ship silently again — this audit would have caught PR #37's bug too. */
+  function extractCssRules(cssText) {
+    const clean = cssText.replace(/\/\*[\s\S]*?\*\//g, '');
+    const rules = [];
+    const stack = [{ selector: '', buf: '' }];
+    for (const ch of clean) {
+      if (ch === '{') {
+        const top = stack[stack.length - 1];
+        stack.push({ selector: top.buf.trim(), buf: '' });
+        top.buf = '';
+      } else if (ch === '}') {
+        const frame = stack.pop();
+        if (frame.selector && !frame.selector.startsWith('@')) rules.push({ selector: frame.selector, body: frame.buf });
+      } else {
+        stack[stack.length - 1].buf += ch;
+      }
+    }
+    return rules;
+  }
+  const KNOWN_SAFE_SCREEN_COVERING_RULES = {
+    'body::before': (body) => /pointer-events:\s*none/.test(body),
+    '.modal-overlay': () => !/id="modal-root"[^>]*>[\s\S]*?class="modal-overlay"/.test(indexHtml),
+    '.assistant': () => !/class="[^"]*\bassistant\b[^"]*"/.test(indexHtml.replace(/<!--[\s\S]*?-->/g, '')),
+    '.tour-layer': (body) => /pointer-events:\s*none/.test(body),
+    '.sidebar': (body) => /transform:\s*translate3d/.test(body) && /z-index:\s*220/.test(body),
+    '.nav-backdrop': (body) => /display:\s*none/.test(body) && /pointer-events:\s*none/.test(body)
+  };
+  const allCss = css + '\n' + charCss;
+  const screenCoveringRules = extractCssRules(allCss).filter((r) => /position:\s*fixed/.test(r.body) && /inset:\s*0\b/.test(r.body));
+  ok('P0 overlay audit: at least the known screen-covering rules are detected (scanner sanity)', screenCoveringRules.length >= 6);
+  for (const rule of screenCoveringRules) {
+    const knownKey = Object.keys(KNOWN_SAFE_SCREEN_COVERING_RULES).find((k) => rule.selector.split(',').map((s) => s.trim()).includes(k));
+    ok('P0 overlay audit: `' + rule.selector + '` is a recognised, explicitly reviewed screen-covering rule',
+      !!knownKey, 'неизвестный fixed+inset:0 селектор — требует ручного review hit-testing перед merge');
+    if (knownKey) ok('P0 overlay audit: `' + rule.selector + '` satisfies its documented non-blocking contract', KNOWN_SAFE_SCREEN_COVERING_RULES[knownKey](rule.body));
+  }
+  const unrecognisedSelectors = screenCoveringRules
+    .map((r) => r.selector)
+    .filter((sel) => !Object.keys(KNOWN_SAFE_SCREEN_COVERING_RULES).some((k) => sel.split(',').map((s) => s.trim()).includes(k)));
+  ok('P0 overlay audit: no unreviewed fixed+inset:0 selector exists in style.css/character.css', unrecognisedSelectors.length === 0, unrecognisedSelectors.join(', '));
+
   /* 3. Responsive DOM Smoke across mobile breakpoints */
   const routes = ['home', 'day', 'calendar', 'tasks', 'notes', 'finance', 'auto', 'shopping', 'tools', 'help', 'assistant', 'automation', 'history', 'admin', 'settings', 'profile'];
   for (const width of [320, 360, 390, 412, 430]) {

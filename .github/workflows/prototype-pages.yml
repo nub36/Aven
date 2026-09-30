@@ -52,6 +52,31 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
+      # P0 cache-busting hotfix (2026-09-30): GitHub Pages отдаёт ВСЕ файлы с
+      # фиксированным Cache-Control: max-age=600 без возможности это изменить, а
+      # prototype/index.html раньше ссылался на css/js БЕЗ версии — после экстренного
+      # деплоя устройство, уже посещавшее прототип, могло до ~10 минут (а на части
+      # мобильных сетей дольше) получать из кэша СТАРЫЕ ресурсы при уже свежем HTML.
+      # Плейсхолдер __ASSET_VERSION__ в prototype/index.html заменяется SHA коммита
+      # ТОЛЬКО в артефакте деплоя (изменение не коммитится в репозиторий) —
+      # каждый новый деплой гарантированно инвалидирует кэш всех локальных ресурсов.
+      - name: Подставить версию ресурсов (cache-busting) в index.html
+        run: |
+          set -e
+          test -f prototype/index.html
+          before=$(grep -c '__ASSET_VERSION__' prototype/index.html || true)
+          if [ "$before" -eq 0 ]; then
+            echo "::error::__ASSET_VERSION__ не найден в prototype/index.html — cache-busting не применится."
+            exit 1
+          fi
+          sed -i "s/__ASSET_VERSION__/${GITHUB_SHA}/g" prototype/index.html
+          remaining=$(grep -c '__ASSET_VERSION__' prototype/index.html || true)
+          echo "Заменено вхождений: $before; версия: ${GITHUB_SHA}; осталось плейсхолдеров: $remaining"
+          if [ "$remaining" -ne 0 ]; then
+            echo "::error::Не все вхождения __ASSET_VERSION__ заменены."
+            exit 1
+          fi
+
       # Публикуется ТОЛЬКО содержимое /prototype:
       # index.html оказывается в корне сайта, поэтому проектный URL
       # вида https://<username>.github.io/<repository>/ работает без вложенности.
