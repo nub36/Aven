@@ -2498,6 +2498,7 @@ window.AvenActions = (function () {
       linkedOp: purchaseLinkedOp, financeCategory: purchaseFinanceCategory },
     reminders: { create: createReminder, update: updateReminder, delete: deleteReminder,
       get: getReminder, list: getReminders,
+      reaction: (key) => { const N = notifyEngine(); return N && N.reaction ? N.reaction(key) : null; },
       markRead: (key) => notificationAction('notification.read', (N) => N.markRead(key)),
       markAllRead: () => notificationAction('notification.readAll', (N) => N.markAllRead()),
       snooze: (key, days) => notificationAction('notification.snooze', (N) => N.snooze(key, days)),

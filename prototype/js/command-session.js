@@ -37,9 +37,15 @@ window.AvenCommandSession = (function () {
       return bits.join(' · ');
     }
     if (c.time) bits.push(C.format.time(c.time));
-    /* Напоминание и покупка не имеют статуса «открыта/выполнена»: приписывать
-       его было бы неправдой. У покупки полезнее цена. */
-    if (c.kind === 'reminder') return bits.join(' · ');
+    /* У напоминания состояние относится к производному уведомлению, а не к самой
+       записи. Оно всё равно полезно для безопасного различения кандидатов. */
+    if (c.kind === 'reminder') {
+      if (c.dismissed) bits.push('скрыто');
+      else if (c.state === 'snoozed') bits.push('отложено до ' + C.dates.dateLabel(c.snoozeUntilISO));
+      else bits.push('в списке');
+      return bits.join(' · ');
+    }
+    /* Покупка не имеет статуса «открыта/выполнена»; полезнее цена. */
     if (c.kind === 'purchase') {
       if (Number(c.price) > 0) bits.push(C.money.exact(c.price));
       return bits.join(' · ');
@@ -101,7 +107,9 @@ window.AvenCommandSession = (function () {
             title: result.target.title || '', dateISO: result.target.dateISO || '',
             time: result.target.time || '', endTime: result.target.endTime || '',
             allDay: result.target.allDay === true,
-            body: String(result.target.body || ''), folder: String(result.target.folder || '')
+            body: String(result.target.body || ''), folder: String(result.target.folder || ''),
+            dismissed: result.target.dismissed === true,
+            snoozeUntilISO: String(result.target.snoozeUntilISO || '')
           } : null,
           slots: carried,
           summary: result.summary
@@ -151,9 +159,17 @@ window.AvenCommandSession = (function () {
          решает, нужно ли следующее уточнение или подтверждение. */
       const slots = Object.assign({}, flow.slots || {});
       if (flow.slot) slots[flow.slot] = candidate.id;
+      const expected = flow.slot ? null : {
+        title: candidate.title || '', dateISO: candidate.dateISO || '',
+        time: candidate.time || '', endTime: candidate.endTime || '',
+        allDay: candidate.allDay === true,
+        body: String(candidate.body || ''), folder: String(candidate.folder || ''),
+        dismissed: candidate.dismissed === true,
+        snoozeUntilISO: String(candidate.snoozeUntilISO || '')
+      };
       const result = Engine().execute(flow.intent, Object.assign({}, flow.context, flow.slot
         ? { slots }
-        : { targetId: candidate.id, expectedTitle: candidate.title, selected: true }));
+        : { targetId: candidate.id, expectedTitle: candidate.title, expected, selected: true }));
       busy = false;
       if (result.status === 'confirmation_required' || result.status === 'ambiguous') {
         return setFromResult(flow.intent, result, flow.context, slots);

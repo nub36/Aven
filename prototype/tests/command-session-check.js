@@ -785,6 +785,71 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
     }
   }
 
+  /* Stage 2, итерация 12: ambiguity/confirmation существующих напоминаний остаются
+     transient; выбор перечитывает entity + notification reaction snapshot. */
+  {
+    const e = sandbox();
+    const a = e.C.reminders.create({ title: 'Оплатить интернет', dateISO: '2026-10-01', time: '09:00' }, { source: 'fixture' }).entity;
+    const b = e.C.reminders.create({ title: 'Оплатить интернет', dateISO: '2026-10-02', time: '10:00' }, { source: 'fixture' }).entity;
+    clearHistory(e);
+    const amb = e.session.submit('Скрой напоминание Оплатить интернет');
+    ok('S186 reminder ambiguity показывает даты/время/state и ничего не скрывает',
+      amb.status === 'clarification_required' && amb.candidates.length === 2 &&
+      amb.candidates.every((x) => x.dateISO && x.time && x.state === 'active') &&
+      Object.keys(e.state.notifState || {}).length === 0 && e.state.history.length === 0);
+    const chosen = amb.candidates[0];
+    e.C.reminders.update(chosen.id, { time: '11:00' }, { source: 'ui' });
+    const before = e.state.history.length;
+    const stale = e.session.choose(0);
+    ok('S187 material target change between candidate list and choice is stale',
+      stale.status === 'stale' && e.state.history.length === before &&
+      !(e.state.notifState && e.state.notifState['manual:' + chosen.id] && e.state.notifState['manual:' + chosen.id].dismissed));
+    ok('S188 stale choice clears pending and does not affect the other reminder',
+      e.session.pending() === null && e.C.reminders.get(a.id).ok && e.C.reminders.get(b.id).ok);
+  }
+  {
+    const e = sandbox();
+    const a = e.C.reminders.create({ title: 'Позвонить врачу', dateISO: '2026-10-01' }, { source: 'fixture' }).entity;
+    const b = e.C.reminders.create({ title: 'Позвонить врачу', dateISO: '2026-10-02' }, { source: 'fixture' }).entity;
+    clearHistory(e);
+    const amb = e.session.submit('Скрой напоминание Позвонить врачу');
+    const picked = e.session.choose(0);
+    ok('S188a выбор ambiguous reminder сам не мутирует и переходит к confirmation',
+      amb.status === 'clarification_required' && picked.status === 'confirmation_required' &&
+      Object.keys(e.state.notifState || {}).length === 0 && e.state.history.length === 0);
+    const chosenId = amb.candidates[0].id;
+    const done = e.session.confirm();
+    ok('S188b только Confirm скрывает выбранное notification', done.ok &&
+      e.state.notifState['manual:' + chosenId].dismissed === true &&
+      !(e.state.notifState['manual:' + (chosenId === a.id ? b.id : a.id)] || {}).dismissed && e.state.history.length === 1);
+  }
+  {
+    const e = sandbox();
+    const r = e.C.reminders.create({ title: 'Оплатить домашний интернет', dateISO: '2026-10-01' }, { source: 'fixture' }).entity;
+    clearHistory(e);
+    const ask = e.session.submit('Скрой напоминание интернет');
+    ok('S189 INFERRED hide требует confirmation без notifState/History',
+      ask.status === 'confirmation_required' && Object.keys(e.state.notifState || {}).length === 0 && e.state.history.length === 0);
+    e.C.reminders.dismiss('manual:' + r.id);
+    const before = e.state.history.length;
+    const stale = e.session.confirm();
+    ok('S190 reaction change before Confirm safely yields stale',
+      stale.status === 'stale' && e.state.history.length === before && e.session.pending() === null);
+  }
+  {
+    const e = sandbox();
+    const r = e.C.reminders.create({ title: 'Оплатить домашний интернет', dateISO: '2026-10-01', time: '09:00' }, { source: 'fixture' }).entity;
+    clearHistory(e);
+    const ask = e.session.submit('Перенеси напоминание интернет на завтра в 10');
+    ok('S191 INFERRED reschedule показывает before/after и ждёт confirmation',
+      ask.status === 'confirmation_required' && /09:00|9:00/.test(ask.response) && /10:00/.test(ask.response));
+    e.C.reminders.update(r.id, { dateISO: '2026-10-03' }, { source: 'ui' });
+    const before = e.state.history.length;
+    const stale = e.session.confirm();
+    ok('S192 schedule change before Confirm is stale and not overwritten',
+      stale.status === 'stale' && e.C.reminders.get(r.id).entity.dateISO === '2026-10-03' && e.state.history.length === before);
+  }
+
   ['первую', 'вторая', 'вторую', 'отмена', 'нет', 'подтвердить'].forEach((word, i) => {
     const e = sandbox(); const a = task(e, 'Тест один'), b = task(e, 'Тест два'); clearHistory(e);
     e.session.submit('Отметь тест выполненным');

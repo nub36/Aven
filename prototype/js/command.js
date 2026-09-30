@@ -77,7 +77,9 @@ window.AvenCommand = (function () {
            который человек видел перед подтверждением. Папка нужна, потому что
            она показывается как отличающая деталь выбранной заметки. */
         body: String(ctx.expected.body || ''),
-        folder: String(ctx.expected.folder || '')
+        folder: String(ctx.expected.folder || ''),
+        dismissed: ctx.expected.dismissed === true,
+        snoozeUntilISO: String(ctx.expected.snoozeUntilISO || '')
       } : null,
       selected: ctx.selected === true,
       confirmed: ctx.confirmed === true,
@@ -239,7 +241,13 @@ window.AvenCommand = (function () {
     EVENT_QUERY_REQUIRED: 'Не поняла, какое событие перенести. Напишите так: «Перенеси встречу с Сергеем на завтра в 12:00».',
     EVENT_WHEN_REQUIRED: 'Не поняла, на какую дату или время перенести событие. Напишите так: «Перенеси встречу с Сергеем на завтра», «Перенеси событие стоматолог на 15:30» или «… на пятницу в 15:30».',
     UNSUPPORTED_FINANCE: 'Записывать расходы и доходы текстом я пока не умею. Добавьте операцию в разделе «Финансы».',
-    UNSUPPORTED_REMINDER: 'Изменять, откладывать или скрывать уже созданное напоминание текстовой командой я пока не умею. Откройте «Уведомления» — там это можно сделать, и действие попадёт в «Историю». Создать новое напоминание и посмотреть список я уже умею: «Напомни купить масло на завтра», «Покажи напоминания».',
+    UNSUPPORTED_REMINDER: 'Не поняла действие с напоминанием. Перенести можно так: «Перенеси напоминание оплатить интернет на завтра в 10», отложить — до будущей даты, скрыть — «Скрой напоминание …», вернуть — «Верни напоминание …». Я ничего не изменила.',
+    REMINDER_MANAGE_QUERY_REQUIRED: 'Укажите название одного напоминания. Например: «Скрой напоминание оплатить интернет». Я ничего не изменила.',
+    REMINDER_WHEN_REQUIRED: 'Укажите новую дату и/или время. Например: «Перенеси напоминание оплатить интернет на завтра в 10». Я ничего не изменила.',
+    REMINDER_SNOOZE_UNTIL_REQUIRED: 'Укажите будущую дату: «Отложи напоминание оплатить интернет до завтра», «на 3 дня» или «на неделю». Я ничего не изменила.',
+    REMINDER_SNOOZE_TIME_UNSUPPORTED: 'Отложить уведомление до точного времени пока нельзя: существующий центр уведомлений хранит только дату. Укажите будущий день, например «до завтра». Я ничего не изменила.',
+    REMINDER_SNOOZE_PAST: 'Отложить можно только до будущего дня. Укажите, например, «до завтра» или «на 3 дня». Я ничего не изменила.',
+    UNSUPPORTED_BULK_REMINDER: 'Массово переносить, откладывать, скрывать или возвращать напоминания текстом нельзя. Назовите одно напоминание — я ничего не изменила.',
     UNSUPPORTED_AUTO: 'Эту команду об автомобиле я пока не понимаю. Заправку можно записать так: «Запиши заправку 45 л на 2500 рублей».',
     FUEL_LITERS_REQUIRED: 'Не поняла количество топлива. Напишите, например: «Запиши заправку 45 л».',
     FUEL_LITERS_INVALID: 'Количество топлива должно быть больше нуля.',
@@ -613,6 +621,79 @@ window.AvenCommand = (function () {
     if (!when.dateISO) return fail('REMINDER_DATE_REQUIRED', 'reminder.create');
     return intent('reminder.create', 'mutation',
       { title: capitalize(content), dateISO: when.dateISO, time: when.time || '' }, 'reminder.create');
+  }
+
+  /* Управление существующим напоминанием (Stage 2, итерация 12).
+     Напоминание — сохранённая сущность; hide/snooze/restore меняют только реакцию
+     производного уведомления `manual:<id>`. Массовая форма проверяется строго в
+     позиции перед словом «напоминание»: «про каждого клиента» остаётся названием. */
+  const REMINDER_MOVE_VERB = '(?:перенеси|перенести|передвинь|передвинуть|сдвинь|сдвинуть)';
+  const REMINDER_SNOOZE_VERB = '(?:отложи(?:те)?|отложить)';
+  const REMINDER_HIDE_VERB = '(?:скрой(?:те)?|скрыть|спрячь(?:те)?|спрятать)';
+  const REMINDER_RESTORE_VERB = '(?:верни(?:те)?|вернуть|восстанови(?:те)?|восстановить)';
+  function reminderManageQuery(value) {
+    return tidy(String(value || '').replace(/^(?:мо[её]|это|про|о|об|на тему)\s+/i, ''));
+  }
+  function parseReminderManage(n, raw, context) {
+    const verbs = '(?:' + REMINDER_MOVE_VERB + '|' + REMINDER_SNOOZE_VERB + '|' + REMINDER_HIDE_VERB + '|' + REMINDER_RESTORE_VERB + ')';
+    if (!startRx(verbs, 'i').test(n)) return null;
+    const bulk = new RegExp('^' + verbs + '\\s+' + BULK_PREFIX_WORDS + NOT_AFTER + '\\s+' + REMINDER_WORD + NOT_AFTER, 'i');
+    if (bulk.test(n)) return fail('UNSUPPORTED_BULK_REMINDER', 'guard.reminder.bulk');
+
+    let rx = new RegExp('^' + REMINDER_MOVE_VERB + '\\s+(?:мо[её]\\s+|это\\s+)?' + REMINDER_WORD + NOT_AFTER + '\\s+(.+)\\s+на\\s+(.+)$', 'i');
+    if (rx.test(n)) {
+      const m = rx.exec(raw) || rx.exec(n);
+      const query = reminderManageQuery(m[1]);
+      if (!query) return fail('REMINDER_MANAGE_QUERY_REQUIRED', 'reminder.reschedule');
+      const when = extractWhen(m[2] || '', context);
+      if (when.error) return fail(when.error, 'reminder.reschedule');
+      if (!when.dateISO && !when.time) return fail('REMINDER_WHEN_REQUIRED', 'reminder.reschedule');
+      if (tidy(when.rest || '')) return fail('REMINDER_WHEN_REQUIRED', 'reminder.reschedule');
+      return intent('reminder.reschedule', 'mutation', { query, dateISO: when.dateISO || '', time: when.time || '' }, 'reminder.reschedule');
+    }
+    if (startRx(REMINDER_MOVE_VERB, 'i').test(n) && new RegExp(NOT_BEFORE + REMINDER_WORD + NOT_AFTER).test(n)) {
+      return fail('REMINDER_WHEN_REQUIRED', 'reminder.reschedule');
+    }
+
+    rx = new RegExp('^' + REMINDER_SNOOZE_VERB + '\\s+(?:мо[её]\\s+|это\\s+)?' + REMINDER_WORD + NOT_AFTER + '\\s+(.+)\\s+(?:до|на)\\s+(.+)$', 'i');
+    if (rx.test(n)) {
+      const m = rx.exec(raw) || rx.exec(n);
+      const query = reminderManageQuery(m[1]);
+      if (!query) return fail('REMINDER_MANAGE_QUERY_REQUIRED', 'reminder.snooze');
+      const tail = tidy(m[2]);
+      const tm = findTime(tail);
+      if (tm.found) return fail(tm.error || 'REMINDER_SNOOZE_TIME_UNSUPPORTED', 'reminder.snooze');
+      let untilISO = '';
+      const duration = /^(\d+)\s+(?:дн(?:я|ей)?|сут(?:ки|ок)?)$/i.exec(tail);
+      if (duration) untilISO = Core().dates.addDays(context.todayISO, Number(duration[1]));
+      else if (/^(?:неделю|7\s+дн(?:ей|я)?)$/i.test(tail)) untilISO = Core().dates.addDays(context.todayISO, 7);
+      else {
+        const d = findDate(tail, context);
+        if (d.found && d.error) return fail(d.error, 'reminder.snooze');
+        if (d.found && !tidy(cut(tail, d.source))) untilISO = d.dateISO;
+      }
+      if (!untilISO) return fail('REMINDER_SNOOZE_UNTIL_REQUIRED', 'reminder.snooze');
+      if (Core().dates.diffDays(untilISO, context.todayISO) <= 0) return fail('REMINDER_SNOOZE_PAST', 'reminder.snooze');
+      return intent('reminder.snooze', 'mutation', { query, untilISO }, 'reminder.snooze');
+    }
+    if (startRx(REMINDER_SNOOZE_VERB, 'i').test(n) && new RegExp(NOT_BEFORE + REMINDER_WORD + NOT_AFTER).test(n)) {
+      return fail('REMINDER_SNOOZE_UNTIL_REQUIRED', 'reminder.snooze');
+    }
+
+    const simple = [
+      { verb: REMINDER_HIDE_VERB, action: 'reminder.hide', rule: 'reminder.hide' },
+      { verb: REMINDER_RESTORE_VERB, action: 'reminder.restore', rule: 'reminder.restore' }
+    ];
+    for (let i = 0; i < simple.length; i++) {
+      const d = simple[i];
+      rx = new RegExp('^' + d.verb + '\\s+(?:скрытое\\s+|мо[её]\\s+|это\\s+)?' + REMINDER_WORD + NOT_AFTER + '\\s*(.*)$', 'i');
+      if (!rx.test(n)) continue;
+      const m = rx.exec(raw) || rx.exec(n);
+      const query = reminderManageQuery(m[1]);
+      if (!query) return fail('REMINDER_MANAGE_QUERY_REQUIRED', d.rule);
+      return intent(d.action, 'mutation', { query }, d.rule);
+    }
+    return null;
   }
 
   /* «Покажи/найди [мои] напоминания [про …]» и «Какие [у меня] напоминания?» —
@@ -1197,7 +1278,7 @@ window.AvenCommand = (function () {
        остаётся заметкой, а разрушительная команда не может быть случайно
        перехвачена другим доменом и выполнена как что-то иное. */
     parseDelete,
-    parseRename, parseNoteBodyEdit,
+    parseRename, parseNoteBodyEdit, parseReminderManage,
     parseTaskCreate, parseNoteCreate, parseNoteSearch, parseReminderCreate, parseReminderSearch,
     parseFuelCreate, parseServiceCreate, parseExpenseCreate, parseExpenseList,
     parsePurchaseCreate, parsePurchaseWarranty, parsePurchaseSearch, parseIncomeUnsupported,
@@ -1329,7 +1410,15 @@ window.AvenCommand = (function () {
     };
   }
   function reminderCandidate(x) {
-    return { id: x.id, kind: 'reminder', title: x.title || '', dateISO: x.dateISO || '', time: x.time || '' };
+    const key = 'manual:' + x.id;
+    const reaction = Core().reminders.reaction(key) || {};
+    const snoozeUntilISO = reaction.snoozeUntilISO || '';
+    const snoozed = !!(snoozeUntilISO && Core().dates.diffDays(snoozeUntilISO, Core().dates.todayISO()) > 0);
+    return {
+      id: x.id, kind: 'reminder', key, title: x.title || '', dateISO: x.dateISO || '', time: x.time || '',
+      dismissed: !!reaction.dismissed, snoozeUntilISO,
+      state: reaction.dismissed ? 'hidden' : (snoozed ? 'snoozed' : 'active')
+    };
   }
   function purchaseCandidate(x) {
     const C = Core();
@@ -1418,6 +1507,9 @@ window.AvenCommand = (function () {
     }
     if (intentObj.action === 'note.body.replace' || intentObj.action === 'note.body.append') {
       return resolveNote((intentObj.params || {}).query);
+    }
+    if (['reminder.reschedule', 'reminder.snooze', 'reminder.hide', 'reminder.restore'].indexOf(intentObj.action) >= 0) {
+      return resolveReminder((intentObj.params || {}).query);
     }
     /* Удаление отвечает на resolve() тем же контрактом, что и остальные команды:
        это позволяет проверить цель, ничего не удаляя. */
@@ -1573,6 +1665,27 @@ window.AvenCommand = (function () {
       ' → после подтверждения ' + noteBodyPreview(after) +
       '? Пока ничего не изменилось.';
   }
+  function reminderStateText(target) {
+    if (target.dismissed) return 'скрыто';
+    if (target.snoozeUntilISO && Core().dates.diffDays(target.snoozeUntilISO, Core().dates.todayISO()) > 0) {
+      return 'отложено до ' + Core().dates.humanDate(target.snoozeUntilISO);
+    }
+    return 'в списке';
+  }
+  function reminderManageSummary(action, target, preview, resolution) {
+    const inferred = resolution === 'INFERRED' ? ' (нашла по части названия)' : '';
+    const current = whenPhrase(target.dateISO, target.time);
+    if (action === 'reminder.reschedule') {
+      return 'Перенести напоминание ' + quote(target.title) + inferred + ': ' + current + ' → ' +
+        whenPhrase(preview.dateISO, preview.time) + '? Пока ничего не изменилось.';
+    }
+    const verb = action === 'reminder.snooze' ? 'Отложить' : action === 'reminder.hide' ? 'Скрыть' : 'Вернуть';
+    const next = action === 'reminder.snooze' ? 'отложено до ' + Core().dates.humanDate(preview.untilISO)
+      : action === 'reminder.hide' ? 'скрыто' : 'в списке';
+    return verb + ' уведомление напоминания ' + quote(target.title) + inferred + ': ' +
+      reminderStateText(target) + ' → ' + next + '? Пока ничего не изменилось.';
+  }
+
   function ambiguous(actionName, intentObj, candidates) {
     return result(false, 'ambiguous', actionName, {
       code: 'AMBIGUOUS_TASK', resolution: 'AMBIGUOUS', intent: intentObj, candidates
@@ -1709,6 +1822,95 @@ window.AvenCommand = (function () {
           intent: intentObj, entity: res.entity, historyId: res.entry && res.entry.id,
           data: { mode, title: res.entity.title, folder: C.notes.folderOf(res.entity),
             oldBody, body: String(res.entity.body || ''), content: p.content }
+        });
+      }
+      case 'reminder.reschedule':
+      case 'reminder.snooze':
+      case 'reminder.hide':
+      case 'reminder.restore': {
+        const actionName = intentObj.action;
+        let found;
+        const stale = () => result(false, 'stale', actionName, {
+          code: 'STALE_TARGET', resolution: 'UNSUPPORTED', intent: intentObj,
+          message: 'Напоминание или состояние его уведомления изменилось после выбора. Повторите команду — ничего не изменено.'
+        });
+        if (context.targetId) {
+          const got = C.reminders.get(context.targetId);
+          if (!got.ok || !got.entity) return stale();
+          const cand = reminderCandidate(got.entity);
+          const exp = context.expected;
+          if (context.expectedTitle && normalize(cand.title) !== normalize(context.expectedTitle)) return stale();
+          if (exp && (String(cand.title || '') !== String(exp.title || '') ||
+              String(cand.dateISO || '') !== String(exp.dateISO || '') ||
+              String(cand.time || '') !== String(exp.time || '') ||
+              cand.dismissed !== !!exp.dismissed ||
+              String(cand.snoozeUntilISO || '') !== String(exp.snoozeUntilISO || ''))) return stale();
+          found = { ok: true, resolution: context.selected ? 'EXACT' : 'INFERRED', entity: cand };
+        } else found = resolveReminder(p.query);
+        if (!found.ok && found.status === 'ambiguous') return result(false, 'ambiguous', actionName, {
+          code: 'AMBIGUOUS_REMINDER', resolution: 'AMBIGUOUS', intent: intentObj, candidates: found.candidates
+        });
+        if (!found.ok) return result(false, 'not_found', actionName, {
+          code: 'REMINDER_NOT_FOUND', resolution: 'UNSUPPORTED', intent: intentObj, query: p.query
+        });
+        const target = found.entity;
+        const preview = {};
+        if (actionName === 'reminder.reschedule') {
+          preview.dateISO = p.dateISO || target.dateISO;
+          preview.time = p.time || target.time;
+          if (preview.dateISO === target.dateISO && preview.time === target.time) return result(true, 'info', actionName, {
+            code: 'REMINDER_SCHEDULE_SAME', intent: intentObj, entity: target,
+            data: { title: target.title, dateISO: target.dateISO, time: target.time, unchanged: true }
+          });
+        } else if (actionName === 'reminder.snooze') {
+          const days = C.dates.diffDays(p.untilISO, context.todayISO);
+          if (!(days > 0)) return result(false, 'invalid', actionName, {
+            code: 'REMINDER_SNOOZE_PAST', message: PARSE_MESSAGES.REMINDER_SNOOZE_PAST, intent: intentObj
+          });
+          if (target.dismissed) return result(false, 'unsupported', actionName, {
+            code: 'REMINDER_HIDDEN', intent: intentObj,
+            message: 'Это уведомление скрыто. Сначала верните его командой «Верни напоминание ' + target.title + '». Ничего не изменено.'
+          });
+          preview.untilISO = p.untilISO;
+          preview.days = days;
+          if (target.snoozeUntilISO === p.untilISO) return result(true, 'info', actionName, {
+            code: 'REMINDER_SNOOZE_SAME', intent: intentObj, entity: target,
+            data: { title: target.title, untilISO: p.untilISO, unchanged: true }
+          });
+        } else if (actionName === 'reminder.hide') {
+          if (target.dismissed) return result(true, 'info', actionName, {
+            code: 'REMINDER_ALREADY_HIDDEN', intent: intentObj, entity: target,
+            data: { title: target.title, unchanged: true }
+          });
+        } else if (!target.dismissed) return result(true, 'info', actionName, {
+          code: 'REMINDER_ALREADY_VISIBLE', intent: intentObj, entity: target,
+          data: { title: target.title, unchanged: true }
+        });
+
+        /* По общей политике EXACT reversible mutation выполняется сразу;
+           INFERRED всегда требует явного подтверждения. */
+        if ((found.resolution === 'INFERRED' || context.selected) && !context.confirmed) return result(false, 'confirmation_required', actionName, {
+          code: 'CONFIRMATION_REQUIRED', resolution: found.resolution, intent: intentObj, target, preview,
+          summary: reminderManageSummary(actionName, target, preview, found.resolution)
+        });
+
+        let res;
+        if (actionName === 'reminder.reschedule') res = C.reminders.update(target.id,
+          { dateISO: preview.dateISO, time: preview.time }, opts);
+        else if (actionName === 'reminder.snooze') res = C.reminders.snooze(target.key, preview.days);
+        else if (actionName === 'reminder.hide') res = C.reminders.dismiss(target.key);
+        else res = C.reminders.restore(target.key);
+        if (!res.ok) return actionFailed(actionName, res, intentObj);
+        const fresh = C.reminders.get(target.id);
+        return result(true, 'done', actionName, {
+          resolution: found.resolution, intent: intentObj,
+          entity: fresh.ok ? fresh.entity : target,
+          historyId: res.entry && res.entry.id,
+          data: {
+            title: target.title, fromDateISO: target.dateISO, fromTime: target.time,
+            dateISO: preview.dateISO || target.dateISO, time: preview.time || target.time,
+            untilISO: preview.untilISO || '', hidden: actionName === 'reminder.hide'
+          }
         });
       }
       case 'reminder.create': {
@@ -2298,6 +2500,10 @@ window.AvenCommand = (function () {
   const NOTE_BODY_ACTIONS = {
     'note.body.replace': true, 'note.body.append': true
   };
+  const REMINDER_MANAGE_ACTIONS = {
+    'reminder.reschedule': true, 'reminder.snooze': true,
+    'reminder.hide': true, 'reminder.restore': true
+  };
   /* Род существительного задаётся явно: «Событие удалено», но «Задача удалена».
      Вычислять род из строки нельзя — получилось бы «удолена». Подлежащее второго
      предложения — всегда «Запись» (женский род), поэтому там форма постоянна. */
@@ -2622,6 +2828,20 @@ window.AvenCommand = (function () {
           return 'Напоминание ' + quote(res.data.title) + ' создано на ' + whenPhrase(res.data.dateISO, res.data.time) +
             '. Оно уже видно в разделе «Уведомления»; отменить создание можно в «Истории».';
         case 'reminder.search': return reminderSearchText(res.data);
+        case 'reminder.reschedule':
+          if (res.data.unchanged) return 'Напоминание ' + quote(res.data.title) + ' уже стоит на ' + whenPhrase(res.data.dateISO, res.data.time) + '. Ничего не изменено, новой записи в «Истории» нет.';
+          return 'Напоминание ' + quote(res.data.title) + ' перенесено: ' +
+            whenPhrase(res.data.fromDateISO, res.data.fromTime) + ' → ' + whenPhrase(res.data.dateISO, res.data.time) +
+            '. Новое расписание уже видно в «Уведомлениях»; отменить можно в «Истории».';
+        case 'reminder.snooze':
+          if (res.data.unchanged) return 'Уведомление напоминания ' + quote(res.data.title) + ' уже отложено до ' + C.dates.humanDate(res.data.untilISO) + '. Ничего не изменено.';
+          return 'Уведомление напоминания ' + quote(res.data.title) + ' отложено до ' + C.dates.humanDate(res.data.untilISO) + '. Само напоминание не перенесено; отменить можно в «Истории».';
+        case 'reminder.hide':
+          if (res.data.unchanged) return 'Уведомление напоминания ' + quote(res.data.title) + ' уже скрыто. Само напоминание не удалено, новой записи в «Истории» нет.';
+          return 'Уведомление напоминания ' + quote(res.data.title) + ' скрыто. Само напоминание не удалено; вернуть можно командой «Верни напоминание …» или через «Историю».';
+        case 'reminder.restore':
+          if (res.data.unchanged) return 'Уведомление напоминания ' + quote(res.data.title) + ' уже показано. Ничего не изменено.';
+          return 'Уведомление напоминания ' + quote(res.data.title) + ' возвращено в список. Отменить можно в «Истории».';
         case 'shopping.purchase.create': return purchaseCreateText(res.data);
         case 'shopping.purchase.search': return purchaseSearchText(res.data);
         case 'shopping.purchase.warranty': return purchaseWarrantyText(res.data);
@@ -2684,6 +2904,17 @@ window.AvenCommand = (function () {
     if (res.status === 'ambiguous' && res.slot) {
       return (res.question || 'Уточните выбор.') + ' Варианты: ' +
         (res.candidates || []).map((x, i) => (i + 1) + '. ' + x.title).join('; ') + '. Пока ничего не изменилось.';
+    }
+    if (REMINDER_MANAGE_ACTIONS[res.action]) {
+      if (res.status === 'ambiguous') {
+        return 'Под это название подходит несколько напоминаний: ' +
+          (res.candidates || []).slice(0, 5).map((c, i) => (i + 1) + '. ' + quote(c.title) +
+            ' — ' + whenPhrase(c.dateISO, c.time) + ' · ' + reminderStateText(c)).join('; ') +
+          '. Выберите одно — пока ничего не изменилось.';
+      }
+      if (res.status === 'not_found') return 'Не нашла в «Уведомлениях» напоминание ' +
+        quote(p.query || res.query || '') + '. Проверьте название — я ничего не изменила.';
+      if (res.status === 'unsupported') return res.message || 'Сейчас это действие с напоминанием недоступно. Ничего не изменено.';
     }
     /* Удаление обязано отвечать про свой домен: общий текст «Нашла несколько
        задач» или «Не нашла подходящую открытую задачу» ввёл бы в заблуждение,
@@ -2819,6 +3050,10 @@ window.AvenCommand = (function () {
         { action: 'note.body.replace', example: 'Замени текст заметки План отпуска: Купить билеты', about: 'полностью заменяет текст одной активной заметки — всегда после вашего подтверждения' },
         { action: 'note.body.append', example: 'Дополни заметку План отпуска: Забронировать отель', about: 'сохраняет прежний текст и дописывает новый с новой строки — всегда после вашего подтверждения' },
         { action: 'reminder.create', example: 'Напомни купить масло на завтра', about: 'создаёт напоминание на указанную дату' },
+        { action: 'reminder.reschedule', example: 'Перенеси напоминание оплатить интернет на завтра в 10', about: 'меняет дату и/или время существующего напоминания' },
+        { action: 'reminder.snooze', example: 'Отложи напоминание оплатить интернет до завтра', about: 'откладывает его уведомление до будущего дня; точное время не поддерживается' },
+        { action: 'reminder.hide', example: 'Скрой напоминание оплатить интернет', about: 'скрывает уведомление, но не удаляет напоминание' },
+        { action: 'reminder.restore', example: 'Верни напоминание оплатить интернет', about: 'возвращает скрытое уведомление' },
         { action: 'finance.expense.create', example: 'Запиши расход 850 ₽ на продукты', about: 'записывает расход — всегда после вашего подтверждения' },
         { action: 'auto.fuel.create', example: 'Запиши заправку 45 л на 2500 рублей', about: 'создаёт заправку в разделе «Авто»' },
         { action: 'auto.service.create', example: 'Запиши обслуживание замена масла на 3500 рублей', about: 'создаёт обслуживание в разделе «Авто»' },
@@ -2842,7 +3077,7 @@ window.AvenCommand = (function () {
         'создание новых категорий и счетов текстом',
         'сокращения сумм вроде «5к» и пересчёт валют',
         'архивирование и возврат из архива текстовой командой (текст одной активной заметки уже умею заменять и дополнять)',
-        'изменение даты/времени, откладывание и скрытие уже существующих напоминаний текстом (создать, переименовать, показать и удалить уже умею)',
+        'откладывание напоминания до точного времени (центр уведомлений хранит только день; перенос, откладывание до дня, скрытие и возврат уже умею)',
         'изменение даты/цены, ведение ремонтов и смена статуса покупок текстом (создание, переименование, поиск, гарантии и удаление уже умею)',
         'чеки, фото и файлы к покупкам — ждут сервис хранения',
         'изменение места, описания, участников и повторения события текстом (дату, время и название уже меняю)',

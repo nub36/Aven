@@ -148,7 +148,7 @@ Morning/Evening, Settings, Profile, Help) остаются информацио�
 Проверки: `tests/tutorial2-interactive-check.js` — 90 behavioral checks; существующий
 `tests/help-tutorial-check.js` — 33 checks совместимости.
 
-## Текстовые команды (Stage 2, итерации 1–11, 2026-09-28 … 2026-09-30)
+## Текстовые команды (Stage 2, итерации 1–12, 2026-09-28 … 2026-09-30)
 
 `js/command.js` (`window.AvenCommand`) — ядро текстовых команд **без DOM, без AI/LLM, без сети и без
 голоса**: `normalize → parse → structured intent → execute → structured result → respond`. Разбор
@@ -554,7 +554,7 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 **Проверка:** `node prototype/tests/actions-core-check.js` — **18 проверок Common Actions без DOM**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/help-tutorial-check.js` — **33 проверки Help/Tutorial/responsive/TTS narration**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js`
-(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage13-entities-check.js` — **124 проверки заметок, финансов, авто, покупок и напоминаний** (контракт слоя без DOM на часах приложения, производные итоги «Финансов», сценарии через интерфейс, история и Undo, согласованность Главной/Истории/помощника/уведомлений, справка и обучение, темы и ширины, запрет записи в обход слоя). `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` — **786 проверок текстовых команд, заметок, напоминаний, расходов, удаления и переименования записи, Assistant UI** (включая обязательное подтверждение финансовой мутации, удаления и переименования, отмену/Escape/double confirm, уточнение счёта и категории, stale-защиту, форматы суммы и отказ от `5к`/валют, отказ от массовых операций); `node prototype/tests/command-session-check.js` — **155 проверок transient clarification/confirmation flow** (включая финансовые slots, flow удаления и переименования, сброс pending в обе стороны); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/data-integrity-check.js` — **127 проверок целостности данных** (календарный контракт даты и високосные годы, матрица невозможных дат по шести разделам, инвариант безопасных денег с границей, вычисленной из `Number.MAX_SAFE_INTEGER`, переполнение баланса, атомарность связанных Auto/Shopping, запрет обхода слоя через команду и форму, Undo и перезагрузка, детерминированные property-проверки); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tutorial2-interactive-check.js` — **90 проверок Tutorial 2.0**. Полный набор из семнадцати suite — **2198 проверок, 0 провалов**.
+(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage13-entities-check.js` — **124 проверки заметок, финансов, авто, покупок и напоминаний** (контракт слоя без DOM на часах приложения, производные итоги «Финансов», сценарии через интерфейс, история и Undo, согласованность Главной/Истории/помощника/уведомлений, справка и обучение, темы и ширины, запрет записи в обход слоя). `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` — **877 проверок текстовых команд, заметок, управления напоминаниями, расходов, удаления и переименования записи, Assistant UI** (включая обязательное подтверждение финансовой мутации, удаления и переименования, отмену/Escape/double confirm, уточнение счёта и категории, stale-защиту, форматы суммы и отказ от `5к`/валют, отказ от массовых операций); `node prototype/tests/command-session-check.js` — **179 проверок transient clarification/confirmation flow** (включая финансовые slots, flow удаления и переименования, сброс pending в обе стороны); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/data-integrity-check.js` — **127 проверок целостности данных** (календарный контракт даты и високосные годы, матрица невозможных дат по шести разделам, инвариант безопасных денег с границей, вычисленной из `Number.MAX_SAFE_INTEGER`, переполнение баланса, атомарность связанных Auto/Shopping, запрет обхода слоя через команду и форму, Undo и перезагрузка, детерминированные property-проверки); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tutorial2-interactive-check.js` — **90 проверок Tutorial 2.0**. Полный набор из семнадцати suite — **2313 проверок, 0 провалов**.
 `stage1-proto-check.js` покрывает: меню и метки этапов, история с
 Undo/фильтрами/экспортом, все 8 разделов админки с подтверждениями и аудитом, тема, экраны аккаунта,
 роут-гард, сквозная история и настоящий Undo в задачах/заметках/финансах/авто/покупках/автоматизациях,
@@ -783,3 +783,26 @@ Help получил статью «Изменение текста заметк�
 
 Полный набор — **17 suite, 2118/2118, 0 провалов**. jsdom не считает раскладку: реальная ширина
 колонки и реальное горизонтальное переполнение в нём не измеряются и за проверенные не выдаются.
+
+### Iteration 12 — управление существующим напоминанием (2026-09-30)
+
+Один завершённый блок поверх того же `AvenCommand`/`AvenCommandSession`: «Перенеси напоминание
+оплатить интернет на завтра в 10» обновляет date/time сущности через `AvenActions.reminders.update`;
+«Отложи … до завтра», «Скрой …», «Верни …» вызывают существующие `snooze/dismiss/restore` фасада над
+`AvenNotify`. Reminder и notification не смешиваются: hide не удаляет запись, snooze не переносит её,
+поиск видит скрытую запись, а stable `manual:<id>` rebuild не оставляет старой карточки после reschedule.
+
+Общий parser дат/времени поддерживает date-only/time-only/date+time; snooze намеренно date-only — «до
+18:00» получает честный отказ. EXACT обратимые действия выполняются сразу, INFERRED mutation требует
+confirmation, AMBIGUOUS показывает дату/время/состояние без внутренних ID. Candidate choice не мутирует;
+stale guard сверяет title/date/time и notification reaction. Bulk отклоняется позиционно, название «Про
+каждого клиента» не даёт false positive. History/Undo — только существующие Common Actions; прямых
+записей state/localStorage и отдельного command store нет.
+
+Help и существующий Commands tutorial объясняют reschedule/snooze/hide/restore, hide versus delete,
+Undo, ambiguity, ограничения точного времени и отсутствие гарантированной доставки при закрытом
+браузере. Assistant сохраняет ровно три compact chips и существующий responsive/a11y shell.
+
+Проверка Iteration 12: `command-engine-check.js` — **877/877**, `command-session-check.js` —
+**179/179**; полный regression — **17 suites, 2313/2313**, 0 failures. Все 43 JS-файла прошли
+`node --check`, `git diff --check` чист. Real-browser validation not performed.

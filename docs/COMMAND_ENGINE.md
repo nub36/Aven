@@ -1,7 +1,7 @@
 # COMMAND_ENGINE — Движок команд Aven
 
 > **Статус:** проектная документация. Владелец утвердил дискретную модель разрешения и правила подтверждений; числовые confidence-пороги не используются.
-> **Итерации 1–11 реализованы в UX-прототипе 2026-09-28…2026-09-30** — фактический контракт и охват см. разделы 9–20 (это прототип, не production-реализация).
+> **Итерации 1–12 реализованы в UX-прототипе 2026-09-28…2026-09-30** — фактический контракт и охват см. разделы 9–21 (это прототип, не production-реализация).
 > **Последнее обновление:** 2026-09-30
 
 ---
@@ -1107,3 +1107,64 @@ Help содержит отдельную статью «Изменение те�
 Help/Tutorial, Cancel/Escape/double Confirm, stale, History/Undo, сохранение полей и ширины
 320/360/390/412/430/768/1440); `command-session-check.js` — **170/170**. Полный regression —
 **17 suites, 2285/2285**, 0 failures. Реальный браузер в окружении недоступен; jsdom за него не выдаётся.
+
+## 21. Двенадцатая итерация: управление существующим напоминанием (Stage 2, 2026-09-30)
+
+Итерация закрывает один блок: перенос сохранённого ручного напоминания и управление реакцией его
+производного уведомления. Модель не менялась: reminder — сущность (`title`, `dateISO`, optional `time`,
+плюс существующие note/link), notification — вычисляемая карточка, а read/snooze/hidden хранятся отдельно
+в `notifState['manual:'+id]`.
+
+| Intent | Пример | Единственный Common Action |
+|---|---|---|
+| `reminder.reschedule` | «Перенеси напоминание оплатить интернет на завтра в 10» | `AvenActions.reminders.update` |
+| `reminder.snooze` | «Отложи напоминание оплатить интернет до завтра» | `AvenActions.reminders.snooze` |
+| `reminder.hide` | «Скрой напоминание оплатить интернет» | `AvenActions.reminders.dismiss` |
+| `reminder.restore` | «Верни напоминание оплатить интернет» | `AvenActions.reminders.restore` |
+
+### 21.1. Расписание и семантика уведомления
+
+Reschedule использует общий `findDate/findTime`: дата-only сохраняет прежнее время, time-only сохраняет
+дату, date+time меняет оба поля; поддержаны относительные, недельные и явные даты. Пустое/невозможное
+расписание отклоняется. Patch содержит только дату/время, поэтому title/note/link и прочие поля
+сохраняются. Stable notification key не меняется: после переноса `AvenNotify.build()` выдаёт одну карточку
+с актуальным расписанием, старой копии нет.
+
+Snooze не переносит reminder. Существующий `AvenNotify.snooze(key, days)` хранит только будущий день,
+поэтому поддержаны «до завтра», «на 3 дня», «на неделю», но **не** «до 18:00»: точная временная семантика
+не изобреталась. Hide ставит dismissed у уведомления и никогда не удаляет reminder; read-only поиск
+по-прежнему видит скрытые/отложенные reminder. Restore включён, потому что существующий контракт прямо
+содержит `AvenNotify.restore` и UI-кнопку «Вернуть». Snooze скрытой карточки отклоняется до её restore.
+
+### 21.2. Resolution, confirmation, stale и bulk
+
+Используется общий `EXACT / INFERRED / AMBIGUOUS / UNSUPPORTED`. Варианты показывают только название,
+дату, время и человеческое состояние («в списке», «отложено до…», «скрыто»), без внутренних ID.
+
+- `EXACT` reschedule/snooze/hide/restore — обратимые безопасные операции существующего UI, поэтому
+  выполняются без отдельного подтверждения;
+- `INFERRED` mutation — подтверждение **обязательно** по общей политике §6;
+- `AMBIGUOUS` — только выбор, без мутации; после выбора всегда показывается confirmation, поэтому нажатие
+  candidate само по себе никогда не выполняет действие;
+- no-op (то же расписание/тот же snooze/already hidden/already visible) не пишет History.
+
+Перед продолжением flow цель перечитывается. Сверяются title/date/time и notification reaction
+(dismissed/snooze date); удаление, rename, reschedule, hide/restore/snooze или другая материальная смена
+между показом кандидата/подтверждения и execute даёт `STALE_TARGET`. Bulk guard привязан к квантификатору
+перед словом «напоминание»: массовые команды отклоняются, но название «Про каждого клиента» допустимо.
+
+### 21.3. History, UI и ограничения
+
+Командный слой не пишет state/localStorage/History. Все четыре операции идут через существующий фасад
+`AvenActions.reminders` → `AvenNotify`; History/Undo ровно те же, что у формы и кнопок уведомления.
+Assistant переиспользует существующие choice/confirmation controls, keyboard/focus/Escape/ARIA и
+responsive shell; число compact chips остаётся ровно три. Help и существующий Commands tutorial
+объясняют различие hide/delete, Undo, ambiguity/stale и отсутствие гарантированной фоновой доставки.
+
+Не добавлены: массовые операции, snooze до точного времени, mark-read текстом, push/email/service
+worker/Android system notifications. Закрытый браузер не гарантирует доставку.
+
+Проверка итерации 12: `command-engine-check.js` — **877/877**, `command-session-check.js` —
+**179/179**; полный regression — **17 suites, 2313/2313**, 0 failures. Все 43 JS-файла прошли
+`node --check`, `git diff --check` чист. Real-browser validation not performed; jsdom не является
+проверкой layout/touch/Android.

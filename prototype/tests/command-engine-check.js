@@ -928,27 +928,57 @@ function partA() {
       caseInsensitive.ok && caseInsensitive.result.data.items.length === 1 &&
       caseInsensitive.result.data.items[0].title === 'Оплатить интернет', caseInsensitive.response);
 
-    /* A200 — операции над уже существующим напоминанием (изменить/отложить/скрыть/удалить)
-       вне scope этой итерации и остаются честно неподдержанными, без мутации и истории. */
+    /* A200 — управление существующим напоминанием: entity schedule отдельно от
+       notification reaction state; всё выполняют существующие Common Actions. */
     const before200 = { reminders: env14.state.reminders.length, history: env14.state.history.length };
-    const upd = K14.run('измени напоминание про интернет на завтра', { source: 'test' });
-    ok('A200a «измени напоминание …» безопасно отклоняется',
-      upd.ok === false && upd.intent.error.code === 'UNSUPPORTED_REMINDER' &&
-      /не умею/i.test(upd.response) && env14.state.reminders.length === before200.reminders &&
-      env14.state.history.length === before200.history, upd.response);
-    const snooze = K14.run('отложи напоминание про интернет', { source: 'test' });
-    ok('A200b «отложи напоминание …» безопасно отклоняется',
-      snooze.ok === false && snooze.intent.error.code === 'UNSUPPORTED_REMINDER' &&
-      env14.state.reminders.length === before200.reminders && env14.state.history.length === before200.history);
-    const dismiss = K14.run('скрой напоминание про интернет', { source: 'test' });
-    ok('A200c «скрой напоминание …» безопасно отклоняется',
-      dismiss.ok === false && dismiss.intent.error.code === 'UNSUPPORTED_REMINDER' &&
-      env14.state.reminders.length === before200.reminders && env14.state.history.length === before200.history);
+    const parsedMove = K14.parse('Перенеси напоминание Оплатить интернет на завтра в 10');
+    ok('A200a перенос разбирает цель и общие дату/время', parsedMove.ok &&
+      parsedMove.action === 'reminder.reschedule' && parsedMove.params.query === 'Оплатить интернет' &&
+      parsedMove.params.dateISO === '2026-09-29' && parsedMove.params.time === '10:00');
+    const moved = K14.run('Перенеси напоминание Оплатить интернет на завтра в 10', { source: 'test' });
+    const movedEntity = C14.reminders.list({ q: 'Оплатить интернет' }).items[0];
+    ok('A200b EXACT перенос выполняется Common Action и сохраняет прочие поля', moved.ok &&
+      moved.result.action === 'reminder.reschedule' && movedEntity.dateISO === '2026-09-29' &&
+      movedEntity.time === '10:00' && movedEntity.title === 'Оплатить интернет' &&
+      !!movedEntity.createdISO && env14.state.history.length === before200.history + 1);
+    const timeOnly = K14.run('Перенеси напоминание Оплатить интернет на 18:30', { source: 'test' });
+    ok('A200c перенос только времени сохраняет дату', timeOnly.ok &&
+      C14.reminders.get(movedEntity.id).entity.dateISO === '2026-09-29' &&
+      C14.reminders.get(movedEntity.id).entity.time === '18:30');
+    const inferred = K14.run('Перенеси напоминание интернет на пятницу', { source: 'test' });
+    ok('A200d INFERRED перенос ждёт подтверждения без мутации', !inferred.ok &&
+      inferred.result.status === 'confirmation_required' && C14.reminders.get(movedEntity.id).entity.dateISO === '2026-09-29');
+
+    const snoozed = K14.run('Отложи напоминание Оплатить интернет до завтра', { source: 'test' });
+    ok('A200e EXACT snooze меняет только notifState manual:id и пишет общую History', snoozed.ok &&
+      env14.state.notifState['manual:' + movedEntity.id].snoozeUntilISO === '2026-09-29' &&
+      C14.reminders.get(movedEntity.id).entity.dateISO === '2026-09-29');
+    const byTime = K14.run('Отложи напоминание Оплатить интернет до 18:00', { source: 'test' });
+    ok('A200f точное время snooze честно отклоняется существующим date-only контрактом', !byTime.ok &&
+      byTime.intent.error.code === 'REMINDER_SNOOZE_TIME_UNSUPPORTED');
+    const hidden = K14.run('Скрой напоминание Оплатить интернет', { source: 'test' });
+    ok('A200g hide скрывает notification и не удаляет reminder', hidden.ok &&
+      env14.state.notifState['manual:' + movedEntity.id].dismissed === true &&
+      C14.reminders.get(movedEntity.id).ok && C14.reminders.list({ q: 'Оплатить интернет' }).items.length === 1);
+    const hiddenSearch = K14.run('Найди напоминание про интернет', { source: 'test' });
+    ok('A200h поиск по-прежнему находит hidden reminder', hiddenSearch.ok && hiddenSearch.result.data.items.length === 1);
+    const hiddenSnooze = K14.run('Отложи напоминание Оплатить интернет до 02.10', { source: 'test' });
+    ok('A200i скрытый notification нельзя молча snooze', !hiddenSnooze.ok && hiddenSnooze.result.code === 'REMINDER_HIDDEN');
+    const restored = K14.run('Верни напоминание Оплатить интернет', { source: 'test' });
+    ok('A200j restore возвращает существующее скрытое notification', restored.ok &&
+      env14.state.notifState['manual:' + movedEntity.id].dismissed === false);
+    const noRestore = K14.run('Верни напоминание Оплатить интернет', { source: 'test' });
+    ok('A200k повторный restore — no-op без History', noRestore.ok && noRestore.result.data.unchanged === true);
+
+    ok('A200l массовые reminder mutations отклоняются позиционно',
+      ['Перенеси все напоминания на завтра', 'Отложи каждое напоминание до завтра', 'Скрой все напоминания', 'Верни все напоминания']
+        .every((x) => K14.parse(x).error.code === 'UNSUPPORTED_BULK_REMINDER'));
+    ok('A200m bulk-слово внутри title не даёт false positive',
+      K14.parse('Скрой напоминание Про каждого клиента').action === 'reminder.hide');
     const delRem = K14.run('удали напоминание про интернет', { source: 'test' });
-    ok('A200d «удали напоминание …» распознаётся как удаление и ждёт подтверждения (без мутации)',
-      delRem.ok === false && delRem.intent.action === 'reminder.delete' &&
-      ['confirmation_required', 'not_found'].indexOf(delRem.result.status) >= 0 &&
-      env14.state.reminders.length === before200.reminders && env14.state.history.length === before200.history);
+    ok('A200n удаление напоминания по-прежнему ждёт подтверждения', !delRem.ok &&
+      delRem.intent.action === 'reminder.delete' && delRem.result.status === 'confirmation_required' &&
+      env14.state.reminders.length === before200.reminders);
 
     /* A200e — review-фикс: широкая (неанкорированная) проверка «слово напоминание/напомни
        встречается где-то в фразе» ложно классифицировала обычные фразы, вообще не относящиеся
@@ -968,14 +998,19 @@ function partA() {
         r.ok === false && r.intent.error.code === 'UNKNOWN_COMMAND' &&
         env14.state.reminders.length === before.reminders && env14.state.history.length === before.history, r.response);
     });
-    /* Ровно эти же формы (начало фразы с триггера напоминания, включая пустой «напомни», и
-       явный глагол изменения рядом с «напоминание») по-прежнему честно отклоняются как
-       UNSUPPORTED_REMINDER — фикс не ослабляет уже протестированное поведение A76b/A200a-c. */
-    ['напомни', 'напомни ', 'Отложи напоминание', 'Верни напоминание про интернет'].forEach((text, i) => {
+    /* Пустое создание остаётся честным guard; неполный snooze просит срок, а
+       restore по части названия следует общей политике INFERRED confirmation. */
+    ['напомни', 'напомни '].forEach((text, i) => {
       const r = K14.run(text, { source: 'test' });
-      ok('A200f.' + i + ' «' + text + '» по-прежнему честно отклоняется как UNSUPPORTED_REMINDER',
+      ok('A200f.' + i + ' «' + text + '» честно отклоняется без мутации',
         r.ok === false && r.intent.error.code === 'UNSUPPORTED_REMINDER', JSON.stringify(r.intent && r.intent.error));
     });
+    const missingSnooze = K14.run('Отложи напоминание', { source: 'test' });
+    ok('A200f.2 неполный snooze просит будущую дату', !missingSnooze.ok &&
+      missingSnooze.intent.error.code === 'REMINDER_SNOOZE_UNTIL_REQUIRED');
+    const inferredRestore = K14.run('Верни напоминание про интернет', { source: 'test' });
+    ok('A200f.3 restore уже видимого уведомления — безопасный no-op без подтверждения', inferredRestore.ok &&
+      inferredRestore.result.data.unchanged === true);
 
     /* A201 — parse() для напоминаний остаётся чистым: разбор без исполнения не мутирует. */
     const env15 = coreSandbox();
@@ -2229,9 +2264,10 @@ function partA() {
     /\.shopping\.updatePurchase\(/.test(src));
   ok('A152d движок не меняет названия сам и не заводит второй путь переименования',
     !/RenameEngine|CommandRename|voiceRename/i.test(src));
-  ok('A153 напоминания идут только через существующий фасад reminders (не через собственный движок)',
+  ok('A153 напоминания и реакции уведомления идут только через существующий фасад reminders',
     /\bC\.reminders\.create\(/.test(src) && /\bC\.reminders\.list\(/.test(src) &&
-    !/\bC\.reminders\.(snooze|dismiss|markRead)\(/.test(src) &&
+    /\bC\.reminders\.update\(/.test(src) && /\bC\.reminders\.snooze\(/.test(src) &&
+    /\bC\.reminders\.dismiss\(/.test(src) && /\bC\.reminders\.restore\(/.test(src) &&
     !/window\.AvenNotify\s*=/.test(src) && !/CommandReminders|ReminderCommandStore/.test(src));
 }
 
@@ -2549,16 +2585,72 @@ async function partB() {
     ok('B54 «покажи напоминания» показывает список и не пишет «Историю»',
       p.H().length === histBeforeSearch && /Напомин|напоминани/i.test(listReply), listReply);
 
-    /* Изменение/отложить/скрыть/удалить уже существующего напоминания — честно неподдержано. */
+    /* Неполная форма изменения не угадывает новое расписание и не мутирует. */
     const remindersBeforeGuard = p.st().reminders.length;
+    const historyBeforeGuard = p.H().length;
     const updReply = await p.say('измени напоминание про страховку');
-    ok('B55 «измени напоминание …» не редактирует данные',
-      /не умею/i.test(updReply) && p.st().reminders.length === remindersBeforeGuard);
+    ok('B55 неполная команда изменения не редактирует данные',
+      /не поняла|укажите|перенести/i.test(updReply) && p.st().reminders.length === remindersBeforeGuard &&
+      p.H().length === historyBeforeGuard);
     const delReply = await p.say('удали напоминание про страховку');
     /* Удаление напоминания поддержано (итерация 9), но обязано СНАЧАЛА спросить:
        после одной фразы ни одно напоминание исчезнуть не должно. */
     ok('B56 «удали напоминание …» сначала спрашивает подтверждение и ничего не удаляет',
       /Удалить:|Не нашла/i.test(delReply) && p.st().reminders.length === remindersBeforeGuard);
+    p.dom.window.close();
+  }
+
+  /* ---- B3c2. Управление существующим напоминанием через Assistant (итерация 12) ---- */
+  {
+    const p = await load('#/assistant');
+    const created = p.C().reminders.create({
+      title: 'Оплатить тестовый интернет 42', note: 'Лицевой счёт сохранён',
+      dateISO: '2026-10-05', time: '09:00', link: 'https://example.test'
+    }, { source: 'fixture' }).entity;
+    p.st().history.length = 0;
+    const tomorrowReminder = p.C().dates.todayISO(1);
+
+    const movedReply = await p.say('Перенеси напоминание Оплатить тестовый интернет 42 на завтра в 10');
+    const moved = p.C().reminders.get(created.id).entity;
+    const notification = p.C().reminders.notifications({ includeDismissed: true, includeSnoozed: true })
+      .filter((n) => n.key === 'manual:' + created.id);
+    ok('B55a Assistant переносит exact reminder общим update и сохраняет unrelated fields',
+      moved.dateISO === tomorrowReminder && moved.time === '10:00' &&
+      moved.note === 'Лицевой счёт сохранён' && moved.link === 'https://example.test' &&
+      p.H().length === 1 && p.H()[0].action === 'reminder.update' && /перенесено/i.test(movedReply));
+    ok('B55b после reschedule существует одно актуальное notification без старой даты',
+      notification.length === 1 && notification[0].dateISO === tomorrowReminder && notification[0].time === '10:00');
+    p.w.Aven.undoAction(p.H()[0].id);
+    await sleep(40);
+    ok('B55c общий Undo переноса возвращает расписание и прочие поля',
+      p.C().reminders.get(created.id).entity.dateISO === '2026-10-05' &&
+      p.C().reminders.get(created.id).entity.time === '09:00' &&
+      p.C().reminders.get(created.id).entity.note === 'Лицевой счёт сохранён');
+
+    p.st().history.length = 0;
+    const snoozeReply = await p.say('Отложи напоминание Оплатить тестовый интернет 42 до завтра');
+    ok('B55d snooze меняет только manual:id reaction и объясняет отличие от переноса',
+      p.st().notifState['manual:' + created.id].snoozeUntilISO === tomorrowReminder &&
+      p.C().reminders.get(created.id).entity.dateISO === '2026-10-05' &&
+      p.H()[0].action === 'notify.snooze' && /Само напоминание не перенесено/i.test(snoozeReply));
+    p.w.Aven.undoAction(p.H()[0].id);
+    await sleep(40);
+    ok('B55e общий Undo snooze восстанавливает reaction state',
+      !((p.st().notifState['manual:' + created.id] || {}).snoozeUntilISO));
+
+    p.st().history.length = 0;
+    const hideReply = await p.say('Скрой напоминание Оплатить тестовый интернет 42');
+    ok('B55f hide не удаляет reminder и пишет notify.dismiss с Undo',
+      p.C().reminders.get(created.id).ok && p.st().notifState['manual:' + created.id].dismissed === true &&
+      p.H()[0].action === 'notify.dismiss' && /не удалено/i.test(hideReply));
+    const restoredReply = await p.say('Верни напоминание Оплатить тестовый интернет 42');
+    ok('B55g restore поддержан существующим AvenNotify и возвращает карточку',
+      p.st().notifState['manual:' + created.id].dismissed === false &&
+      p.H()[0].action === 'notify.restore' && /возвращено/i.test(restoredReply));
+    p.w.Aven.undoAction(p.H()[0].id);
+    await sleep(40);
+    ok('B55h Undo restore снова делает notification скрытым, reminder остаётся',
+      p.st().notifState['manual:' + created.id].dismissed === true && p.C().reminders.get(created.id).ok);
     p.dom.window.close();
   }
 
@@ -3139,7 +3231,7 @@ async function partB() {
     ok('B67a справка объясняет создание заметки текстом с примером',
       /Создай заметку купить фильтр/.test(bodies));
     ok('B67b справка объясняет, что текст внутри заметки не переключает домен',
-      /Про встречу/.test(bodies) && /не превращается|не превращает/i.test(bodies + ' ' +
+      /Про встречу/i.test(bodies) && /не превращается|не превращает|не переключает/i.test(bodies + ' ' +
         (p.w.AvenHelp.articles.find((a) => a.id === 'cmd-notes') || {}).body));
     ok('B67c справка объясняет поиск заметок текстом', /Покажи заметки/.test(bodies) && /Найди заметку/.test(bodies));
     ok('B67d справка больше не отрицает body edit и честно оставляет архив ограничением',
@@ -3185,16 +3277,19 @@ async function partB() {
       /время необязательно/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-reminders') || {}).body || ''));
     ok('B67h справка объясняет, что текст внутри напоминания не переключает домен',
       /Про встречу/.test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-reminders') || {}).body || '') &&
-      /не переключают/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-reminders') || {}).body || ''));
+      /не переключают|не переключает/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-reminders') || {}).body || ''));
     ok('B67i справка объясняет поиск напоминаний текстом',
       /Покажи напоминания/.test(bodies) && /Найди напоминание/.test(bodies));
-    ok('B67j справка честно говорит, что изменение/откладывание/скрытие напоминания текстом не поддерживаются',
-      /изменить, отложить или скрыть уже существующее напоминание[^.]*пока нельзя/i.test(bodies) ||
-      /изменить.{0,30}отложить.{0,30}(?:отметить прочитанным.{0,30})?скрыть уже существующее напоминание/i.test(bodies));
+    ok('B67j справка объясняет перенос/snooze/hide/restore и разницу hide/delete',
+      /Перенеси напоминание оплатить интернет на завтра в 10/.test(bodies) &&
+      /Отложи напоминание/.test(bodies) && /Скрой напоминание/.test(bodies) &&
+      /Верни напоминание/.test(bodies) && /НЕ удаляет|не удаляет/.test(bodies));
+    ok('B67j1 справка честно ограничивает snooze точным временем и объясняет confirmation',
+      /до 18:00/.test(bodies) && /EXACT/.test(bodies) && /INFERRED/.test(bodies));
     ok('B67j2 справка при этом честно говорит, что удалить напоминание текстом уже можно',
       /Удали напоминание/i.test(bodies));
-    ok('B67k справка честно не обещает доставку при закрытом сайте',
-      /не придёт по почте или push/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-reminders') || {}).body || ''));
+    ok('B67k справка честно не обещает доставку при закрытом браузере',
+      /закрытый браузер не гарантирует фоновую доставку/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-reminders') || {}).body || ''));
     /* Stage 2, итерация 5: расходы текстом — справка объясняет запись, форматы суммы,
        поведение категории/счёта, обязательное подтверждение, где увидеть и как отменить. */
     const finArticle = (p.w.AvenHelp.articles.find((a) => a.id === 'cmd-finance') || {}).body || '';
@@ -3359,7 +3454,7 @@ async function partB() {
     ok('B100l обучение по «Календарю» упоминает перенос текстом, не обещая большего',
       p.w.AvenTutorial.definitions.calendar.steps.some((x) => /перенести текстом/i.test(x.title) && /подтвержден/i.test(x.text)));
     ok('B67l раздел «Уведомления» тоже упоминает создание текстом',
-      /текстовой командой/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'notif-reminders') || {}).body || ''));
+      /текстом|текстовой командой/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'notif-reminders') || {}).body || ''));
     p.dom.window.close();
   }
 

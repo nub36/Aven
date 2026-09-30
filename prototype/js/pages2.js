@@ -713,7 +713,11 @@
             return [date, when].filter(Boolean).join(' · ');
           }
           if (c.kind === 'note') return c.folder ? 'Папка «' + c.folder + '»' : '';
-          if (c.kind === 'reminder') return [date, c.time ? window.AvenActions.format.time(c.time) : ''].filter(Boolean).join(' · ');
+          if (c.kind === 'reminder') {
+            const state = c.dismissed ? 'Скрыто'
+              : (c.state === 'snoozed' ? 'Отложено до ' + window.AvenActions.dates.dateLabel(c.snoozeUntilISO) : 'В списке');
+            return [date, c.time ? window.AvenActions.format.time(c.time) : '', state].filter(Boolean).join(' · ');
+          }
           if (c.kind === 'purchase') {
             return [Number(c.price) > 0 ? window.AvenActions.money.exact(c.price) : '', date].filter(Boolean).join(' · ');
           }
