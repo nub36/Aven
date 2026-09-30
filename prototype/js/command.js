@@ -516,11 +516,13 @@ window.AvenCommand = (function () {
     if (separator < 0) return fail('NOTE_BODY_FORMAT_REQUIRED', 'note.body.' + mode);
 
     const query = tidy(cleanText(restRaw.slice(0, separator)).replace(/^(?:про|о|об|на тему)\s+/i, ''));
-    /* В отличие от названия, body сохраняет конечную пунктуацию и кавычки — это
-       пользовательский текст, а не служебная часть команды. Переносы из input
-       сворачиваются в пробел только на границе командной строки. */
+    /* В отличие от названия, body сохраняет конечную пунктуацию, кавычки и
+       внутренние переводы строк — это пользовательский текст, а не служебная
+       часть команды. CRLF нормализуется в LF; внешние пробелы остаются только
+       границей самой команды. */
     const content = String(restRaw.slice(separator + 1))
-      .replace(/[\u00a0\u202f\t\r\n]+/g, ' ')
+      .replace(/\r\n?/g, '\n')
+      .replace(/[\u00a0\u202f\t]+/g, ' ')
       .trim();
     if (!query) return fail('NOTE_BODY_QUERY_REQUIRED', 'note.body.' + mode);
     if (!content) return fail('NOTE_BODY_CONTENT_REQUIRED', 'note.body.' + mode);
@@ -1562,13 +1564,13 @@ window.AvenCommand = (function () {
   }
   function noteBodySummary(mode, target, content) {
     const where = target.folder ? ' в папке ' + quote(target.folder) : '';
-    if (mode === 'append') {
-      return 'Дополнить заметку ' + quote(target.title) + where + ': сейчас ' +
-        noteBodyPreview(target.body) + ', добавить в конец ' + noteBodyPreview(content) +
-        '? Пока ничего не изменилось.';
-    }
-    return 'Заменить текст заметки ' + quote(target.title) + where + ': ' +
-      noteBodyPreview(target.body) + ' → ' + noteBodyPreview(content) +
+    const before = String(target.body || '');
+    const after = mode === 'append'
+      ? before + (before ? '\n' : '') + String(content || '')
+      : String(content || '');
+    return (mode === 'append' ? 'Дополнить заметку ' : 'Заменить текст заметки ') +
+      quote(target.title) + where + ': сейчас ' + noteBodyPreview(before) +
+      ' → после подтверждения ' + noteBodyPreview(after) +
       '? Пока ничего не изменилось.';
   }
   function ambiguous(actionName, intentObj, candidates) {
@@ -1677,10 +1679,14 @@ window.AvenCommand = (function () {
           resolution = found.resolution;
         }
 
+        const oldBody = String(target.body || '');
+        const nextBody = mode === 'append'
+          ? oldBody + (oldBody ? '\n' : '') + String(p.content || '')
+          : String(p.content || '');
         /* Replace с тем же телом — честный no-op ещё ДО подтверждения. Это важно:
            `updateNote` по общему контракту пишет History даже для пустого patch,
            поэтому command engine сам не вызывает action, когда менять нечего. */
-        if (mode === 'replace' && String(target.body || '') === String(p.content || '')) {
+        if (mode === 'replace' && oldBody === nextBody) {
           return result(true, 'info', intentObj.action, {
             code: 'NOTE_BODY_SAME', intent: intentObj, entity: target,
             data: { mode, title: target.title, body: target.body, unchanged: true }
@@ -1688,14 +1694,13 @@ window.AvenCommand = (function () {
         }
         if (!context.confirmed) return result(false, 'confirmation_required', intentObj.action, {
           code: 'CONFIRMATION_REQUIRED', resolution, intent: intentObj, target,
-          preview: { mode, title: target.title, folder: target.folder, before: target.body, content: p.content },
+          preview: {
+            mode, title: target.title, folder: target.folder,
+            before: oldBody, after: nextBody, content: p.content
+          },
           summary: noteBodySummary(mode, target, p.content)
         });
 
-        const oldBody = String(target.body || '');
-        const nextBody = mode === 'append'
-          ? oldBody + (oldBody ? '\n' : '') + String(p.content || '')
-          : String(p.content || '');
         const res = C.notes.updateNote(target.id, { body: nextBody }, Object.assign({
           title: mode === 'append' ? 'Заметка дополнена' : 'Текст заметки заменён'
         }, opts));

@@ -711,8 +711,10 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
       ok('S175 replace через Session сохранил title/folder/tags/pinned',
         n.title === 'План отпуска' && e.C.notes.folderOf(n) === 'Личное' && n.tags[0] === 'лето' && n.pinned);
       const again = e.session.confirm();
-      ok('S176 повторный Confirm не дописывает History и не выполняет действие второй раз',
-        again.status === 'no_pending' && n.body === 'Купить билеты' && e.state.history.length === 1);
+      const third = e.session.confirm();
+      ok('S176 повторный и третий Confirm не дописывают History и не выполняют действие ещё раз',
+        again.status === 'no_pending' && third.status === 'no_pending' &&
+        n.body === 'Купить билеты' && e.state.history.length === 1);
     }
     {
       const e = sandbox();
