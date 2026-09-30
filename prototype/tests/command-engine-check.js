@@ -402,7 +402,7 @@ function partA() {
     ok('A143 список возможностей честно перечисляет и то, чего движок не умеет',
       /Пока не умею/.test(cap.response) && /удаление сразу нескольких записей/.test(cap.response));
     ok('A144 перечень возможностей доступен как данные для интерфейса и справки',
-      K9.supported().queries.length >= 6 && K9.supported().mutations.length === 16 &&
+      K9.supported().queries.length >= 6 && K9.supported().mutations.length === 21 &&
       K9.supported().notYet.length >= 4 && K9.examples().length >= 6);
     /* Удаление обязано быть перечислено как умение, а не остаться скрытым:
        иначе «Что ты умеешь?» умалчивало бы о разрушительной операции. */
@@ -411,6 +411,12 @@ function partA() {
         .every((x) => K9.supported().mutations.some((m) => m.action === x)));
     ok('A144b каждое удаление в перечне честно предупреждает о подтверждении',
       K9.supported().mutations.filter((m) => /\.delete$/.test(m.action))
+        .every((m) => /подтвержден/i.test(m.about)));
+    ok('A144c переименование перечислено в возможностях по всем пяти доменам',
+      ['task.rename', 'event.rename', 'note.rename', 'reminder.rename', 'shopping.purchase.rename']
+        .every((x) => K9.supported().mutations.some((m) => m.action === x)));
+    ok('A144d каждое переименование в перечне честно предупреждает о подтверждении',
+      K9.supported().mutations.filter((m) => /\.rename$/.test(m.action))
         .every((m) => /подтвержден/i.test(m.about)));
   }
 
@@ -1294,9 +1300,12 @@ function partA() {
     ok('A459 удаление события текстом распознаётся как удаление события, а не как перенос',
       K.parse('Удали встречу с Сергеем').action === 'event.delete' &&
       K.parse('Удали встречу с Сергеем').params.query === 'с Сергеем');
-    ok('A460 изменение других полей события — честный отказ, а не догадка',
-      K.parse('Переименуй встречу с Сергеем в планёрку').error.code === 'UNSUPPORTED_EVENT_FIELD' &&
-      K.parse('Измени место встречи с Сергеем на офис').error.code === 'UNSUPPORTED_EVENT_FIELD');
+    ok('A460 переименование события теперь поддерживается',
+      K.parse('Переименуй встречу с Сергеем в планёрку').action === 'event.rename' &&
+      K.parse('Переименуй встречу с Сергеем в планёрку').params.newTitle === 'Планёрку');
+    ok('A460a изменение остальных полей события продолжает честно отклоняться',
+      K.parse('Измени место встречи с Сергеем на офис').error.code === 'UNSUPPORTED_EVENT_FIELD' &&
+      K.parse('Измени описание встречи с Сергеем на детали').error.code === 'UNSUPPORTED_EVENT_FIELD');
     ok('A461 невалидные дата и время отклоняются без мутаций',
       K.parse('Перенеси встречу с Сергеем на 31.02').error.code === 'DATE_INVALID' &&
       K.parse('Перенеси встречу с Сергеем на 25:00').error.code === 'TIME_INVALID' &&
@@ -1678,6 +1687,303 @@ function partA() {
         .every((a) => env9.state.history.some((h) => h.action === a)));
   }
 
+  /* ---- A19. Переименование записи текстом (Stage 2, итерация 10) ----
+     Общий путь на 5 доменов: task, event, note, reminder, purchase.
+     Все инварианты: обязательное подтверждение, ноль мутаций до Confirm,
+     Undo, stale guard, bulk guard, false positive guard, честные отказы. */
+  {
+    const env = coreSandbox();
+    const C = env.C, K = env.K;
+    const mk = () => {
+      C.tasks.createTask({ title: 'Купить масло', date: '2026-09-30' }, { source: 'test' });
+      C.events.createEvent({ title: 'Стоматолог', date: '2026-09-30', startTime: '10:00', endTime: '11:00' }, { source: 'test' });
+      C.notes.createNote({ title: 'Про отпуск', body: 'Билеты в Сочи' }, { source: 'test' });
+      C.reminders.create({ title: 'Про интернет', dateISO: '2026-09-30' }, { source: 'test' });
+      C.shopping.createPurchase({ name: 'Телефон', price: 45000, dateISO: '2026-09-01' }, { source: 'test' });
+    };
+    mk();
+
+    /* --- грамматика: домен определяется явным словом, а не догадкой --- */
+    ok('A540 переименование распознаётся по всем пяти доменам',
+      K.parse('Переименуй задачу купить масло в купить оливковое масло').action === 'task.rename' &&
+      K.parse('Переименуй событие стоматолог в визит к врачу').action === 'event.rename' &&
+      K.parse('Переименуй заметку про отпуск в планы на отпуск').action === 'note.rename' &&
+      K.parse('Переименуй напоминание про интернет в оплатить интернет').action === 'reminder.rename' &&
+      K.parse('Переименуй покупку телефон в смартфон').action === 'shopping.purchase.rename');
+
+    ok('A541 варианты фразы «Измени/Смени/Поменяй название … на …» распознаются так же',
+      K.parse('Измени название задачи купить масло на купить оливковое масло').action === 'task.rename' &&
+      K.parse('Смени название заметки про отпуск на планы').action === 'note.rename' &&
+      K.parse('Поменяй название покупки телефон на смартфон').action === 'shopping.purchase.rename');
+
+    ok('A542 без типа записи движок не угадывает домен наугад',
+      K.parse('Переименуй купить масло в оливковое масло').error.code === 'RENAME_TARGET_REQUIRED');
+
+    ok('A543 без старого названия разбор честно просит его',
+      K.parse('Переименуй задачу в купить масло').error.code === 'RENAME_QUERY_REQUIRED');
+
+    ok('A544 без нового названия разбор честно просит его',
+      K.parse('Переименуй задачу купить масло').error.code === 'RENAME_NEW_REQUIRED');
+
+    /* --- массовое переименование не выполняется никогда --- */
+    const bulkSnapshot = JSON.stringify(env.state);
+    const bulkPhrases = ['Переименуй все задачи в архив', 'Переименуй всё в черновик',
+      'Переименуй все заметки в старое', 'Переименуй каждую задачу в дело'];
+    ok('A545 массовое переименование отклоняется во всех формулировках',
+      bulkPhrases.every((t) => { const r = K.parse(t); return !r.ok && r.error.code === 'UNSUPPORTED_BULK_RENAME'; }));
+    bulkPhrases.forEach((t) => K.run(t, { source: 'assistant' }));
+    ok('A546 ни одна массовая фраза переименования ничего не изменила и не попала в «Историю»',
+      JSON.stringify(env.state) === bulkSnapshot);
+    ok('A547 отказ о массовом переименовании объясняет причину человеку, без жаргона',
+      /по одной/i.test(K.run('Переименуй все задачи в архив', { source: 'assistant' }).response) &&
+      !/(intent|payload|action|DOM|JSON)/i.test(K.run('Переименуй все задачи в архив', { source: 'assistant' }).response));
+
+    /* --- домены без надёжного имени: честный отказ, а не догадка --- */
+    ok('A548 деньги и авто текстом не переименовываются — отдельные честные отказы',
+      K.parse('Переименуй расход 850 в 900').error.code === 'UNSUPPORTED_FINANCE_RENAME' &&
+      K.parse('Переименуй заправку на ТО').error.code === 'UNSUPPORTED_AUTO_RENAME');
+
+    /* --- совпадение старого и нового имени --- */
+    ok('A549 одинаковое старое и новое название безопасно отклоняется без мутаций',
+      K.run('Переименуй задачу купить масло в купить масло', { source: 'assistant' }).result.code === 'RENAME_SAME_TITLE');
+
+    /* --- разбор чист: parse() ничего не меняет --- */
+    const pureBefore = JSON.stringify(env.state);
+    ['Переименуй задачу купить масло в оливковое масло', 'Переименуй все задачи в архив',
+     'Переименуй расход 500 в 600', 'Переименуй покупку телефон в смартфон'].forEach((t) => K.parse(t, { source: 'assistant' }));
+    ok('A550 parse() переименования не мутирует состояние', JSON.stringify(env.state) === pureBefore);
+
+    /* --- доменный приоритет: переименование не крадёт чужие команды --- */
+    ok('A551 слово «переименуй» внутри содержимого не превращает команду в переименование',
+      K.parse('Создай заметку переименуй задачу купить масло').action === 'note.create' &&
+      K.parse('Напомни переименовать файлы завтра').action === 'reminder.create');
+
+    /* --- обязательное подтверждение даже при точном совпадении --- */
+    const stateBefore = JSON.stringify(env.state);
+    const histBefore = env.state.history.length;
+    const ask = K.run('Переименуй задачу купить масло в купить оливковое масло', { source: 'assistant' });
+    ok('A552 до подтверждения состояние побайтово эквивалентно и «История» не тронута',
+      ask.ok === false && ask.result.status === 'confirmation_required' &&
+      JSON.stringify(env.state) === stateBefore && env.state.history.length === histBefore);
+    ok('A553 подтверждение показывает старое и новое название и отличающие детали',
+      /Купить масло/.test(ask.response) && /Купить оливковое масло/.test(ask.response) &&
+      /Подтвердите/i.test(ask.response));
+
+    /* --- отказ оставляет состояние неизменным --- */
+    const cancelRun = K.execute(ask.intent, { source: 'assistant', confirmed: false });
+    ok('A554 отказ оставляет старое название и не пишет «Историю»',
+      cancelRun.status === 'confirmation_required' &&
+      JSON.stringify(env.state) === stateBefore && env.state.history.length === histBefore);
+
+    /* --- Confirm выполняет переименование ровно один раз --- */
+    const doneRen = K.execute(ask.intent, { source: 'assistant', confirmed: true });
+    const taskAfter = C.tasks.getTasks({}).items.find((t) => /масло/i.test(t.title));
+    ok('A555 Confirm выполняет ровно одно переименование через Common Action',
+      doneRen.ok === true && doneRen.status === 'done' &&
+      taskAfter && taskAfter.title === 'Купить оливковое масло');
+    ok('A556 запись «Истории» содержит изменение названия с возможностью Undo',
+      env.state.history.length === histBefore + 1 && env.state.history[0].action === 'task.update' &&
+      env.state.history[0].undoable === true);
+    ok('A557 ответ о переименовании говорит, где это видно и как вернуть',
+      /Задача/.test(K.respond(doneRen)) && /переименована/.test(K.respond(doneRen)) &&
+      /Истории/.test(K.respond(doneRen)));
+
+    /* --- Undo возвращает прежнее название --- */
+    const env2 = coreSandbox();
+    const C2 = env2.C, K2 = env2.K;
+    const t2 = C2.tasks.createTask({ title: 'Старое имя', date: '2026-09-30' }, { source: 'test' });
+    const p2 = K2.parse('Переименуй задачу старое имя в новое имя');
+    K2.execute(p2, { source: 'assistant', confirmed: true });
+    const undoSpec2 = env2.state.history[0].undo;
+    if (undoSpec2 && undoSpec2.fields) Object.assign(t2.entity, undoSpec2.fields);
+    ok('A558 Undo действительно возвращает прежнее название записи',
+      C2.tasks.getTask(t2.entity.id).entity.title === 'Старое имя');
+
+    /* --- защита от двойного подтверждения --- */
+    const env3 = coreSandbox();
+    const C3 = env3.C, K3 = env3.K;
+    C3.tasks.createTask({ title: 'Задача X', date: '2026-09-30' }, { source: 'test' });
+    const p3 = K3.parse('Переименуй задачу задача x в задача y');
+    K3.execute(p3, { source: 'assistant', confirmed: true });
+    const hCount = env3.state.history.length;
+    K3.execute(p3, { source: 'assistant', confirmed: true });
+    ok('A559 повторное подтверждение не переименовывает второй раз и не пишет вторую «Историю»',
+      env3.state.history.length === hCount);
+
+    /* --- stale guard: если запись изменилась до Confirm --- */
+    const env4 = coreSandbox();
+    const C4 = env4.C, K4 = env4.K;
+    const t4 = C4.tasks.createTask({ title: 'Быстрая задача', date: '2026-09-30' }, { source: 'test' });
+    const p4 = K4.parse('Переименуй задачу быстрая задача в обновлённая задача');
+    const ask4 = K4.execute(p4, { source: 'assistant' });
+    C4.tasks.updateTask(t4.entity.id, { title: 'Уже переименована в UI' });
+    const staleRes = K4.execute(p4, {
+      source: 'assistant', targetId: ask4.target.id,
+      expectedTitle: ask4.target.title, confirmed: true
+    });
+    ok('A560 изменившаяся снаружи цель безопасно отклоняется, а не перезаписывается',
+      staleRes.ok === false && staleRes.status === 'stale' && staleRes.code === 'STALE_TARGET' &&
+      C4.tasks.getTask(t4.entity.id).entity.title === 'Уже переименована в UI');
+    ok('A561 сообщение о stale честно говорит, что ничего не переименовано',
+      /уже изменилась|Ничего не переименовано/i.test(staleRes.message));
+
+    /* --- исчезнувшая цель --- */
+    const env5 = coreSandbox();
+    const C5 = env5.C, K5 = env5.K;
+    const t5 = C5.tasks.createTask({ title: 'Исчезающая задача', date: '2026-09-30' }, { source: 'test' });
+    const p5 = K5.parse('Переименуй задачу исчезающая задача в финал');
+    const ask5 = K5.execute(p5, { source: 'assistant' });
+    C5.tasks.deleteTask(t5.entity.id);
+    const staleHist = env5.state.history.length;
+    const staleDelRes = K5.execute(p5, {
+      source: 'assistant', targetId: ask5.target.id,
+      expectedTitle: ask5.target.title, confirmed: true
+    });
+    ok('A562 уже удалённая снаружи цель не создаёт вторую запись «Истории»',
+      staleDelRes.ok === false && staleDelRes.status === 'stale' &&
+      env5.state.history.length === staleHist);
+
+    /* --- неоднозначность и выбор --- */
+    const env6 = coreSandbox();
+    const C6 = env6.C, K6 = env6.K;
+    C6.notes.createNote({ title: 'План на май' }, { source: 'test' });
+    C6.notes.createNote({ title: 'План на июнь' }, { source: 'test' });
+    const amb = K6.run('Переименуй заметку план в планы на лето', { source: 'assistant' });
+    ok('A563 несколько подходящих записей → выбор, а не переименование',
+      amb.ok === false && amb.result.status === 'ambiguous' &&
+      amb.result.candidates.length === 2 && env6.state.history.length === 2);
+    ok('A564 варианты показывают отличия и не раскрывают внутренние id',
+      /План на май/.test(amb.response) && /План на июнь/.test(amb.response) &&
+      !/(note-[0-9a-f]{8}|id:)/i.test(amb.response));
+    const selRes = K6.execute(amb.intent, {
+      source: 'assistant', targetId: amb.result.candidates[0].id,
+      expectedTitle: amb.result.candidates[0].title, selected: true
+    });
+    ok('A565 выбор варианта ведёт к обязательному подтверждению, а не к мутации',
+      selRes.status === 'confirmation_required' && /Подтвердите/i.test(selRes.summary) &&
+      C6.notes.getNotes({}).items.some((n) => n.title === 'План на май'));
+
+    /* --- несуществующая цель и INFERRED --- */
+    const notFound = K6.run('Переименуй заметку галактика в космос', { source: 'assistant' });
+    ok('A566 несуществующая цель: честное «не нашла», ноль изменений',
+      notFound.ok === false && notFound.result.status === 'not_found' &&
+      /не нашла/i.test(notFound.response));
+    const single = C6.notes.createNote({ title: 'Починить велосипед' }, { source: 'test' });
+    const inf = K6.run('Переименуй заметку велосипед в ремонт велосипеда', { source: 'assistant' });
+    ok('A567 частичное совпадение единственной записи → INFERRED + подтверждение',
+      inf.result.status === 'confirmation_required' && inf.result.resolution === 'INFERRED' &&
+      /части названия/i.test(inf.response) && C6.notes.getNote(single.entity.id).ok);
+
+    /* --- выполненная задача --- */
+    const env7 = coreSandbox();
+    const C7 = env7.C, K7 = env7.K;
+    const doneTask = C7.tasks.createTask({ title: 'Сдать отчёт', date: '2026-09-30' }, { source: 'test' });
+    C7.tasks.completeTask(doneTask.entity.id);
+    const renDone = K7.run('Переименуй задачу сдать отчёт в отчёт сдан', { source: 'assistant' });
+    ok('A568 выполненная задача находится для переименования',
+      renDone.result.status === 'confirmation_required' && /Сдать отчёт/.test(renDone.response));
+    const execDone = K7.execute(renDone.intent, { source: 'assistant', confirmed: true });
+    ok('A569 выполненная задача действительно переименовывается через общий слой',
+      execDone.ok === true && C7.tasks.getTask(doneTask.entity.id).entity.title === 'Отчёт сдан');
+
+    /* --- архивная запись --- */
+    const env8 = coreSandbox();
+    const C8 = env8.C, K8 = env8.K;
+    const archNote = C8.notes.createNote({ title: 'Архивный проект' }, { source: 'test' });
+    C8.notes.setNoteArchived(archNote.entity.id, true);
+    const archRen = K8.run('Переименуй заметку архивный проект в новый проект', { source: 'assistant' });
+    ok('A570 архивная запись не переименовывается текстом, но и не объявляется несуществующей',
+      archRen.ok === false && archRen.result.code === 'ARCHIVED_TARGET' &&
+      /в архиве/i.test(archRen.response) && !/не нашла/i.test(archRen.response));
+
+    /* --- покупка: обновление name и связанного расхода --- */
+    const envP = coreSandbox();
+    const CP = envP.C, KP = envP.K;
+    const pur = CP.shopping.createPurchase({ name: 'Старый телефон', price: 50000, dateISO: '2026-09-01' }, { source: 'test' });
+    const purRen = KP.run('Переименуй покупку старый телефон в новый смартфон', { source: 'assistant' });
+    KP.execute(purRen.intent, { source: 'assistant', confirmed: true });
+    ok('A571 переименование покупки обновляет поле name и не трогает цену/гарантию',
+      CP.shopping.getPurchase(pur.entity.id).entity.name === 'Новый смартфон' &&
+      CP.shopping.getPurchase(pur.entity.id).entity.price === 50000);
+
+    const purLink = CP.shopping.createPurchase({ name: 'Ноутбук', price: 90000, dateISO: '2026-09-01' }, { source: 'test' });
+    CP.shopping.linkFinance(purLink.entity.id, 'card-main', 'Электроника');
+    const linkRen = KP.run('Переименуй покупку ноутбук в рабочий ноутбук', { source: 'assistant' });
+    KP.execute(linkRen.intent, { source: 'assistant', confirmed: true });
+    const linkPurAfter = CP.shopping.getPurchase(purLink.entity.id).entity;
+    const linkOpAfter = CP.shopping.linkedOp(linkPurAfter);
+    ok('A572 переименование покупки со связанным расходом меняет название обеих частей',
+      linkPurAfter.name === 'Рабочий ноутбук' && linkOpAfter && linkOpAfter.title === 'Покупка: Рабочий ноутбук');
+
+    /* --- сохранение остальных полей по доменам --- */
+    const envE = coreSandbox();
+    const CE = envE.C, KE = envE.K;
+    const ev = CE.events.createEvent({ title: 'Встреча А', date: '2026-10-05', startTime: '14:00', endTime: '15:30' }, { source: 'test' });
+    const evRen = KE.run('Переименуй встречу встреча а в встреча б', { source: 'assistant' });
+    KE.execute(evRen.intent, { source: 'assistant', confirmed: true });
+    const evAfter = CE.events.getEvent(ev.entity.id).entity;
+    ok('A573 переименование события сохраняет дату, время и длительность',
+      evAfter.title === 'Встреча б' && evAfter.date === '2026-10-05' &&
+      evAfter.startTime === '14:00' && evAfter.endTime === '15:30');
+
+    const envN = coreSandbox();
+    const CN = envN.C, KN = envN.K;
+    const nt = CN.notes.createNote({ title: 'Заметка А', body: 'Длинный текст заметки', folder: 'Работа', tags: ['важно'] }, { source: 'test' });
+    const ntRen = KN.run('Переименуй заметку заметка а в заметка б', { source: 'assistant' });
+    KN.execute(ntRen.intent, { source: 'assistant', confirmed: true });
+    const ntAfter = CN.notes.getNote(nt.entity.id).entity;
+    ok('A574 переименование заметки сохраняет тело, папку и теги',
+      ntAfter.title === 'Заметка б' && ntAfter.body === 'Длинный текст заметки' &&
+      ntAfter.folder === 'Работа' && ntAfter.tags.indexOf('важно') >= 0);
+
+    const envR = coreSandbox();
+    const CR = envR.C, KR = envR.K;
+    const rm = CR.reminders.create({ title: 'Напомнить А', dateISO: '2026-10-10', time: '09:00' }, { source: 'test' });
+    const rmRen = KR.run('Переименуй напоминание напомнить а в напомнить б', { source: 'assistant' });
+    KR.execute(rmRen.intent, { source: 'assistant', confirmed: true });
+    const rmAfter = CR.reminders.get(rm.entity.id).entity;
+    ok('A575 переименование напоминания сохраняет дату и время',
+      rmAfter.title === 'Напомнить б' && rmAfter.dateISO === '2026-10-10' && rmAfter.time === '09:00');
+
+    /* --- проверка всех 5 доменов в одном цикле --- */
+    const env9 = coreSandbox();
+    const C9d = env9.C, K9d = env9.K;
+    C9d.tasks.createTask({ title: 'Задача 1', date: '2026-09-30' }, { source: 'test' });
+    C9d.events.createEvent({ title: 'Событие 1', date: '2026-09-30' }, { source: 'test' });
+    C9d.notes.createNote({ title: 'Заметка 1' }, { source: 'test' });
+    C9d.reminders.create({ title: 'Напоминание 1', dateISO: '2026-09-30' }, { source: 'test' });
+    C9d.shopping.createPurchase({ name: 'Покупка 1', price: 1000 }, { source: 'test' });
+
+    const domainRenCmds = [
+      ['Переименуй задачу задача 1 в задача 2', 'task.rename', () => C9d.tasks.getTasks({}).items.some((t) => t.title === 'Задача 2')],
+      ['Переименуй событие событие 1 в событие 2', 'event.rename', () => C9d.events.getEvents({}).items.some((e) => e.title === 'Событие 2')],
+      ['Переименуй заметку заметка 1 в заметка 2', 'note.rename', () => C9d.notes.getNotes({}).items.some((n) => n.title === 'Заметка 2')],
+      ['Переименуй напоминание напоминание 1 в напоминание 2', 'reminder.rename', () => C9d.reminders.list({}).items.some((r) => r.title === 'Напоминание 2')],
+      ['Переименуй покупку покупка 1 в покупка 2', 'shopping.purchase.rename', () => C9d.shopping.getPurchases({}).items.some((p) => p.name === 'Покупка 2')]
+    ];
+    let allRenOk = true;
+    domainRenCmds.forEach(([text, action, check]) => {
+      const a9 = K9d.run(text, { source: 'assistant' });
+      if (a9.result.status !== 'confirmation_required' || check()) { allRenOk = false; return; }
+      const d9 = K9d.execute(a9.intent, { source: 'assistant', confirmed: true });
+      if (!d9.ok || d9.action !== action || !check()) allRenOk = false;
+    });
+    ok('A576 во всех пяти доменах: вопрос → ноль изменений → Confirm → название обновлено', allRenOk);
+    ok('A577 каждое переименование оставило свою запись в общей «Истории»',
+      ['task.update', 'event.update', 'note.update', 'reminder.update', 'purchase.update']
+        .every((a) => env9.state.history.some((h) => h.action === a)));
+
+    /* --- проверка на false positives bulk guard --- */
+    const envFP = coreSandbox();
+    const CFP = envFP.C, KFP = envFP.K;
+    CFP.notes.createNote({ title: 'Про каждого клиента' }, { source: 'test' });
+    const delFP = KFP.parse('Удали заметку про каждого клиента');
+    const renFP = KFP.parse('Переименуй заметку про каждого клиента в клиенты');
+    ok('A578 bulk guard не ломает одиночные команды со словом «каждого» в названии',
+      delFP.ok === true && delFP.action === 'note.delete' && delFP.params.query === 'каждого клиента' &&
+      renFP.ok === true && renFP.action === 'note.rename' && renFP.params.query === 'каждого клиента' && renFP.params.newTitle === 'Клиенты');
+  }
+
   /* ---- A12. Второго слоя действий и своей истории не появилось ---- */
   ok('A150 движок не пишет в состояние напрямую',
     !/AvenState|\.save\s*\(\)|state\s*\./.test(src.replace(/\/\*[\s\S]*?\*\//g, '')));
@@ -1686,7 +1992,7 @@ function partA() {
   ok('A152 изменения идут только через существующие общие действия',
     /\bC\.tasks\.createTask\(/.test(src) && /\bC\.tasks\.completeTask\(/.test(src) &&
     /\bC\.tasks\.updateTask\(/.test(src) && /\bC\.events\.createEvent\(/.test(src) &&
-    /\bC\.notes\.createNote\(/.test(src) && !/\bC\.notes\.(updateNote|setNoteArchived)\(/.test(src));
+    /\bC\.notes\.createNote\(/.test(src) && !/\bC\.notes\.setNoteArchived\(/.test(src));
   /* Итерация 9: удаление выполняется ИМЕННО существующими Common Actions —
      теми же, что и кнопка в разделе. Своего удаления движок не пишет. */
   ok('A152a удаление во всех пяти доменах идёт через существующие Common Actions',
@@ -1695,9 +2001,15 @@ function partA() {
     /\.shopping\.deletePurchase\(/.test(src));
   ok('A152b движок не удаляет записи сам и не заводит второй путь удаления',
     !/\.splice\s*\(/.test(srcNoComments) && !/DeleteEngine|CommandDelete|voiceDelete/i.test(src));
+  ok('A152c переименование во всех пяти доменах идёт через существующие Common Actions',
+    /\.tasks\.updateTask\(/.test(src) && /\.events\.updateEvent\(/.test(src) &&
+    /\.notes\.updateNote\(/.test(src) && /\.reminders\.update\(/.test(src) &&
+    /\.shopping\.updatePurchase\(/.test(src));
+  ok('A152d движок не меняет названия сам и не заводит второй путь переименования',
+    !/RenameEngine|CommandRename|voiceRename/i.test(src));
   ok('A153 напоминания идут только через существующий фасад reminders (не через собственный движок)',
     /\bC\.reminders\.create\(/.test(src) && /\bC\.reminders\.list\(/.test(src) &&
-    !/\bC\.reminders\.(update|snooze|dismiss|markRead)\(/.test(src) &&
+    !/\bC\.reminders\.(snooze|dismiss|markRead)\(/.test(src) &&
     !/window\.AvenNotify\s*=/.test(src) && !/CommandReminders|ReminderCommandStore/.test(src));
 }
 
@@ -2751,6 +3063,43 @@ async function partB() {
         delSteps.length >= 3 && delSteps.every((x) => known.indexOf(x.target) >= 0) &&
         delSteps.every((x) => ['command-chat', 'command-limits'].indexOf(x.target) >= 0));
     }
+
+    /* Stage 2, итерация 10: переименование текстом — справка и обучение */
+    const renArticle = (p.w.AvenHelp.articles.find((a) => a.id === 'cmd-rename') || {}).body || '';
+    ok('B102a в справке есть отдельная статья о переименовании текстом',
+      renArticle.length > 400 && /Переименуй задачу купить масло/.test(renArticle));
+    ok('B102b статья объясняет, что это и зачем, простыми словами',
+      /Что это\./.test(renArticle) && /Зачем\./.test(renArticle) && /С чего начать\./.test(renArticle));
+    ok('B102c статья объясняет обязательное подтверждение и что до него ничего не изменено',
+      /Подтвердить/.test(renArticle) && /прежним именем|ничего не изменилось/i.test(renArticle));
+    ok('B102d статья объясняет отмену до и после переименования',
+      /Escape/.test(renArticle) && /Undo/.test(renArticle) && /Истори/.test(renArticle));
+    ok('B102e статья говорит, где ещё виден результат',
+      /Где ещё виден результат\./.test(renArticle) && /Главной/.test(renArticle));
+    ok('B102f статья честно перечисляет ограничения, включая массовое переименование',
+      /Ограничения\./.test(renArticle) && /по одной/i.test(renArticle) &&
+      /Финанс/.test(renArticle));
+    ok('B102g статья разбирает типичные проблемы, включая архив и совпадение имён',
+      /Типичные проблемы\./.test(renArticle) && /совпадает со старым/i.test(renArticle));
+    ok('B102h статья написана без жаргона разработчика',
+      !/(DOM|payload|provider|action layer|route|intent|JSON|API)/i.test(renArticle));
+    ok('B102i статья о переименовании находится поиском по обычным словам',
+      p.w.AvenHelp.search('переименовать').some((a) => a.id === 'cmd-rename'));
+    ok('B102j перечень команд включает примеры переименования по всем доменам',
+      ['Переименуй задачу', 'Переименуй событие', 'Переименуй заметку', 'Переименуй напоминание', 'Переименуй покупку']
+        .every((x) => new RegExp(x).test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-supported') || {}).body || '')));
+    ok('B102k обучение по командам содержит сценарий переименования с подтверждением и Undo',
+      p.w.AvenTutorial.definitions.commands.steps.some((x) => /Переименуйте запись/.test(x.title)) &&
+      p.w.AvenTutorial.definitions.commands.steps.some((x) => /старое и новое название/.test(x.title)));
+    {
+      const steps = p.w.AvenTutorial.definitions.commands.steps;
+      const known = steps.map((x) => x.target).filter((t) => typeof t === 'string');
+      const renSteps = steps.filter((x) => /[Пп]ереимен/.test(x.title));
+      ok('B102l шаги про переименование используют существующие хуки обучения, без нового фреймворка',
+        renSteps.length >= 2 && renSteps.every((x) => known.indexOf(x.target) >= 0) &&
+        renSteps.every((x) => ['command-chat', 'command-limits'].indexOf(x.target) >= 0));
+    }
+
     ok('B100k обучение по командам включает сценарий переноса события с подтверждением',
       p.w.AvenTutorial.definitions.commands.steps.some((x) => /Найдите событие и попросите перенести/.test(x.title)) &&
       p.w.AvenTutorial.definitions.commands.steps.some((x) => /было → станет/.test(x.title)) &&
@@ -2895,6 +3244,128 @@ async function partB() {
         confirm.tagName === 'BUTTON' && confirm.disabled !== true);
       p.dom.window.close();
     }
+  }
+
+  /* ---- B14. Переименование записи текстом сквозь настоящий Assistant (итерация 10) ---- */
+  {
+    const p = await load('#/assistant');
+    const C = p.C();
+    C.tasks.createTask({ title: 'Старая задача', date: C.dates.todayISO(0) }, { source: 'test' });
+    await p.go('#/assistant');
+
+    const tasksBefore = p.st().tasks.length, histBefore = p.H().length;
+    const ask = await p.say('Переименуй задачу старая задача в обновлённая задача');
+    ok('B230 переименование одной фразой не мутирует сразу, а показывает вопрос',
+      /Переименовать:/.test(ask) && /Старая задача/.test(ask) && /Обновлённая задача/.test(ask) &&
+      p.st().tasks.length === tasksBefore && p.H().length === histBefore, ask);
+    ok('B231 на экране появились настоящие кнопки «Подтвердить» и «Отмена»',
+      !!p.q('[data-action="command-confirm"]') && !!p.q('[data-action="command-cancel"]'));
+    ok('B232 блок подтверждения объявлен для вспомогательных технологий',
+      (p.q('.command-confirm') || {}).getAttribute &&
+      p.q('.command-confirm').getAttribute('aria-label') === 'Подтверждение действия');
+    ok('B233 в вопросе нет служебных терминов',
+      !/(intent|payload|task\.rename|JSON|provider)/i.test(ask));
+
+    /* Отмена кнопкой: ничего не изменилось */
+    p.click(p.q('[data-action="command-cancel"]'));
+    await sleep(350);
+    ok('B234 «Отмена» оставляет прежнее название и не пишет «Историю»',
+      p.st().tasks.some((t) => t.title === 'Старая задача') && p.H().length === histBefore &&
+      !p.q('[data-action="command-confirm"]'));
+
+    /* Escape тоже отказ */
+    await p.say('Переименуй задачу старая задача в обновлённая задача');
+    p.d.dispatchEvent(new p.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await sleep(350);
+    ok('B235 Escape отменяет переименование и ничего не трогает',
+      p.st().tasks.some((t) => t.title === 'Старая задача') && p.H().length === histBefore);
+
+    /* Подтверждение: ровно одно изменение даже при двойном нажатии */
+    await p.say('Переименуй задачу старая задача в обновлённая задача');
+    const btn = p.q('[data-action="command-confirm"]');
+    p.click(btn); p.click(btn);
+    await sleep(500);
+    ok('B236 Confirm переименовывает ровно один раз даже при двойном нажатии',
+      p.st().tasks.some((t) => t.title === 'Обновлённая задача') && p.H().length === histBefore + 1);
+    ok('B237 запись «Истории» — это изменение задачи с возможностью отмены',
+      p.H()[0].action === 'task.update' && p.H()[0].undoable === true);
+    ok('B238 ответ говорит человеку, что запись переименована',
+      /переименована/.test(p.w.Aven._lastReply || '') && /Истории/.test(p.w.Aven._lastReply || ''));
+
+    /* Переименованная задача видна в разделах */
+    await p.go('#/tasks');
+    ok('B239 переименованная задача видна с новым именем в разделе «Задачи»',
+      /Обновлённая задача/.test(p.text()) && !p.broken());
+    await p.go('#/home');
+    const homeTasksCard = p.qa('.card').filter((c) => /Задачи/.test(c.textContent || ''))[0];
+    ok('B240 переименованная задача видна в карточке задач на «Главной»',
+      !!homeTasksCard && /Обновлённая задача/.test(homeTasksCard.textContent || '') && !p.broken());
+
+    /* Undo из «Истории» возвращает прежнее название */
+    await p.go('#/history');
+    const renEntryId = p.H()[0].id;
+    const undoBtn = p.q('[data-action="hist-undo"][data-id="' + renEntryId + '"]');
+    ok('B241 в «Истории» есть кнопка отмены именно этого переименования', !!undoBtn);
+    p.click(undoBtn);
+    await sleep(400);
+    ok('B242 Undo вернул задаче прежнее название в состояние',
+      p.st().tasks.some((t) => t.title === 'Старая задача'));
+    await p.go('#/tasks');
+    ok('B243 после Undo задача снова видна с прежним именем в разделе «Задачи»',
+      /Старая задача/.test(p.text()) && !p.broken());
+    p.dom.window.close();
+  }
+
+  /* ---- B15. Переименование: выбор из нескольких, массовый отказ, честные отказы ---- */
+  {
+    const p = await load('#/assistant');
+    const C = p.C();
+    C.notes.createNote({ title: 'Проект Альфа' }, { source: 'test' });
+    C.notes.createNote({ title: 'Проект Бета' }, { source: 'test' });
+    await p.go('#/assistant');
+
+    const notesBefore = p.st().notes.length, histBefore = p.H().length;
+    const amb = await p.say('Переименуй заметку проект в проект гамма');
+    ok('B244 несколько подходящих заметок → выбор, а не переименование',
+      /Уточните выбор|подходящ/i.test(amb) && p.st().notes.length === notesBefore);
+
+    p.click(p.qa('[data-action="command-choice"]')[0]);
+    await sleep(400);
+    ok('B245 выбор варианта — ещё не переименование: спрашивается подтверждение',
+      /Переименовать:/.test(p.w.Aven._lastReply || '') && p.H().length === histBefore);
+    p.click(p.q('[data-action="command-confirm"]'));
+    await sleep(400);
+    ok('B246 после подтверждения переименована ровно одна заметка',
+      p.st().notes.some((n) => n.title === 'Проект гамма') && p.H()[0].action === 'note.update');
+
+    /* Массовое переименование на настоящем экране не выполняется */
+    const before = JSON.stringify(p.st().notes), h = p.H().length;
+    const bulk = await p.say('Переименуй все заметки в архив');
+    ok('B247 «Переименуй все заметки» на экране отклоняется и ничего не трогает',
+      /по одной/i.test(bulk) && JSON.stringify(p.st().notes) === before && p.H().length === h);
+    ok('B248 отказ не предлагает кнопку подтверждения', !p.q('[data-action="command-confirm"]'));
+
+    /* Финансы текстом не переименовываются */
+    const opsBefore = (p.st().ops || []).length;
+    const fin = await p.say('Переименуй расход 500 в 600');
+    ok('B249 переименование расхода текстом честно отклоняется и не трогает операции',
+      /Финанс/.test(fin) && (p.st().ops || []).length === opsBefore);
+
+    /* Мобильные ширины для переименования */
+    for (const width of [320, 390]) {
+      const m = await load('#/assistant', width);
+      const C = m.C();
+      C.notes.createNote({ title: 'Проект бета' }, { source: 'test' });
+      await m.go('#/assistant');
+      const rep = await m.say('Переименуй заметку проект бета в проект омега');
+      const box = m.q('.command-confirm');
+      ok('B250[' + width + '] вопрос о переименовании доступен на ширине ' + width,
+        /Переименовать:/.test(rep) && !!box && !m.broken());
+      ok('B251[' + width + '] кнопки подтверждения переименования — валидные controls',
+        box && box.querySelectorAll('button').length === 2);
+      m.dom.window.close();
+    }
+    p.dom.window.close();
   }
 
   /* ---- B7. Обучение реально работает на экране помощника ---- */
