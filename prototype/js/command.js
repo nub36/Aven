@@ -266,7 +266,16 @@ window.AvenCommand = (function () {
     DELETE_QUERY_REQUIRED: 'Не поняла, какую именно запись удалить — нужно название. Напишите, например: «Удали задачу купить масло». Я ничего не удалила.',
     UNSUPPORTED_BULK_DELETE: 'Удалять всё сразу я не буду: массовое удаление невозможно проверить глазами и легко потерять нужное. Удаляю строго по одной записи и всегда спрашиваю подтверждение — например: «Удали задачу купить масло». Если нужно очистить раздел целиком, это делается в самом разделе. Я ничего не удалила.',
     UNSUPPORTED_FINANCE_DELETE: 'Удалять уже записанную операцию текстовой командой я пока не умею: у расходов и доходов нет короткого названия, по которому я могла бы надёжно понять, какую именно запись вы имеете в виду, а ошибиться с деньгами нельзя. Откройте «Финансы» — там операцию можно удалить, баланс пересчитается, а действие попадёт в «Историю». Я ничего не удалила.',
-    UNSUPPORTED_AUTO_DELETE: 'Удалять заправки и записи обслуживания текстовой командой я пока не умею: они различаются датой и пробегом, а не названием, и перепутать их слишком легко. Откройте «Авто» — там запись можно удалить, и это попадёт в «Историю». Я ничего не удалила.'
+    UNSUPPORTED_AUTO_DELETE: 'Удалять заправки и записи обслуживания текстовой командой я пока не умею: они различаются датой и пробегом, а не названием, и перепутать их слишком легко. Откройте «Авто» — там запись можно удалить, и это попадёт в «Историю». Я ничего не удалила.',
+    /* Переименование текстом (итерация 10). Формулировки обязаны говорить человеку,
+       ЧТО именно нужно уточнить, и подчёркивать, что пока ничего не изменилось. */
+    RENAME_TARGET_REQUIRED: 'Не поняла, что именно переименовать. Скажите тип записи: «Переименуй задачу … в …», «Переименуй событие … в …», «Переименуй заметку … в …», «Переименуй напоминание … в …» или «Переименуй покупку … в …». Я ничего не изменила.',
+    RENAME_QUERY_REQUIRED: 'Не поняла, какую именно запись переименовать — нужно старое название. Напишите, например: «Переименуй задачу купить масло в купить оливковое масло». Я ничего не изменила.',
+    RENAME_NEW_REQUIRED: 'Не поняла новое название. Напишите так: «Переименуй задачу купить масло в купить оливковое масло». Я ничего не изменила.',
+    RENAME_SAME_TITLE: 'Новое название совпадает со старым. Если нужно изменить запись, напишите другое название — пока ничего не изменилось.',
+    UNSUPPORTED_BULK_RENAME: 'Переименовывать всё сразу я не буду: массовое изменение невозможно проверить глазами. Переименовываю строго по одной записи и всегда спрашиваю подтверждение — например: «Переименуй задачу купить масло в купить оливковое масло». Я ничего не изменила.',
+    UNSUPPORTED_FINANCE_RENAME: 'Переименовывать финансовые операции текстовой командой я пока не умею: у них нет названия, по которому их можно надёжно найти. Откройте «Финансы» — там операцию можно отредактировать, и это попадёт в «Историю». Я ничего не изменила.',
+    UNSUPPORTED_AUTO_RENAME: 'Переименовывать записи автомобиля текстовой командой я пока не умею: они различаются датой и пробегом, а не названием. Откройте «Авто» — там запись можно отредактировать, и это попадёт в «Историю». Я ничего не изменила.'
   };
   function intent(action, kind, params, rule, extra) {
     return Object.assign({
@@ -330,30 +339,37 @@ window.AvenCommand = (function () {
      reminders.delete / shopping.deletePurchase — те же, что и кнопка в разделе. */
   const DELETE_VERB = '(?:удали(?:те)?|удалить|удаляй|сотри(?:те)?|стереть|стирай|убери(?:те)?|убрать)';
   const CLEAR_VERB = '(?:очисти(?:те)?|очистить)';
+  const BULK_PREFIX_WORDS = '(?:все|всё|все[хм]|всю|весь|любые|кажд[а-яе]*)';
   const BULK_WORD = '(?:все|всё|все[хм]|всю|весь|любые|подряд|полностью|целиком)';
   const REMINDER_DELETE_WORD = '(?:напоминани[а-яе]*)';
-  /* Список строится лениво: PURCHASE_WORD объявлен ниже по файлу, и вычисление
+  /* Единый реестр доменов с именованными записями для удаления и переименования.
+     Список строится лениво: PURCHASE_WORD объявлен ниже по файлу, и вычисление
      массива на этапе загрузки модуля упало бы в temporal dead zone. */
-  let DELETE_DOMAINS = null;
-  function deleteDomains() {
-    if (!DELETE_DOMAINS) {
-      DELETE_DOMAINS = [
-        { action: 'task.delete', word: TASK_WORD, label: 'задачу' },
-        { action: 'note.delete', word: NOTE_WORD, label: 'заметку' },
-        { action: 'reminder.delete', word: REMINDER_DELETE_WORD, label: 'напоминание' },
-        { action: 'shopping.purchase.delete', word: PURCHASE_WORD, label: 'покупку' },
-        { action: 'event.delete', word: '(?:встреч[уаией]|событи[а-яе]*|созвон[а-яё]*|звонок|при[её]м|визит)', label: 'событие' }
+  let NAMED_DOMAINS = null;
+  function namedDomains() {
+    if (!NAMED_DOMAINS) {
+      NAMED_DOMAINS = [
+        { domain: 'task', word: TASK_WORD, label: 'задачу', deleteAction: 'task.delete', renameAction: 'task.rename' },
+        { domain: 'note', word: NOTE_WORD, label: 'заметку', deleteAction: 'note.delete', renameAction: 'note.rename' },
+        { domain: 'reminder', word: REMINDER_DELETE_WORD, label: 'напоминание', deleteAction: 'reminder.delete', renameAction: 'reminder.rename' },
+        { domain: 'shopping', word: PURCHASE_WORD, label: 'покупку', deleteAction: 'shopping.purchase.delete', renameAction: 'shopping.purchase.rename' },
+        { domain: 'event', word: '(?:встреч[уаией]|событи[а-яе]*|созвон[а-яё]*|звонок|при[её]м|визит)', label: 'событие', deleteAction: 'event.delete', renameAction: 'event.rename' }
       ];
     }
-    return DELETE_DOMAINS;
+    return NAMED_DOMAINS;
+  }
+  function deleteDomains() {
+    return namedDomains().map((d) => ({ action: d.deleteAction, word: d.word, label: d.label }));
   }
   function parseDelete(n, raw) {
     const startsDelete = startRx(DELETE_VERB, 'i').test(n);
     const startsClear = startRx(CLEAR_VERB, 'i').test(n);
     if (!startsDelete && !startsClear) return null;
-    /* «Очисти историю», «Очисти список» и любое «удали все …» — массовая
-       операция. Она не выполняется никогда, независимо от домена. */
-    if (startsClear || hasWord(n, BULK_WORD)) return fail('UNSUPPORTED_BULK_DELETE', 'guard.delete.bulk');
+    /* «Очисти историю», «Очисти список» и любое «удали все …», «удали каждую …» —
+       массовая операция. Она не выполняется никогда, независимо от домена. */
+    if (startsClear || new RegExp('^' + DELETE_VERB + '\\s+' + BULK_PREFIX_WORDS + NOT_AFTER, 'i').test(n) || hasWord(n, BULK_WORD)) {
+      return fail('UNSUPPORTED_BULK_DELETE', 'guard.delete.bulk');
+    }
     /* Домены, у которых записи не адресуются названием: деньги различаются суммой
        и датой, авто-записи — пробегом. Угадывать «последний расход» нельзя. */
     if (/(расход[а-яе]*|доход[а-яе]*|операци[а-яе]*|трат[а-яе]*|платеж[а-яе]*|платёж)/.test(n)) {
@@ -377,6 +393,80 @@ window.AvenCommand = (function () {
     /* Глагол удаления есть, а типа записи нет: «Удали купить масло» могло бы быть
        и задачей, и заметкой, и покупкой. Молча выбрать домен нельзя. */
     return fail('DELETE_TARGET_REQUIRED', 'delete.target');
+  }
+
+  /* Переименование записи текстом (Stage 2, итерация 10).
+     Позволяет изменить название существующей записи фразой:
+     «Переименуй задачу купить масло в купить оливковое масло»,
+     «Переименуй событие встреча с Сергеем в обед с Сергеем»,
+     «Переименуй заметку идея в идеи для проекта»,
+     «Переименуй напоминание интернет в оплатить интернет»,
+     «Переименуй покупку телефон в смартфон».
+     Также поддерживается: «Измени/Смени/Поменяй название [типа] [old] на/в [new]».
+     Инварианты:
+     1) глагол переименования в начале фразы (или «измени название ...»);
+     2) тип записи обязателен — без слова задачи/события/заметки/напоминания/покупки
+        домен не угадывается;
+     3) старое и новое название обязательны;
+     4) массовое переименование («переименуй все ...», «переименуй каждую ...»)
+        не выполняется никогда — честный отказ;
+     5) подтверждение ВСЕГДА обязательно (даже при точном совпадении). */
+  const RENAME_VERB = '(?:переименуй(?:те)?|переименовать|переименуем|назови(?:те)?|назвать)';
+  const CHANGE_TITLE_VERB = '(?:(?:измени(?:те)?|изменить|поменяй(?:те)?|поменять|смени(?:те)?|сменить)\\s+названи[ея])';
+  const RENAME_PREFIX_RX = '(?:' + RENAME_VERB + '|' + CHANGE_TITLE_VERB + ')';
+
+  function parseRename(n, raw) {
+    const startsRename = startRx(RENAME_PREFIX_RX, 'i').test(n);
+    if (!startsRename) return null;
+    /* Массовое переименование не поддерживается */
+    if (new RegExp('^' + RENAME_PREFIX_RX + '\\s+' + BULK_PREFIX_WORDS + NOT_AFTER, 'i').test(n) || hasWord(n, BULK_WORD)) {
+      return fail('UNSUPPORTED_BULK_RENAME', 'guard.rename.bulk');
+    }
+    /* Неподдерживаемые домены без надёжного названия */
+    if (/(расход[а-яе]*|доход[а-яе]*|операци[а-яе]*|трат[а-яе]*|платеж[а-яе]*|платёж)/.test(n)) {
+      return fail('UNSUPPORTED_FINANCE_RENAME', 'guard.rename.finance');
+    }
+    if (/(заправк[а-яе]*|обслуживани[а-яе]*|то\b|топлив[а-яе]*|бензин[а-яе]*)/.test(n)) {
+      return fail('UNSUPPORTED_AUTO_RENAME', 'guard.rename.auto');
+    }
+    const domains = namedDomains();
+    for (let i = 0; i < domains.length; i++) {
+      const d = domains[i];
+      const rx = new RegExp('^' + RENAME_PREFIX_RX + '\\s+(?:мо[юийё]\\s+|эт[уоа]т?\\s+)?' + d.word + NOT_AFTER + '\\s*(.*)$', 'i');
+      if (!rx.test(n)) continue;
+      const mRaw = rx.exec(raw);
+      const mNorm = rx.exec(n);
+      const restRaw = mRaw ? String(mRaw[1] || '') : '';
+      const restNorm = mNorm ? String(mNorm[1] || '') : '';
+      if (!tidy(restNorm)) return fail('RENAME_QUERY_REQUIRED', 'rename.query');
+
+      /* Разделение старого и нового названия через предлог «в», «на» или «как».
+         Пример: «купить масло в купить оливковое масло».
+         Если начинается прямо с предлога — старое название пропущено. */
+      if (/^(?:в|на|как)\s+/i.test(restNorm)) {
+        return fail('RENAME_QUERY_REQUIRED', 'rename.query');
+      }
+
+      const sepMatch = /\s+(?:в|на|как)\s+/i.exec(restNorm);
+      if (!sepMatch) {
+        return fail('RENAME_NEW_REQUIRED', 'rename.new');
+      }
+
+      /* Извлекаем части из raw (для сохранения регистра нового названия) */
+      const sepIndex = sepMatch.index;
+      const sepLen = sepMatch[0].length;
+      const oldRaw = restRaw.slice(0, sepIndex);
+      const newRaw = restRaw.slice(sepIndex + sepLen);
+
+      const oldQuery = tidy(oldRaw.replace(/^(?:про|о|об|на тему)\s+/i, ''));
+      const newTitle = capitalize(tidy(newRaw));
+
+      if (!oldQuery) return fail('RENAME_QUERY_REQUIRED', 'rename.query');
+      if (!newTitle) return fail('RENAME_NEW_REQUIRED', 'rename.new');
+
+      return intent(d.renameAction, 'mutation', { query: oldQuery, newTitle }, 'rename', { requiresConfirmation: true });
+    }
+    return fail('RENAME_TARGET_REQUIRED', 'rename.target');
   }
 
   function parseTaskCreate(n, raw, context) {
@@ -1028,7 +1118,7 @@ window.AvenCommand = (function () {
        либо непонятая формулировка переноса, либо изменение других полей события —
        и то и другое честно объясняется, без мутации и без записи в «Историю». */
     if (EVENT_WORD.test(n)) {
-      if (hasWord(n, 'переименуй|переименовать|назови|назвать|название|место|описание|участник[а-яе]*|повтор[а-яе]*|напоминание')) {
+      if (hasWord(n, 'место|описание|участник[а-яе]*|повтор[а-яе]*|напоминание')) {
         return fail('UNSUPPORTED_EVENT_FIELD', 'guard.event.field');
       }
       if (new RegExp('^(?:' + MOVE_VERB + '|измени|изменить|поменяй|поменять)').test(n)) {
@@ -1044,6 +1134,7 @@ window.AvenCommand = (function () {
        остаётся заметкой, а разрушительная команда не может быть случайно
        перехвачена другим доменом и выполнена как что-то иное. */
     parseDelete,
+    parseRename,
     parseTaskCreate, parseNoteCreate, parseNoteSearch, parseReminderCreate, parseReminderSearch,
     parseFuelCreate, parseServiceCreate, parseExpenseCreate, parseExpenseList,
     parsePurchaseCreate, parsePurchaseWarranty, parsePurchaseSearch, parseIncomeUnsupported,
@@ -1841,6 +1932,68 @@ window.AvenCommand = (function () {
           data: { title: target.title, dateISO: target.dateISO || '', time: target.time || '', kind: target.kind }
         });
       }
+      /* ---------- Переименование записи текстом (Stage 2, итерация 10) ----------
+         Один общий путь на пять доменов. Инварианты, обязательные для КАЖДОГО:
+         — подтверждение ВСЕГДА, даже при точном совпадении названия (COMMAND_ENGINE §6);
+         — до подтверждения нет ни мутации, ни записи в «Историю»;
+         — перед самим переименованием цель перечитывается общим запросом и сверяется
+           со слепком: изменившаяся или уже исчезнувшая запись безопасно отклоняется;
+         — выполняет только существующий Common Action — тот же, что и кнопка
+           в разделе, поэтому «История» и Undo работают без отдельного кода. */
+      case 'task.rename':
+      case 'event.rename':
+      case 'note.rename':
+      case 'reminder.rename':
+      case 'shopping.purchase.rename': {
+        const spec = renameSpec()[intentObj.action];
+        const act = intentObj.action;
+        let found;
+        if (context.targetId) {
+          const staleFail = () => result(false, 'stale', act, {
+            code: 'STALE_TARGET', intent: intentObj,
+            message: 'Эта запись уже изменилась или её больше нет. Ничего не переименовано — повторите команду.'
+          });
+          const fresh = spec.get(context.targetId);
+          if (!fresh.ok || !fresh.entity || fresh.entity.archived) return staleFail();
+          const cand = spec.candidate(fresh.entity);
+          const exp = context.expected;
+          if (context.expectedTitle && normalize(cand.title) !== normalize(context.expectedTitle)) return staleFail();
+          if (exp && ((cand.dateISO || '') !== (exp.dateISO || '') || (cand.time || '') !== (exp.time || ''))) return staleFail();
+          found = { ok: true, resolution: context.selected ? 'EXACT' : 'INFERRED', entity: cand };
+        } else found = spec.resolve(p.query, context);
+        if (!found.ok && found.status === 'ambiguous') {
+          return result(false, 'ambiguous', act, {
+            code: 'AMBIGUOUS_RENAME', resolution: 'AMBIGUOUS', intent: intentObj, candidates: found.candidates
+          });
+        }
+        if (!found.ok) {
+          /* Запись может существовать, но лежать в архиве. Сказать «не нашла»
+             было бы неправдой (ADR-010) — честно объясняем, где она. */
+          const inArchive = typeof spec.archived === 'function' && spec.archived(p.query);
+          return result(false, 'not_found', act, {
+            code: inArchive ? 'ARCHIVED_TARGET' : spec.notFound,
+            resolution: 'UNSUPPORTED', intent: intentObj, query: p.query, archived: !!inArchive
+          });
+        }
+        const target = found.entity;
+        if (normalize(target.title) === normalize(p.newTitle)) {
+          return result(false, 'invalid', act, {
+            code: 'RENAME_SAME_TITLE', message: PARSE_MESSAGES.RENAME_SAME_TITLE, intent: intentObj
+          });
+        }
+        if (!context.confirmed) {
+          return result(false, 'confirmation_required', act, {
+            code: 'CONFIRMATION_REQUIRED', resolution: found.resolution, intent: intentObj,
+            target, summary: renameSummary(act, target, p.newTitle, found.resolution)
+          });
+        }
+        const res = spec.rename(target.id, p.newTitle, opts);
+        if (!res.ok) return actionFailed(act, res, intentObj);
+        return result(true, 'done', act, {
+          resolution: found.resolution, intent: intentObj, entity: res.entity, historyId: res.entry && res.entry.id,
+          data: { oldTitle: target.title, title: p.newTitle, dateISO: target.dateISO || '', time: target.time || '', kind: target.kind, where: spec.where }
+        });
+      }
       case 'day.plan': {
         const dateISO = ISO_RE.test(String(p.dateISO || '')) ? p.dateISO : context.todayISO;
         const events = C.events.getEventsForDate(dateISO).items || [];
@@ -1967,6 +2120,10 @@ window.AvenCommand = (function () {
     'task.delete': true, 'event.delete': true, 'note.delete': true,
     'reminder.delete': true, 'shopping.purchase.delete': true
   };
+  const RENAME_ACTIONS = {
+    'task.rename': true, 'event.rename': true, 'note.rename': true,
+    'reminder.rename': true, 'shopping.purchase.rename': true
+  };
   /* Род существительного задаётся явно: «Событие удалено», но «Задача удалена».
      Вычислять род из строки нельзя — получилось бы «удолена». Подлежащее второго
      предложения — всегда «Запись» (женский род), поэтому там форма постоянна. */
@@ -1980,6 +2137,80 @@ window.AvenCommand = (function () {
     return spec.noun + ' ' + quote(d.title) + ' ' + (DELETE_GONE[res.action] || 'удалена') +
       '. Запись исчезла из раздела ' + spec.section +
       ', но осталась в «Истории» — там же её можно вернуть кнопкой «Undo».';
+  }
+
+  /* ---------- Таблица доменов переименования (Stage 2, итерация 10) ----------
+     Здесь нет ни одной собственной операции над данными: только ссылки на уже
+     существующие Common Actions и Common Queries. Строится лениво — Core()
+     на этапе загрузки модуля ещё недоступен. */
+  let RENAME_SPEC = null;
+  function renameSpec() {
+    if (!RENAME_SPEC) {
+      const C = () => Core();
+      RENAME_SPEC = {
+        'task.rename': {
+          noun: 'Задача', where: '«Задачах»', section: '«Задачи»', notFound: 'TASK_NOT_FOUND',
+          get: (id) => C().tasks.getTask(id), candidate: taskCandidate,
+          resolve: (q, ctx) => resolveTaskForDelete(q, ctx),
+          rename: (id, newTitle, o) => C().tasks.updateTask(id, { title: newTitle }, o),
+          archived: (q) => resolveArchived(C().tasks.getTasks({ includeArchived: true }).items || [], q, taskCandidate)
+        },
+        'event.rename': {
+          noun: 'Событие', where: '«Календаре»', section: '«Календарь»', notFound: 'EVENT_NOT_FOUND',
+          get: (id) => C().events.getEvent(id), candidate: eventCandidate,
+          resolve: (q, ctx) => resolveEvent(q, ctx),
+          rename: (id, newTitle, o) => C().events.updateEvent(id, { title: newTitle }, o),
+          archived: (q) => resolveArchived(C().events.getEvents({}).items || [], q, eventCandidate)
+        },
+        'note.rename': {
+          noun: 'Заметка', where: '«Заметках»', section: '«Заметки»', notFound: 'NOTE_NOT_FOUND',
+          get: (id) => C().notes.getNote(id), candidate: noteCandidate,
+          resolve: (q) => resolveNote(q),
+          rename: (id, newTitle, o) => C().notes.updateNote(id, { title: newTitle }, o),
+          archived: (q) => resolveArchived(C().notes.getNotes({ status: 'all' }).items || [], q, noteCandidate)
+        },
+        'reminder.rename': {
+          noun: 'Напоминание', where: '«Уведомлениях»', section: '«Уведомления»', notFound: 'REMINDER_NOT_FOUND',
+          get: (id) => C().reminders.get(id), candidate: reminderCandidate,
+          resolve: (q) => resolveReminder(q),
+          rename: (id, newTitle, o) => C().reminders.update(id, { title: newTitle }, o)
+        },
+        'shopping.purchase.rename': {
+          noun: 'Покупка', where: '«Покупках»', section: '«Покупки»', notFound: 'PURCHASE_NOT_FOUND',
+          get: (id) => C().shopping.getPurchase(id), candidate: purchaseCandidate,
+          resolve: (q) => resolvePurchase(q),
+          rename: (id, newTitle, o) => C().shopping.updatePurchase(id, { name: newTitle }, o)
+        }
+      };
+    }
+    return RENAME_SPEC;
+  }
+
+  function renameSummary(action, target, newTitle, resolution) {
+    const spec = renameSpec()[action];
+    const details = deleteDetails(target);
+    return 'Переименовать: ' + spec.noun.toLowerCase() + ' ' + quote(target.title) +
+      (details ? ' · ' + details : '') +
+      ' → ' + quote(newTitle) +
+      (resolution === 'INFERRED' ? ' (нашла по части названия)' : '') +
+      '. Подтвердите — пока ничего не изменилось.';
+  }
+
+  const RENAME_DONE_GENDER = {
+    'task.rename': 'переименована',
+    'event.rename': 'переименовано',
+    'note.rename': 'переименована',
+    'reminder.rename': 'переименовано',
+    'shopping.purchase.rename': 'переименована'
+  };
+
+  function renameDoneText(res) {
+    const spec = renameSpec()[res.action];
+    const d = res.data || {};
+    const gender = RENAME_DONE_GENDER[res.action] || 'переименована';
+    return spec.noun + ' ' + quote(d.oldTitle) + ' ' + gender + ' в ' + quote(d.title) +
+      (spec.where ? ' в ' + spec.where : '') +
+      '. Отменить можно в «Истории».';
   }
   function whenPhrase(dateISO, time) {
     const C = Core();
@@ -2233,6 +2464,11 @@ window.AvenCommand = (function () {
         case 'note.delete':
         case 'reminder.delete':
         case 'shopping.purchase.delete': return deleteDoneText(res);
+        case 'task.rename':
+        case 'event.rename':
+        case 'note.rename':
+        case 'reminder.rename':
+        case 'shopping.purchase.rename': return renameDoneText(res);
         case 'day.plan': return dayText(res.data);
         case 'tasks.overdue':
           return res.data.items.length
@@ -2288,6 +2524,26 @@ window.AvenCommand = (function () {
         }
         return 'Не нашла в ' + spec.where + ' запись ' + quote(p.query || res.query || '') +
           '. Проверьте название — я ничего не удалила.';
+      }
+    }
+    /* Переименование также отвечает строго по своему домену. */
+    if (RENAME_ACTIONS[res.action]) {
+      const spec = renameSpec()[res.action];
+      if (res.status === 'ambiguous') {
+        return 'Под это название подходит несколько записей: ' +
+          (res.candidates || []).slice(0, 5).map((c, i) => {
+            const det = deleteDetails(c);
+            return (i + 1) + '. ' + quote(c.title) + (det ? ' — ' + det : '');
+          }).join('; ') +
+          '. Уточните, какую переименовать — пока ничего не изменилось.';
+      }
+      if (res.status === 'not_found') {
+        if (res.code === 'ARCHIVED_TARGET') {
+          return 'Запись ' + quote(p.query || res.query || '') + ' есть, но она в архиве, а архивные записи текстом я не переименовываю. ' +
+            'Откройте раздел ' + spec.section + ', покажите архив — и переименуйте её там. Я ничего не меняла.';
+        }
+        return 'Не нашла в ' + spec.where + ' запись ' + quote(p.query || res.query || '') +
+          '. Проверьте название — я ничего не меняла.';
       }
     }
     if (res.status === 'ambiguous' && res.code === 'AMBIGUOUS_EVENT') {
@@ -2375,20 +2631,25 @@ window.AvenCommand = (function () {
         { action: 'event.delete', example: 'Удали событие стоматолог', about: 'удаляет событие — всегда после вашего подтверждения, вернуть можно в «Истории»' },
         { action: 'note.delete', example: 'Удали заметку про отпуск', about: 'удаляет заметку — всегда после вашего подтверждения, вернуть можно в «Истории»' },
         { action: 'reminder.delete', example: 'Удали напоминание про интернет', about: 'удаляет напоминание — всегда после вашего подтверждения, вернуть можно в «Истории»' },
-        { action: 'shopping.purchase.delete', example: 'Удали покупку телефон', about: 'удаляет покупку — всегда после вашего подтверждения, вернуть можно в «Истории»' }
+        { action: 'shopping.purchase.delete', example: 'Удали покупку телефон', about: 'удаляет покупку — всегда после вашего подтверждения, вернуть можно в «Истории»' },
+        { action: 'task.rename', example: 'Переименуй задачу купить масло в купить оливковое масло', about: 'переименовывает задачу — всегда после вашего подтверждения, вернуть можно в «Истории»' },
+        { action: 'event.rename', example: 'Переименуй событие встреча с Сергеем в обед с Сергеем', about: 'переименовывает событие — всегда после вашего подтверждения, вернуть можно в «Истории»' },
+        { action: 'note.rename', example: 'Переименуй заметку идея в идеи для проекта', about: 'переименовывает заметку — всегда после вашего подтверждения, вернуть можно в «Истории»' },
+        { action: 'reminder.rename', example: 'Переименуй напоминание интернет в оплатить интернет', about: 'переименовывает напоминание — всегда после вашего подтверждения, вернуть можно в «Истории»' },
+        { action: 'shopping.purchase.rename', example: 'Переименуй покупку телефон в смартфон', about: 'переименовывает покупку — всегда после вашего подтверждения, вернуть можно в «Истории»' }
       ],
       notYet: [
-        'удаление сразу нескольких записей одной фразой («удали все задачи») — удаляю строго по одной',
+        'переименование и удаление сразу нескольких записей одной фразой («переименуй все задачи») — работаю строго по одной',
         'доходы текстом (расходы уже умею)',
         'изменение уже записанной финансовой операции текстом; удаление операции — только в «Финансах»',
-        'удаление заправок и обслуживания текстом — только в «Авто»',
+        'удаление, замена и редактирование заправок и обслуживания текстом — только в «Авто»',
         'создание новых категорий и счетов текстом',
         'сокращения сумм вроде «5к» и пересчёт валют',
-        'изменение и архивирование уже существующих заметок текстом (создать, найти и удалить уже умею)',
-        'изменение, откладывание и скрытие уже существующих напоминаний текстом (создать, показать и удалить уже умею)',
-        'изменение, ведение ремонтов и смена статуса покупок текстом (создание, поиск, гарантии и удаление уже умею)',
+        'изменение текста (тела) и архивирование уже существующих заметок текстом (создать, переименовать, найти и удалить уже умею)',
+        'изменение даты/времени, откладывание и скрытие уже существующих напоминаний текстом (создать, переименовать, показать и удалить уже умею)',
+        'изменение даты/цены, ведение ремонтов и смена статуса покупок текстом (создание, переименование, поиск, гарантии и удаление уже умею)',
         'чеки, фото и файлы к покупкам — ждут сервис хранения',
-        'изменение названия, места, описания, участников и повторения события текстом (дату и время уже переношу)',
+        'изменение места, описания, участников и повторения события текстом (дату, время и название уже меняю)',
         'перенос повторяющихся событий текстом',
         'свободный разговор за пределами перечисленных уточнений'
       ]
