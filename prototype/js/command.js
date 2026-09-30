@@ -72,7 +72,12 @@ window.AvenCommand = (function () {
         dateISO: String(ctx.expected.dateISO || ''),
         time: String(ctx.expected.time || ''),
         endTime: String(ctx.expected.endTime || ''),
-        allDay: ctx.expected.allDay === true
+        allDay: ctx.expected.allDay === true,
+        /* Для изменения содержимого заметки stale-guard сверяет именно текст,
+           который человек видел перед подтверждением. Папка нужна, потому что
+           она показывается как отличающая деталь выбранной заметки. */
+        body: String(ctx.expected.body || ''),
+        folder: String(ctx.expected.folder || '')
       } : null,
       selected: ctx.selected === true,
       confirmed: ctx.confirmed === true,
@@ -242,7 +247,12 @@ window.AvenCommand = (function () {
     AUTO_SERVICE_TITLE_REQUIRED: 'Не поняла, какая работа выполнена. Напишите, например: «Запиши обслуживание замена масла».',
     AUTO_NUMBER_AMBIGUOUS: 'Не поняла число в команде об автомобиле. Укажите единицу: литры — «45 л», пробег — «104800 км», стоимость — «2500 рублей».',
     NOTE_CONTENT_REQUIRED: 'Не поняла, что записать в заметку. Напишите так: «Создай заметку купить фильтр для машины».',
-    UNSUPPORTED_NOTE_UPDATE: 'Изменять текст уже существующей заметки текстовой командой я пока не умею. Откройте заметку в разделе «Заметки» — там можно отредактировать текст.',
+    NOTE_BODY_QUERY_REQUIRED: 'Укажите название заметки перед двоеточием. Я ничего не изменила.',
+    NOTE_BODY_CONTENT_REQUIRED: 'Укажите новый или добавляемый текст после двоеточия. Я ничего не изменила.',
+    NOTE_BODY_FORMAT_REQUIRED: 'Разделите название заметки и текст двоеточием. Например: «Замени текст заметки План отпуска: Купить билеты» или «Дополни заметку План отпуска: Забронировать отель». Я ничего не изменила.',
+    NOTE_BODY_SAME: 'В заметке уже сохранён такой текст. Ничего менять не нужно.',
+    UNSUPPORTED_NOTE_UPDATE: 'Изменить текст заметки можно двумя точными командами с двоеточием: «Замени текст заметки План отпуска: Купить билеты» или «Дополни заметку План отпуска: Забронировать отель». Я ничего не изменила.',
+    UNSUPPORTED_BULK_NOTE_UPDATE: 'Изменять сразу несколько заметок текстовой командой я не буду. Назовите одну заметку перед двоеточием — я найду её и попрошу подтверждение. Я ничего не изменила.',
     UNSUPPORTED_NOTE_ARCHIVE: 'Отправлять заметку в архив или возвращать её текстом я пока не умею. Это делается в разделе «Заметки».',
     REMINDER_CONTENT_REQUIRED: 'Не поняла, о чём напомнить. Напишите так: «Напомни купить масло на завтра».',
     PURCHASE_NAME_REQUIRED: 'Не поняла название покупки. Напишите, например: «Добавь покупку холодильник за 50000 рублей».',
@@ -467,6 +477,57 @@ window.AvenCommand = (function () {
       return intent(d.renameAction, 'mutation', { query: oldQuery, newTitle }, 'rename', { requiresConfirmation: true });
     }
     return fail('RENAME_TARGET_REQUIRED', 'rename.target');
+  }
+
+  /* ---------- Текст существующей заметки (Stage 2, итерация 11) ----------
+     Двоеточие — обязательная граница между названием заметки и содержимым. Без
+     него движок не угадывает, где заканчивается цель и начинается новый текст.
+     Replace и append остаются разными intent: первый полностью меняет body,
+     второй сохраняет его байт-в-байт и добавляет одну новую строку. Оба всегда
+     требуют подтверждения, потому что меняют уже существующую запись. */
+  const NOTE_BODY_REPLACE_RX = /^(?:замени(?:те)?|заменить|измени(?:те)?|изменить|перепиши(?:те)?|переписать|отредактируй(?:те)?|отредактировать)\s+(?:текст|содержимое)\s+(?:в\s+)?заметк[а-яе]*\s*/i;
+  const NOTE_BODY_APPEND_RX = /^(?:(?:дополни(?:те)?|дополнить|допиши(?:те)?|дописать)\s+(?:текст\s+)?(?:в\s+)?|(?:добавь(?:те)?|добавить)\s+(?:текст\s+)?в\s+)заметк[а-яе]*\s*/i;
+
+  function parseNoteBodyEdit(n, raw, context, original) {
+    /* Bulk guard стоит до обычного шаблона. Он проверяет только квантификатор
+       ПЕРЕД словом «заметки», поэтому название «Про каждого клиента» не
+       превращается в ложное массовое действие. */
+    const bulk = /^(?:(?:замени(?:те)?|заменить|измени(?:те)?|изменить|перепиши(?:те)?|переписать|отредактируй(?:те)?|отредактировать)\s+(?:текст|содержимое)\s+(?:в\s+)?|(?:дополни(?:те)?|дополнить|допиши(?:те)?|дописать)\s+(?:текст\s+)?(?:в\s+)?|(?:добавь(?:те)?|добавить)\s+(?:текст\s+)?в\s+)(?:все|всё|всех|кажд(?:ую|ые|ой))\s+заметк[а-яе]*/i;
+    if (bulk.test(n)) return fail('UNSUPPORTED_BULK_NOTE_UPDATE', 'note.body.bulk');
+
+    let mode = '';
+    let rx = null;
+    if (NOTE_BODY_REPLACE_RX.test(n)) { mode = 'replace'; rx = NOTE_BODY_REPLACE_RX; }
+    else if (NOTE_BODY_APPEND_RX.test(n)) { mode = 'append'; rx = NOTE_BODY_APPEND_RX; }
+
+    if (!rx) {
+      /* Узнаём намерение, но не принимаем менее точную форму: иначе короткое
+         «измени заметку А на Б» нельзя надёжно отличить от rename/body update. */
+      const looksLikeEdit = /^(?:замени(?:те)?|заменить|измени(?:те)?|изменить|перепиши(?:те)?|переписать|отредактируй(?:те)?|отредактировать|дополни(?:те)?|дополнить|допиши(?:те)?|дописать)(?:\s|$)/i.test(n) && /заметк[а-яе]*/i.test(n);
+      if (looksLikeEdit) return fail('UNSUPPORTED_NOTE_UPDATE', 'note.body.format');
+      return null;
+    }
+
+    const rawTrimmed = String(original == null ? raw : original).trim();
+    const rawMatch = rx.exec(rawTrimmed);
+    const normalizedMatch = rx.exec(n);
+    const restRaw = rawMatch ? rawTrimmed.slice(rawMatch[0].length) : n.slice((normalizedMatch && normalizedMatch[0].length) || 0);
+    const separator = restRaw.indexOf(':');
+    if (separator < 0) return fail('NOTE_BODY_FORMAT_REQUIRED', 'note.body.' + mode);
+
+    const query = tidy(cleanText(restRaw.slice(0, separator)).replace(/^(?:про|о|об|на тему)\s+/i, ''));
+    /* В отличие от названия, body сохраняет конечную пунктуацию и кавычки — это
+       пользовательский текст, а не служебная часть команды. Переносы из input
+       сворачиваются в пробел только на границе командной строки. */
+    const content = String(restRaw.slice(separator + 1))
+      .replace(/[\u00a0\u202f\t\r\n]+/g, ' ')
+      .trim();
+    if (!query) return fail('NOTE_BODY_QUERY_REQUIRED', 'note.body.' + mode);
+    if (!content) return fail('NOTE_BODY_CONTENT_REQUIRED', 'note.body.' + mode);
+
+    return intent('note.body.' + mode, 'mutation', { query, content }, 'note.body.' + mode, {
+      requiresConfirmation: true
+    });
   }
 
   function parseTaskCreate(n, raw, context) {
@@ -1134,7 +1195,7 @@ window.AvenCommand = (function () {
        остаётся заметкой, а разрушительная команда не может быть случайно
        перехвачена другим доменом и выполнена как что-то иное. */
     parseDelete,
-    parseRename,
+    parseRename, parseNoteBodyEdit,
     parseTaskCreate, parseNoteCreate, parseNoteSearch, parseReminderCreate, parseReminderSearch,
     parseFuelCreate, parseServiceCreate, parseExpenseCreate, parseExpenseList,
     parsePurchaseCreate, parsePurchaseWarranty, parsePurchaseSearch, parseIncomeUnsupported,
@@ -1148,9 +1209,10 @@ window.AvenCommand = (function () {
     const context = makeContext(ctx);
     const n = normalize(text);
     const raw = cleanText(text);
+    const original = String(text == null ? '' : text);
     if (!n) return fail('EMPTY', 'empty');
     for (let i = 0; i < RULES.length; i++) {
-      const res = RULES[i](n, raw, context);
+      const res = RULES[i](n, raw, context, original);
       if (res) {
         res.input = { text: String(text == null ? '' : text), normalized: n };
         res.context = { todayISO: context.todayISO };
@@ -1258,7 +1320,11 @@ window.AvenCommand = (function () {
      запись от другой; id нужен лишь для продолжения flow. */
   function noteCandidate(x) {
     const C = Core();
-    return { id: x.id, kind: 'note', title: x.title || 'Без названия', folder: C.notes.folderOf(x), dateISO: x.updatedISO || '' };
+    return {
+      id: x.id, kind: 'note', title: x.title || 'Без названия',
+      folder: C.notes.folderOf(x), body: String(x.body || ''),
+      archived: !!x.archived, dateISO: x.updatedISO || ''
+    };
   }
   function reminderCandidate(x) {
     return { id: x.id, kind: 'reminder', title: x.title || '', dateISO: x.dateISO || '', time: x.time || '' };
@@ -1347,6 +1413,9 @@ window.AvenCommand = (function () {
     }
     if (intentObj.action === 'event.reschedule') {
       return resolveEvent((intentObj.params || {}).query, context);
+    }
+    if (intentObj.action === 'note.body.replace' || intentObj.action === 'note.body.append') {
+      return resolveNote((intentObj.params || {}).query);
     }
     /* Удаление отвечает на resolve() тем же контрактом, что и остальные команды:
        это позволяет проверить цель, ничего не удаляя. */
@@ -1484,6 +1553,24 @@ window.AvenCommand = (function () {
       eventWhenText(next.dateISO, next.time, next.endTime, target.allDay) +
       '? Пока ничего не изменилось.';
   }
+  function noteBodyPreview(value) {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!text) return 'пусто';
+    /* Существенное изменение нельзя подтверждать по обрезанному фрагменту:
+       показываем весь старый/новый текст, а перенос доверяем существующему UI. */
+    return quote(text);
+  }
+  function noteBodySummary(mode, target, content) {
+    const where = target.folder ? ' в папке ' + quote(target.folder) : '';
+    if (mode === 'append') {
+      return 'Дополнить заметку ' + quote(target.title) + where + ': сейчас ' +
+        noteBodyPreview(target.body) + ', добавить в конец ' + noteBodyPreview(content) +
+        '? Пока ничего не изменилось.';
+    }
+    return 'Заменить текст заметки ' + quote(target.title) + where + ': ' +
+      noteBodyPreview(target.body) + ' → ' + noteBodyPreview(content) +
+      '? Пока ничего не изменилось.';
+  }
   function ambiguous(actionName, intentObj, candidates) {
     return result(false, 'ambiguous', actionName, {
       code: 'AMBIGUOUS_TASK', resolution: 'AMBIGUOUS', intent: intentObj, candidates
@@ -1539,6 +1626,85 @@ window.AvenCommand = (function () {
         const q = tidy(p.q || '');
         const items = C.notes.getNotes({ status: 'active', q }).items || [];
         return result(true, 'info', 'note.search', { intent: intentObj, data: { q, items } });
+      }
+      case 'note.body.replace':
+      case 'note.body.append': {
+        const mode = intentObj.action === 'note.body.append' ? 'append' : 'replace';
+        let target = null;
+        let resolution = 'EXACT';
+
+        if (context.targetId) {
+          const got = C.notes.getNote(context.targetId);
+          if (!got.ok) return result(false, 'stale', intentObj.action, {
+            code: 'STALE_TARGET', resolution: 'UNSUPPORTED', intent: intentObj,
+            message: 'Заметка изменилась или была удалена. Повторите команду — ничего не изменено.'
+          });
+          const fresh = got.entity;
+          if (fresh.archived) return result(false, 'unsupported', intentObj.action, {
+            code: 'ARCHIVED_TARGET', resolution: 'UNSUPPORTED', intent: intentObj,
+            message: 'Заметка «' + (fresh.title || 'Без названия') + '» находится в архиве. Верните её из архива в разделе «Заметки» и повторите команду. Ничего не изменено.'
+          });
+          const expectedFolder = context.expected && String(context.expected.folder || '');
+          const freshFolder = C.notes.folderOf(fresh);
+          if ((context.expectedTitle && String(fresh.title || '') !== String(context.expectedTitle)) ||
+              (context.expected && (String(fresh.title || '') !== String(context.expected.title || '') ||
+                String(fresh.body || '') !== String(context.expected.body || '') ||
+                freshFolder !== expectedFolder))) {
+            return result(false, 'stale', intentObj.action, {
+              code: 'STALE_TARGET', resolution: 'UNSUPPORTED', intent: intentObj,
+              message: 'Заметка изменилась после выбора. Повторите команду, чтобы увидеть актуальный текст. Ничего не изменено.'
+            });
+          }
+          target = noteCandidate(fresh);
+          resolution = context.selected ? 'EXACT' : (intentObj.match && intentObj.match.resolution) || 'EXACT';
+        } else {
+          const found = resolveNote(p.query);
+          if (!found.ok) {
+            if (found.status === 'ambiguous') return result(false, 'ambiguous', intentObj.action, {
+              code: 'AMBIGUOUS_NOTE', resolution: 'AMBIGUOUS', intent: intentObj, candidates: found.candidates
+            });
+            const archived = resolveArchived(C.notes.getNotes({ status: 'all' }).items || [], p.query, noteCandidate);
+            if (archived) return result(false, 'unsupported', intentObj.action, {
+              code: 'ARCHIVED_TARGET', resolution: 'UNSUPPORTED', intent: intentObj,
+              message: 'Такая заметка находится в архиве. Верните её из архива в разделе «Заметки» и повторите команду. Ничего не изменено.'
+            });
+            return result(false, 'not_found', intentObj.action, {
+              code: 'NOTE_NOT_FOUND', resolution: 'UNSUPPORTED', intent: intentObj,
+              message: 'Не нашла активную заметку «' + p.query + '». Ничего не изменено.'
+            });
+          }
+          target = found.entity;
+          resolution = found.resolution;
+        }
+
+        /* Replace с тем же телом — честный no-op ещё ДО подтверждения. Это важно:
+           `updateNote` по общему контракту пишет History даже для пустого patch,
+           поэтому command engine сам не вызывает action, когда менять нечего. */
+        if (mode === 'replace' && String(target.body || '') === String(p.content || '')) {
+          return result(true, 'info', intentObj.action, {
+            code: 'NOTE_BODY_SAME', intent: intentObj, entity: target,
+            data: { mode, title: target.title, body: target.body, unchanged: true }
+          });
+        }
+        if (!context.confirmed) return result(false, 'confirmation_required', intentObj.action, {
+          code: 'CONFIRMATION_REQUIRED', resolution, intent: intentObj, target,
+          preview: { mode, title: target.title, folder: target.folder, before: target.body, content: p.content },
+          summary: noteBodySummary(mode, target, p.content)
+        });
+
+        const oldBody = String(target.body || '');
+        const nextBody = mode === 'append'
+          ? oldBody + (oldBody ? '\n' : '') + String(p.content || '')
+          : String(p.content || '');
+        const res = C.notes.updateNote(target.id, { body: nextBody }, Object.assign({
+          title: mode === 'append' ? 'Заметка дополнена' : 'Текст заметки заменён'
+        }, opts));
+        if (!res.ok) return actionFailed(intentObj.action, res, intentObj);
+        return result(true, 'done', intentObj.action, {
+          intent: intentObj, entity: res.entity, historyId: res.entry && res.entry.id,
+          data: { mode, title: res.entity.title, folder: C.notes.folderOf(res.entity),
+            oldBody, body: String(res.entity.body || ''), content: p.content }
+        });
       }
       case 'reminder.create': {
         /* Единственный существующий контракт напоминания: `AvenActions.reminders`
@@ -2124,6 +2290,9 @@ window.AvenCommand = (function () {
     'task.rename': true, 'event.rename': true, 'note.rename': true,
     'reminder.rename': true, 'shopping.purchase.rename': true
   };
+  const NOTE_BODY_ACTIONS = {
+    'note.body.replace': true, 'note.body.append': true
+  };
   /* Род существительного задаётся явно: «Событие удалено», но «Задача удалена».
      Вычислять род из строки нельзя — получилось бы «удолена». Подлежащее второго
      предложения — всегда «Запись» (женский род), поэтому там форма постоянна. */
@@ -2437,6 +2606,13 @@ window.AvenCommand = (function () {
         case 'note.create':
           return 'Заметка ' + quote(res.data.title) + ' создана. Она уже видна в «Заметках»; отменить можно в «Истории».';
         case 'note.search': return noteSearchText(res.data);
+        case 'note.body.replace':
+          if (res.data.unchanged) {
+            return 'В заметке ' + quote(res.data.title) + ' уже сохранён такой текст. Ничего менять не пришлось, новая запись в «Истории» не создана.';
+          }
+          return 'Текст заметки ' + quote(res.data.title) + ' заменён. Изменение уже видно в «Заметках» и в поиске; вернуть прежний текст можно в «Истории» кнопкой «Undo».';
+        case 'note.body.append':
+          return 'Заметка ' + quote(res.data.title) + ' дополнена: прежний текст сохранён, новый добавлен с новой строки. Изменение уже видно в «Заметках» и в поиске; отменить можно в «Истории».';
         case 'reminder.create':
           return 'Напоминание ' + quote(res.data.title) + ' создано на ' + whenPhrase(res.data.dateISO, res.data.time) +
             '. Оно уже видно в разделе «Уведомления»; отменить создание можно в «Истории».';
@@ -2546,6 +2722,19 @@ window.AvenCommand = (function () {
           '. Проверьте название — я ничего не меняла.';
       }
     }
+    if (NOTE_BODY_ACTIONS[res.action]) {
+      if (res.status === 'ambiguous') {
+        return 'Под это название подходит несколько активных заметок: ' +
+          (res.candidates || []).slice(0, 5).map((c, i) =>
+            (i + 1) + '. ' + quote(c.title) + (c.folder ? ' — папка ' + quote(c.folder) : '')
+          ).join('; ') + '. Выберите одну — пока ни одна заметка не изменена.';
+      }
+      if (res.status === 'not_found') {
+        return 'Не нашла активную заметку ' + quote(p.query || res.query || '') +
+          '. Проверьте название в разделе «Заметки» — я ничего не изменила.';
+      }
+      if (res.status === 'unsupported') return res.message || 'Эту заметку сейчас нельзя изменить текстовой командой. Ничего не изменено.';
+    }
     if (res.status === 'ambiguous' && res.code === 'AMBIGUOUS_EVENT') {
       return 'Нашла несколько подходящих событий: ' +
         (res.candidates || []).slice(0, 5).map((c, i) => (i + 1) + '. ' + quote(c.title) + ' — ' +
@@ -2622,6 +2811,8 @@ window.AvenCommand = (function () {
         { action: 'task.reschedule', example: 'Перенеси задачу купить масло на пятницу', about: 'меняет дату задачи' },
         { action: 'event.reschedule', example: 'Перенеси событие стоматолог на 12:00', about: 'меняет дату и время уже существующего события — всегда после вашего подтверждения' },
         { action: 'note.create', example: 'Создай заметку купить фильтр для машины', about: 'создаёт заметку с этим текстом' },
+        { action: 'note.body.replace', example: 'Замени текст заметки План отпуска: Купить билеты', about: 'полностью заменяет текст одной активной заметки — всегда после вашего подтверждения' },
+        { action: 'note.body.append', example: 'Дополни заметку План отпуска: Забронировать отель', about: 'сохраняет прежний текст и дописывает новый с новой строки — всегда после вашего подтверждения' },
         { action: 'reminder.create', example: 'Напомни купить масло на завтра', about: 'создаёт напоминание на указанную дату' },
         { action: 'finance.expense.create', example: 'Запиши расход 850 ₽ на продукты', about: 'записывает расход — всегда после вашего подтверждения' },
         { action: 'auto.fuel.create', example: 'Запиши заправку 45 л на 2500 рублей', about: 'создаёт заправку в разделе «Авто»' },
@@ -2645,7 +2836,7 @@ window.AvenCommand = (function () {
         'удаление, замена и редактирование заправок и обслуживания текстом — только в «Авто»',
         'создание новых категорий и счетов текстом',
         'сокращения сумм вроде «5к» и пересчёт валют',
-        'изменение текста (тела) и архивирование уже существующих заметок текстом (создать, переименовать, найти и удалить уже умею)',
+        'архивирование и возврат из архива текстовой командой (текст одной активной заметки уже умею заменять и дополнять)',
         'изменение даты/времени, откладывание и скрытие уже существующих напоминаний текстом (создать, переименовать, показать и удалить уже умею)',
         'изменение даты/цены, ведение ремонтов и смена статуса покупок текстом (создание, переименование, поиск, гарантии и удаление уже умею)',
         'чеки, фото и файлы к покупкам — ждут сервис хранения',

@@ -402,7 +402,7 @@ function partA() {
     ok('A143 список возможностей честно перечисляет и то, чего движок не умеет',
       /Пока не умею/.test(cap.response) && /удаление сразу нескольких записей/.test(cap.response));
     ok('A144 перечень возможностей доступен как данные для интерфейса и справки',
-      K9.supported().queries.length >= 6 && K9.supported().mutations.length === 21 &&
+      K9.supported().queries.length >= 6 && K9.supported().mutations.length >= 23 &&
       K9.supported().notYet.length >= 4 && K9.examples().length >= 6);
     /* Удаление обязано быть перечислено как умение, а не остаться скрытым:
        иначе «Что ты умеешь?» умалчивало бы о разрушительной операции. */
@@ -516,14 +516,14 @@ function partA() {
       caseInsensitive.result.data.items.some((x) => x.title === 'Идеи для отпуска'),
       caseInsensitive.result.data.items.map((x) => x.title));
 
-    /* A173 — изменение/архив уже существующей заметки текстом остаются честно
-       неподдержанными: ни мутации, ни истории, понятное объяснение. */
+    /* A173 — расплывчатая форма изменения всё ещё безопасно отклоняется с двумя
+       точными поддерживаемыми вариантами; архив остаётся вне текущего блока. */
     const before173 = { notes: K11env.state.notes.length, history: K11env.state.history.length };
     const upd = K11.run('измени заметку купить билет', { source: 'test' });
-    ok('A173a «измени заметку …» безопасно отклоняется',
+    ok('A173a расплывчатое «измени заметку …» просит точную replace/append форму',
       upd.ok === false && upd.intent.error.code === 'UNSUPPORTED_NOTE_UPDATE' &&
-      /не умею/i.test(upd.response) && K11env.state.notes.length === before173.notes &&
-      K11env.state.history.length === before173.history, upd.response);
+      /Замени текст заметки/.test(upd.response) && /Дополни заметку/.test(upd.response) &&
+      K11env.state.notes.length === before173.notes && K11env.state.history.length === before173.history, upd.response);
     const arch = K11.run('заархивируй заметку купить билет', { source: 'test' });
     ok('A173b «заархивируй заметку …» безопасно отклоняется',
       arch.ok === false && arch.intent.error.code === 'UNSUPPORTED_NOTE_ARCHIVE' &&
@@ -541,6 +541,179 @@ function partA() {
       'измени заметку тест', 'архивируй заметку тест', 'создай заметку'].forEach((t) => env12.K.parse(t));
     ok('A175 разбор note-команд не меняет данные и не пишет историю',
       JSON.stringify(env12.state) === beforeParse && env12.state.history.length === 0);
+
+    /* ---- A13b. Изменение текста заметки (Stage 2, итерация 11) ----
+       Replace и append — разные intent, но оба доходят до единственного общего
+       `notes.updateNote`. Двоеточие — обязательная граница title/body. */
+    const editEnv = coreSandbox();
+    const KE = editEnv.K, CE = editEnv.C;
+    const created = CE.notes.createNote({
+      title: 'План отпуска', body: 'Выбрать направление', folder: 'Личное',
+      tags: ['лето', 'важное'], pinned: true
+    }, { source: 'ui' }).entity;
+    editEnv.state.history.length = 0;
+
+    const replaceIntent = KE.parse('Замени текст заметки План отпуска: Купить билеты.');
+    const appendIntent = KE.parse('Дополни заметку План отпуска: Забронировать отель.');
+    ok('A176 replace и append разбираются в разные структурированные intent',
+      replaceIntent.ok && replaceIntent.action === 'note.body.replace' && replaceIntent.kind === 'mutation' &&
+      appendIntent.ok && appendIntent.action === 'note.body.append' && appendIntent.kind === 'mutation');
+    ok('A177 body сохраняет регистр, кавычки и конечную пунктуацию',
+      replaceIntent.params.content === 'Купить билеты.' && appendIntent.params.content === 'Забронировать отель.',
+      JSON.stringify({ replace: replaceIntent.params, append: appendIntent.params }));
+    ok('A178 обе операции всегда помечены как требующие подтверждения',
+      replaceIntent.requiresConfirmation === true && appendIntent.requiresConfirmation === true);
+    ok('A179 двоеточие обязательно, пустые title/body получают точную ошибку',
+      KE.parse('Замени текст заметки План отпуска Купить билеты').error.code === 'NOTE_BODY_FORMAT_REQUIRED' &&
+      KE.parse('Замени текст заметки : Купить билеты').error.code === 'NOTE_BODY_QUERY_REQUIRED' &&
+      KE.parse('Дополни заметку План отпуска:').error.code === 'NOTE_BODY_CONTENT_REQUIRED');
+    ok('A179a массовое изменение отклоняется, но «Про каждого клиента» остаётся обычным названием',
+      KE.parse('Дополни все заметки: текст').error.code === 'UNSUPPORTED_BULK_NOTE_UPDATE' &&
+      KE.parse('Дополни заметку Про каждого клиента: Позвонить завтра').action === 'note.body.append');
+
+    const stateBeforeAsk = JSON.stringify(editEnv.state.notes);
+    const replaceAsk = KE.run('Замени текст заметки План отпуска: Купить билеты.', { source: 'assistant' });
+    ok('A180n точная replace-команда показывает подтверждение без преждевременной мутации',
+      replaceAsk.ok === false && replaceAsk.result.status === 'confirmation_required' &&
+      JSON.stringify(editEnv.state.notes) === stateBeforeAsk && editEnv.state.history.length === 0,
+      replaceAsk.response);
+    ok('A181n сводка replace показывает цель, папку и «старое → новое» человеческим текстом',
+      /План отпуска/.test(replaceAsk.response) && /Личное/.test(replaceAsk.response) &&
+      /Выбрать направление/.test(replaceAsk.response) && /Купить билеты/.test(replaceAsk.response) &&
+      !/(note\.body|intent|payload|JSON)/i.test(replaceAsk.response), replaceAsk.response);
+    const replaceDone = KE.execute(replaceIntent, {
+      source: 'assistant', confirmed: true, targetId: created.id, expectedTitle: created.title,
+      expected: { title: created.title, body: created.body, folder: 'Личное' }
+    });
+    const replaced = CE.notes.getNote(created.id).entity;
+    ok('A182n Confirm заменяет всё тело, а не дописывает его',
+      replaceDone.ok && replaceDone.action === 'note.body.replace' && replaced.body === 'Купить билеты.' &&
+      replaced.body.indexOf('Выбрать направление') < 0);
+    ok('A183n replace сохраняет title/folder/tags/pinned/archive без скрытых изменений',
+      replaced.title === 'План отпуска' && CE.notes.folderOf(replaced) === 'Личное' &&
+      JSON.stringify(replaced.tags) === JSON.stringify(['лето', 'важное']) && replaced.pinned === true && !replaced.archived,
+      JSON.stringify(replaced));
+    const replaceEntry = editEnv.state.history[0];
+    ok('A184n изменение выполнено общим note.update и имеет полный fields Undo',
+      editEnv.state.history.length === 1 && replaceEntry.action === 'note.update' && replaceEntry.source === 'assistant' &&
+      replaceEntry.undoable === true && replaceEntry.undo.type === 'fields' &&
+      replaceEntry.undo.fields.body === 'Выбрать направление' && replaceEntry.undo.fields.title === 'План отпуска');
+    ok('A185n ответ replace говорит о «Заметках», поиске и Undo, без служебных терминов',
+      /Заметк/.test(KE.respond(replaceDone)) && /поиск/.test(KE.respond(replaceDone)) && /Undo/.test(KE.respond(replaceDone)) &&
+      !/(note\.update|note\.body|payload|JSON)/i.test(KE.respond(replaceDone)), KE.respond(replaceDone));
+    /* Применяем fields Undo как это делает общий History controller и проверяем
+       сам payload: командный слой не создаёт отдельную схему отмены. */
+    Object.assign(replaced, JSON.parse(JSON.stringify(replaceEntry.undo.fields)));
+    ok('A186n общий fields Undo восстанавливает весь прежний снимок заметки',
+      replaced.body === 'Выбрать направление' && replaced.title === 'План отпуска' &&
+      CE.notes.folderOf(replaced) === 'Личное' && replaced.pinned === true);
+
+    editEnv.state.history.length = 0;
+    const appendAsk = KE.run('Дополни заметку План отпуска: Забронировать отель', { source: 'assistant' });
+    ok('A187n append тоже всегда ждёт отдельного подтверждения',
+      appendAsk.result.status === 'confirmation_required' && replaced.body === 'Выбрать направление' && editEnv.state.history.length === 0);
+    const appendDone = KE.execute(appendAsk.intent, {
+      source: 'assistant', confirmed: true, targetId: created.id, expectedTitle: replaced.title,
+      expected: { title: replaced.title, body: replaced.body, folder: 'Личное' }
+    });
+    ok('A188n append сохраняет старый body дословно и добавляет новый с новой строки',
+      appendDone.ok && replaced.body === 'Выбрать направление\nЗабронировать отель', replaced.body);
+    ok('A189n append также сохраняет все остальные поля и пишет ровно один note.update',
+      replaced.title === 'План отпуска' && CE.notes.folderOf(replaced) === 'Личное' &&
+      replaced.pinned && replaced.tags.length === 2 && editEnv.state.history.length === 1 &&
+      editEnv.state.history[0].action === 'note.update');
+    ok('A190n ответ append честно говорит, что прежний текст сохранён и новый добавлен с новой строки',
+      /прежний текст сохранён/i.test(KE.respond(appendDone)) && /новой строки/i.test(KE.respond(appendDone)), KE.respond(appendDone));
+
+    const empty = CE.notes.createNote({ title: 'Пустая', body: '', folder: 'Работа' }, { source: 'ui' }).entity;
+    editEnv.state.history.length = 0;
+    const emptyIntent = KE.parse('Дополни заметку Пустая: Первая строка');
+    const emptyAsk = KE.execute(emptyIntent, {});
+    const emptyDone = KE.execute(emptyIntent, {
+      confirmed: true, targetId: empty.id, expectedTitle: empty.title,
+      expected: { title: empty.title, body: '', folder: 'Работа' }
+    });
+    ok('A191n append в пустую заметку не добавляет ведущий перенос строки',
+      emptyAsk.status === 'confirmation_required' && emptyDone.ok && empty.body === 'Первая строка');
+
+    editEnv.state.history.length = 0;
+    const same = KE.run('Замени текст заметки Пустая: Первая строка', { source: 'assistant' });
+    ok('A192n replace с идентичным body — no-op без Confirm, мутации и History',
+      same.ok && same.result.status === 'info' && same.result.data.unchanged === true &&
+      empty.body === 'Первая строка' && editEnv.state.history.length === 0 && /не создана/i.test(same.response), same.response);
+
+    const a = CE.notes.createNote({ title: 'Проект Альфа', body: 'Один', folder: 'Работа' }, { source: 'ui' }).entity;
+    const b = CE.notes.createNote({ title: 'Проект Альфа', body: 'Два', folder: 'Личное' }, { source: 'ui' }).entity;
+    editEnv.state.history.length = 0;
+    const ambiguousEdit = KE.run('Дополни заметку Проект Альфа: Срок пятница', { source: 'assistant' });
+    ok('A193n одинаковые названия дают AMBIGUOUS с папками, а не меняют обе заметки',
+      ambiguousEdit.result.status === 'ambiguous' && ambiguousEdit.result.candidates.length === 2 &&
+      ambiguousEdit.result.candidates.every((x) => x.kind === 'note' && x.folder) &&
+      a.body === 'Один' && b.body === 'Два' && editEnv.state.history.length === 0, ambiguousEdit.response);
+    const inferred = CE.notes.createNote({ title: 'План ремонта квартиры', body: 'Выбрать краску' }, { source: 'ui' }).entity;
+    editEnv.state.history.length = 0;
+    const inferredEdit = KE.run('Дополни заметку ремонта: Купить кисти', { source: 'assistant' });
+    ok('A194n единственная цель по целому слову = INFERRED и всё равно требует подтверждения',
+      inferredEdit.result.status === 'confirmation_required' && inferredEdit.result.resolution === 'INFERRED' &&
+      inferredEdit.result.target.id === inferred.id && inferred.body === 'Выбрать краску');
+    const missingEdit = KE.run('Замени текст заметки Несуществующая: Текст', { source: 'assistant' });
+    ok('A195n отсутствующая заметка не создаётся вместо редактирования',
+      missingEdit.result.status === 'not_found' && /Не нашла активную заметку/.test(missingEdit.response) &&
+      editEnv.state.history.length === 0);
+
+    const archived = CE.notes.createNote({ title: 'Архивный план', body: 'Старое', archived: true }, { source: 'ui' }).entity;
+    editEnv.state.history.length = 0;
+    const archivedEdit = KE.run('Замени текст заметки Архивный план: Новое', { source: 'assistant' });
+    ok('A196n архивная цель честно отклоняется без мутации/History',
+      archivedEdit.result.status === 'unsupported' && archivedEdit.result.code === 'ARCHIVED_TARGET' &&
+      archived.body === 'Старое' && editEnv.state.history.length === 0 && /архив/.test(archivedEdit.response));
+
+    /* Stale body: после показа сводки обычный updateNote изменяет ту же заметку.
+       Старое подтверждение не должно затереть более свежий текст. */
+    const stale = CE.notes.createNote({ title: 'Черновик', body: 'Версия 1', folder: 'Работа' }, { source: 'ui' }).entity;
+    editEnv.state.history.length = 0;
+    const staleAsk = KE.run('Замени текст заметки Черновик: Версия команды', { source: 'assistant' });
+    CE.notes.updateNote(stale.id, { body: 'Версия 2' }, { source: 'ui' });
+    const staleHistory = editEnv.state.history.length;
+    const staleResult = KE.execute(staleAsk.intent, {
+      source: 'assistant', confirmed: true, targetId: stale.id, expectedTitle: stale.title,
+      expected: { title: stale.title, body: 'Версия 1', folder: 'Работа' }
+    });
+    ok('A197n изменившийся body перед Confirm даёт STALE_TARGET и не затирается',
+      staleResult.status === 'stale' && staleResult.code === 'STALE_TARGET' && stale.body === 'Версия 2' &&
+      editEnv.state.history.length === staleHistory, KE.respond(staleResult));
+    const staleTitleAsk = KE.run('Дополни заметку Черновик: Комментарий', { source: 'assistant' });
+    CE.notes.updateNote(stale.id, { title: 'Черновик новый' }, { source: 'ui' });
+    const staleTitleHistory = editEnv.state.history.length;
+    const staleTitleResult = KE.execute(staleTitleAsk.intent, {
+      source: 'assistant', confirmed: true, targetId: stale.id, expectedTitle: 'Черновик',
+      expected: { title: 'Черновик', body: 'Версия 2', folder: 'Работа' }
+    });
+    ok('A198n изменившийся title перед Confirm тоже безопасно отклоняется',
+      staleTitleResult.status === 'stale' && stale.body === 'Версия 2' &&
+      editEnv.state.history.length === staleTitleHistory);
+
+    const gone = CE.notes.createNote({ title: 'Удаляемый черновик', body: 'Текст' }, { source: 'ui' }).entity;
+    editEnv.state.history.length = 0;
+    const goneAsk = KE.run('Замени текст заметки Удаляемый черновик: Новый', { source: 'assistant' });
+    CE.notes.deleteNote(gone.id, { source: 'ui' });
+    const goneHistory = editEnv.state.history.length;
+    const goneResult = KE.execute(goneAsk.intent, {
+      confirmed: true, targetId: gone.id, expectedTitle: gone.title,
+      expected: { title: gone.title, body: 'Текст', folder: 'Без папки' }
+    });
+    ok('A199n удалённая до Confirm цель даёт stale и не создаёт вторую запись History',
+      goneResult.status === 'stale' && editEnv.state.history.length === goneHistory);
+
+    const foundUpdated = KE.run('Найди заметку про Забронировать отель', { source: 'assistant' });
+    ok('A200n дополненный body сразу доступен обычному поиску заметок',
+      foundUpdated.ok && foundUpdated.result.data.items.some((x) => x.id === created.id));
+    ok('A201n iteration 11 не ломает delete/rename grammar заметки',
+      KE.parse('Удали заметку Пустая').action === 'note.delete' &&
+      KE.parse('Переименуй заметку Пустая в Новая').action === 'note.rename');
+    ok('A202n командный слой вызывает существующий notes.updateNote и не содержит своего хранилища/History',
+      /C\.notes\.updateNote\(target\.id, \{ body: nextBody \}/.test(src) &&
+      !/state\.notes|logAction\(/.test(srcNoComments));
   }
 
   /* ---- A14. Напоминания текстом (Stage 2, итерация 4) ----
@@ -2231,11 +2404,13 @@ async function partB() {
     ok('B42 поиск заметок находит и не пишет «Историю»',
       /Идеи для отпуска/.test(searchReply) && p.H().length === histBeforeSearch, searchReply);
 
-    /* Изменение/архив существующей заметки текстом — честно неподдержано. */
-    const notesBeforeGuard = p.st().notes.length;
+    /* Расплывчатая форма не мутирует: интерфейс подсказывает две точные формы. */
+    const notesBeforeGuard = p.st().notes.length, historyBeforeGuard = p.H().length;
     const updReply = await p.say('измени заметку купить билет');
-    ok('B43 «измени заметку …» не редактирует данные',
-      /не умею/i.test(updReply) && p.st().notes.length === notesBeforeGuard);
+    ok('B43 расплывчатое «измени заметку …» не редактирует данные и подсказывает replace/append',
+      /Замени текст заметки/.test(updReply) && /Дополни заметку/.test(updReply) &&
+      p.st().notes.length === notesBeforeGuard && p.H().length === historyBeforeGuard &&
+      !p.q('[data-action="command-confirm"]'));
     p.dom.window.close();
   }
 
@@ -2918,12 +3093,40 @@ async function partB() {
       /Про встречу/.test(bodies) && /не превращается|не превращает/i.test(bodies + ' ' +
         (p.w.AvenHelp.articles.find((a) => a.id === 'cmd-notes') || {}).body));
     ok('B67c справка объясняет поиск заметок текстом', /Покажи заметки/.test(bodies) && /Найди заметку/.test(bodies));
-    ok('B67d справка честно говорит, что изменение/архив/удаление заметки текстом не поддерживаются',
-      /(?:Изменить текст|изменить текст уже существующей заметки)[^.]*архив[^.]*пока нельзя/i.test(bodies) ||
-      (/изменить текст уже существующей заметки/i.test(bodies) && /архив/i.test(bodies) && /пока нет/i.test(bodies)),
+    ok('B67d справка больше не отрицает body edit и честно оставляет архив ограничением',
+      /заменить или дополнить/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-note-edit') || {}).summary || '') &&
+      /Отправить заметку в архив[^.]*пока нельзя/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-notes') || {}).body || '') &&
+      !/изменить текст внутри существующей заметки[^.]*пока нет/i.test(bodies),
       bodies.match(/.{0,60}архив.{0,80}/gi));
     ok('B67e раздел «Заметки» тоже упоминает создание текстом',
       /Быструю заметку можно создать/.test((p.w.AvenHelp.articles.find((a) => a.id === 'notes-basics') || {}).body || ''));
+
+    /* Stage 2, итерация 11: отдельная пользовательская статья и важный Tutorial
+       сценарий про replace/append, безопасность и ограничения. */
+    const noteEditArticle = (p.w.AvenHelp.articles.find((a) => a.id === 'cmd-note-edit') || {}).body || '';
+    ok('B68a в справке есть отдельная содержательная статья об изменении текста заметки',
+      noteEditArticle.length > 700 && /Что это\./.test(noteEditArticle) && /С чего начать\./.test(noteEditArticle));
+    ok('B68b статья показывает обе точные формы и объясняет двоеточие',
+      /Замени текст заметки План отпуска: Купить билеты/.test(noteEditArticle) &&
+      /Дополни заметку План отпуска: Забронировать отель/.test(noteEditArticle) && /Двоеточие обязательно/.test(noteEditArticle));
+    ok('B68c статья различает replace и append и обещает сохранить остальные поля',
+      /полностью уберёт прежний текст/.test(noteEditArticle) && /сохранит весь прежний текст/.test(noteEditArticle) &&
+      /название, папка, теги и закрепление сохраняются/.test(noteEditArticle));
+    ok('B68d статья объясняет Confirm, Cancel/Escape и Undo без скрытой мутации',
+      /всегда требуют подтверждения/.test(noteEditArticle) && /До «Подтвердить»/.test(noteEditArticle) &&
+      /Escape/.test(noteEditArticle) && /Undo/.test(noteEditArticle));
+    ok('B68e статья объясняет ambiguity, stale, archive, no-op и массовое ограничение',
+      /несколько активных заметок/.test(noteEditArticle) && /успели переименовать, изменить, архивировать или удалить/.test(noteEditArticle) &&
+      /не создаёт пустую строку/.test(noteEditArticle) && /дополни все заметки/.test(noteEditArticle));
+    ok('B68f статья находится обычным поиском справки и написана без developer jargon',
+      p.w.AvenHelp.search('дополнить заметку').some((a) => a.id === 'cmd-note-edit') &&
+      !/(DOM|payload|provider|action layer|route|intent|JSON|API)/i.test(noteEditArticle));
+    const noteEditSteps = p.w.AvenTutorial.definitions.commands.steps.filter((x) => /заметк/i.test(x.title) && /Замен|проверьте изменение/i.test(x.title));
+    ok('B68g Tutorial содержит компактный replace/append + safety сценарий',
+      noteEditSteps.length === 2 && noteEditSteps.some((x) => /Замени текст заметки/.test(x.text) && /Дополни заметку/.test(x.text)) &&
+      noteEditSteps.some((x) => /Подтвердить/.test(x.text) && /Escape/.test(x.text) && /Истори/.test(x.text)));
+    ok('B68h новые Tutorial шаги используют только существующие command hooks',
+      noteEditSteps.every((x) => ['command-chat', 'command-limits'].indexOf(x.target) >= 0));
     /* Stage 2, итерация 4: напоминания текстом — справка объясняет создание, обязательную
        дату, поиск/показ, где посмотреть результат и честные ограничения (без push/email). */
     ok('B67f справка объясняет создание напоминания текстом с примером',
@@ -3366,6 +3569,160 @@ async function partB() {
       m.dom.window.close();
     }
     p.dom.window.close();
+  }
+
+  /* ---- B16. Текст заметки через настоящий Assistant (итерация 11) ---- */
+  {
+    const p = await load('#/assistant');
+    const C = p.C();
+    const note = C.notes.createNote({
+      title: 'План Итерации 11', body: 'Старый текст', folder: 'Личное',
+      tags: ['проверка', 'команда'], pinned: true
+    }, { source: 'test' }).entity;
+    const current = () => C.notes.getNote(note.id).entity;
+    const histBefore = p.H().length;
+
+    const ask = await p.say('Замени текст заметки План Итерации 11: Новый текст.');
+    const confirmBox = p.q('.command-confirm');
+    ok('B260 replace показывает сводку и настоящие Confirm/Cancel без преждевременной мутации',
+      /Заменить текст заметки/.test(ask) && /Старый текст/.test(ask) && /Новый текст/.test(ask) &&
+      !!p.q('[data-action="command-confirm"]') && !!p.q('[data-action="command-cancel"]') &&
+      current().body === 'Старый текст' && p.H().length === histBefore, ask);
+    ok('B261 confirmation объявлен через aria и не полагается только на цвет',
+      confirmBox && confirmBox.getAttribute('role') === 'group' &&
+      confirmBox.getAttribute('aria-label') === 'Подтверждение действия' &&
+      confirmBox.querySelectorAll('button').length === 2);
+    p.click(p.q('[data-action="command-cancel"]'));
+    await sleep(300);
+    ok('B262 Cancel оставляет body/History без изменений и возвращает фокус в input',
+      current().body === 'Старый текст' && p.H().length === histBefore &&
+      p.d.activeElement && p.d.activeElement.id === 'chat-input');
+
+    await p.say('Замени текст заметки План Итерации 11: Новый текст.');
+    p.d.dispatchEvent(new p.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await sleep(300);
+    ok('B263 Escape отменяет replace без мутации и очищает pending',
+      current().body === 'Старый текст' && p.H().length === histBefore && !p.w.Aven._commandSession.pending());
+
+    await p.say('Замени текст заметки План Итерации 11: Новый текст.');
+    const replaceButton = p.q('[data-action="command-confirm"]');
+    p.click(replaceButton); p.click(replaceButton);
+    await sleep(450);
+    ok('B264 double Confirm выполняет replace ровно один раз через note.update',
+      current().body === 'Новый текст.' && p.H().length === histBefore + 1 &&
+      p.H()[0].action === 'note.update' && !p.w.Aven._commandSession.pending());
+    ok('B265 replace сохранил title/folder/tags/pinned/archive',
+      current().title === 'План Итерации 11' && C.notes.folderOf(current()) === 'Личное' &&
+      JSON.stringify(current().tags) === JSON.stringify(['проверка', 'команда']) && current().pinned && !current().archived);
+    ok('B266 ответ сообщает про «Заметки», поиск и Undo без служебных слов',
+      /Заметк/.test(p.w.Aven._lastReply || '') && /поиск/.test(p.w.Aven._lastReply || '') &&
+      /Undo/.test(p.w.Aven._lastReply || '') && !/(note\.body|note\.update|intent|JSON)/i.test(p.w.Aven._lastReply || ''));
+
+    await p.go('#/notes');
+    ok('B267 обновлённый текст виден в настоящем разделе «Заметки» и общем поиске',
+      /План Итерации 11/.test(p.text()) && /Новый текст/.test(p.text()) &&
+      C.notes.getNotes({ q: 'Новый текст' }).items.some((x) => x.id === note.id) && !p.broken());
+    await p.go('#/home');
+    ok('B268 закреплённая заметка остаётся согласованной с «Главной» после edit',
+      /План Итерации 11/.test(p.text()) && C.notes.getNote(note.id).entity.pinned === true && !p.broken());
+    await p.go('#/history');
+    const editEntry = p.H().find((x) => x.action === 'note.update' && x.undo && x.undo.id === note.id);
+    const undo = editEntry && p.q('[data-action="hist-undo"][data-id="' + editEntry.id + '"]');
+    ok('B269 note.update виден в общей «Истории» с Undo и изменением поля «Текст»',
+      !!editEntry && !!undo && editEntry.undoable && editEntry.changes.some((x) => x.field === 'Текст'));
+    p.click(undo);
+    await sleep(400);
+    ok('B270 общий Undo возвращает прежний body и сохранённые поля',
+      current().body === 'Старый текст' && current().title === 'План Итерации 11' &&
+      C.notes.folderOf(current()) === 'Личное' && current().pinned);
+
+    await p.go('#/assistant');
+    const appendHist = p.H().length;
+    const appendAsk = await p.say('Дополни заметку План Итерации 11: Добавленная строка');
+    ok('B271 append показывает прежний и добавляемый текст и ждёт Confirm',
+      /Дополнить заметку/.test(appendAsk) && /Старый текст/.test(appendAsk) && /Добавленная строка/.test(appendAsk) &&
+      current().body === 'Старый текст' && p.H().length === appendHist);
+    p.click(p.q('[data-action="command-confirm"]'));
+    await sleep(450);
+    ok('B272 append сохраняет прежний body и добавляет ровно одну новую строку',
+      current().body === 'Старый текст\nДобавленная строка' && p.H().length === appendHist + 1 &&
+      p.H()[0].action === 'note.update');
+    ok('B273 ответ append явно говорит про сохранённый прежний текст и новую строку',
+      /прежний текст сохранён/i.test(p.w.Aven._lastReply || '') && /новой строки/i.test(p.w.Aven._lastReply || ''));
+
+    const noOpHist = p.H().length;
+    const noOp = await p.say('Замени текст заметки План Итерации 11: Старый текст\nДобавленная строка');
+    /* Input — однострочный, поэтому проверяем no-op через ту форму body, которую
+       Assistant реально принимает после нормализации переноса в пробел, отдельно
+       ниже ядро уже проверяет полный no-op contract. */
+    if (p.q('[data-action="command-confirm"]')) p.click(p.q('[data-action="command-cancel"]'));
+    ok('B274 Assistant остаётся работоспособным после append и не ломает shell',
+      typeof noOp === 'string' && !!p.q('#chat-input') && !p.broken() && p.H().length === noOpHist);
+
+    /* Stale body через настоящий control: внешний update происходит после сводки. */
+    await p.say('Замени текст заметки План Итерации 11: Командная версия');
+    C.notes.updateNote(note.id, { body: 'Свежая версия из редактора' }, { source: 'ui' });
+    const staleHist = p.H().length;
+    p.click(p.q('[data-action="command-confirm"]'));
+    await sleep(400);
+    ok('B275 stale Confirm не затирает свежий body и не пишет вторую History entry',
+      current().body === 'Свежая версия из редактора' && p.H().length === staleHist &&
+      /изменилась|актуальн/i.test(p.w.Aven._lastReply || ''));
+    p.dom.window.close();
+  }
+
+  /* ---- B17. Ambiguity/archive/format и responsive для note body edit ---- */
+  {
+    const p = await load('#/assistant');
+    const C = p.C();
+    const a = C.notes.createNote({ title: 'Проект Икс', body: 'Рабочий текст', folder: 'Работа' }, { source: 'test' }).entity;
+    const b = C.notes.createNote({ title: 'Проект Икс', body: 'Личный текст', folder: 'Личное' }, { source: 'test' }).entity;
+    const histBefore = p.H().length;
+    const amb = await p.say('Дополни заметку Проект Икс: Новый пункт');
+    const choices = p.qa('[data-action="command-choice"]');
+    ok('B276 ambiguity рисует варианты-кнопки с папками и доступной группой',
+      /Уточните выбор/.test(amb) && choices.length === 2 &&
+      /Работа|Личное/.test((p.q('.command-choices') || {}).textContent || '') &&
+      (p.q('.command-choices') || {}).getAttribute('role') === 'group');
+    p.click(choices[0]); await sleep(300);
+    ok('B277 выбор заметки всё ещё требует Confirm и ничего не меняет',
+      !!p.q('[data-action="command-confirm"]') && a.body === 'Рабочий текст' && b.body === 'Личный текст' &&
+      p.H().length === histBefore);
+    p.click(p.q('[data-action="command-cancel"]')); await sleep(250);
+    ok('B278 Cancel после выбора оставляет обе заметки без изменений',
+      a.body === 'Рабочий текст' && b.body === 'Личный текст' && p.H().length === histBefore);
+
+    const archived = C.notes.createNote({ title: 'Архивный Икс', body: 'Не трогать', archived: true }, { source: 'test' }).entity;
+    const archivedHist = p.H().length;
+    const ar = await p.say('Замени текст заметки Архивный Икс: Новый');
+    ok('B279 архивная заметка отклоняется без Confirm/mutation/History',
+      /архив/.test(ar) && !p.q('[data-action="command-confirm"]') && archived.body === 'Не трогать' && p.H().length === archivedHist);
+    const bulk = await p.say('Дополни все заметки: общий текст');
+    ok('B280 bulk body edit отклоняется и не предлагает Confirm',
+      /несколько|одну заметку|сразу/i.test(bulk) && !p.q('[data-action="command-confirm"]') &&
+      a.body === 'Рабочий текст' && b.body === 'Личный текст');
+    const malformed = await p.say('Замени текст заметки Проект Икс без двоеточия');
+    ok('B281 форма без двоеточия получает точную подсказку без мутации',
+      /двоеточием/.test(malformed) && !p.q('[data-action="command-confirm"]') &&
+      a.body === 'Рабочий текст' && b.body === 'Личный текст');
+    p.dom.window.close();
+
+    for (const width of [320, 360, 390, 412, 430, 768, 1440]) {
+      const m = await load('#/assistant', width);
+      const C = m.C();
+      C.notes.createNote({ title: 'Мобильный план', body: 'Старый длинный текст для проверки переноса строки и доступности', folder: 'Личное' }, { source: 'test' });
+      await m.go('#/assistant');
+      const reply = await m.say('Дополни заметку Мобильный план: Новый длинный пункт для проверки кнопок подтверждения');
+      const box = m.q('.command-confirm');
+      ok('B282[' + width + '] сводка note edit и controls доступны без shell overflow',
+        /Дополнить заметку/.test(reply) && !!box && !!m.q('[data-action="command-confirm"]') &&
+        !!m.q('[data-action="command-cancel"]') && !m.broken() && m.d.documentElement.scrollWidth <= width + 1);
+      ok('B283[' + width + '] Confirm/Cancel — keyboard buttons с доступной подписью',
+        box && box.getAttribute('aria-label') === 'Подтверждение действия' &&
+        Array.from(box.querySelectorAll('button')).every((x) => x.tagName === 'BUTTON' && !x.disabled));
+      m.click(m.q('[data-action="command-cancel"]'));
+      m.dom.window.close();
+    }
   }
 
   /* ---- B7. Обучение реально работает на экране помощника ---- */

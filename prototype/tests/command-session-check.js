@@ -679,6 +679,110 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
     }
   }
 
+  /* ---- S171–S185: replace/append текста заметки (Stage 2, итерация 11) ----
+     Session хранит только transient snapshot body, не мутирует сам и защищает
+     Cancel/Escape/new command/double Confirm тем же общим flow. */
+  {
+    {
+      const e = sandbox();
+      const n = e.C.notes.createNote({ title: 'План отпуска', body: 'Выбрать направление', folder: 'Личное', tags: ['лето'], pinned: true }, { source: 'fixture' }).entity;
+      clearHistory(e);
+      const ask = e.session.submit('Замени текст заметки План отпуска: Купить билеты');
+      ok('S171 точный replace всегда создаёт pending confirmation без мутации',
+        ask.status === 'confirmation_required' && n.body === 'Выбрать направление' && e.state.history.length === 0);
+      const pending = e.session.pending();
+      ok('S172 pending заметки сериализуем и хранит ожидаемые title/body/folder для stale guard',
+        JSON.parse(JSON.stringify(pending)).expected.body === 'Выбрать направление' &&
+        pending.expected.title === 'План отпуска' && pending.expected.folder === 'Личное');
+      const cancelled = e.session.submit('отмена');
+      ok('S173 текстовая Отмена очищает replace без mutation/History',
+        cancelled.status === 'cancelled' && n.body === 'Выбрать направление' &&
+        e.state.history.length === 0 && e.session.pending() === null);
+    }
+    {
+      const e = sandbox();
+      const n = e.C.notes.createNote({ title: 'План отпуска', body: 'Выбрать направление', folder: 'Личное', tags: ['лето'], pinned: true }, { source: 'fixture' }).entity;
+      clearHistory(e);
+      e.session.submit('Замени текст заметки План отпуска: Купить билеты');
+      const done = e.session.confirm();
+      ok('S174 Confirm выполняет replace ровно один раз через note.update',
+        done.ok && done.status === 'done' && n.body === 'Купить билеты' &&
+        e.state.history.length === 1 && e.state.history[0].action === 'note.update');
+      ok('S175 replace через Session сохранил title/folder/tags/pinned',
+        n.title === 'План отпуска' && e.C.notes.folderOf(n) === 'Личное' && n.tags[0] === 'лето' && n.pinned);
+      const again = e.session.confirm();
+      ok('S176 повторный Confirm не дописывает History и не выполняет действие второй раз',
+        again.status === 'no_pending' && n.body === 'Купить билеты' && e.state.history.length === 1);
+    }
+    {
+      const e = sandbox();
+      const n = e.C.notes.createNote({ title: 'Список', body: 'Молоко' }, { source: 'fixture' }).entity;
+      clearHistory(e);
+      const ask = e.session.submit('Дополни заметку Список: Хлеб');
+      const esc = e.session.cancel(); /* UI вызывает тот же API по Escape. */
+      ok('S177 Escape/cancel API отменяет append без новой строки и History',
+        ask.status === 'confirmation_required' && esc.status === 'cancelled' && n.body === 'Молоко' && e.state.history.length === 0);
+      e.session.submit('Дополни заметку Список: Хлеб');
+      const done = e.session.submit('подтвердить');
+      ok('S178 текстовый Confirm append сохраняет старое и добавляет новую строку',
+        done.ok && n.body === 'Молоко\nХлеб' && e.state.history.length === 1);
+    }
+    {
+      const e = sandbox();
+      const a = e.C.notes.createNote({ title: 'Проект Альфа', body: 'Рабочий', folder: 'Работа' }, { source: 'fixture' }).entity;
+      const b = e.C.notes.createNote({ title: 'Проект Альфа', body: 'Личный', folder: 'Личное' }, { source: 'fixture' }).entity;
+      clearHistory(e);
+      const amb = e.session.submit('Дополни заметку Проект Альфа: Срок пятница');
+      ok('S179 одинаковые названия требуют выбора и показывают папки',
+        amb.status === 'clarification_required' && amb.candidates.length === 2 &&
+        amb.candidates.every((x) => x.folder) && a.body === 'Рабочий' && b.body === 'Личный');
+      const selectedId = amb.candidates[0].id;
+      const picked = e.session.submit('первая');
+      ok('S180 выбор одной заметки ещё не меняет body — после него отдельный Confirm',
+        picked.status === 'confirmation_required' && a.body === 'Рабочий' && b.body === 'Личный' && e.state.history.length === 0);
+      const done = e.session.confirm();
+      const selected = e.C.notes.getNote(selectedId).entity;
+      const untouched = selectedId === a.id ? b : a;
+      ok('S181 Confirm меняет ровно выбранную заметку и пишет одну History entry',
+        done.ok && /\nСрок пятница$/.test(selected.body) &&
+        untouched.body === (untouched === a ? 'Рабочий' : 'Личный') && e.state.history.length === 1);
+    }
+    {
+      const e = sandbox();
+      const n = e.C.notes.createNote({ title: 'Черновик', body: 'Версия 1', folder: 'Работа' }, { source: 'fixture' }).entity;
+      clearHistory(e);
+      e.session.submit('Замени текст заметки Черновик: Версия команды');
+      e.C.notes.updateNote(n.id, { body: 'Версия 2' }, { source: 'ui' });
+      const before = e.state.history.length;
+      const stale = e.session.confirm();
+      ok('S182 внешний update body между вопросом и Confirm даёт stale и не затирается',
+        stale.status === 'stale' && n.body === 'Версия 2' && e.state.history.length === before && e.session.pending() === null);
+    }
+    {
+      const e = sandbox();
+      const n = e.C.notes.createNote({ title: 'Черновик', body: 'Текст' }, { source: 'fixture' }).entity;
+      clearHistory(e);
+      e.session.submit('Замени текст заметки Черновик: Новый');
+      const other = e.session.submit('Что у меня сегодня?');
+      ok('S183 новая команда сбрасывает pending edit и не применяет старый текст',
+        other.ok && other.result.action === 'day.plan' && n.body === 'Текст' &&
+        e.state.history.length === 0 && e.session.pending() === null);
+    }
+    {
+      const e = sandbox();
+      const n = e.C.notes.createNote({ title: 'Одинаковая', body: 'Без изменений' }, { source: 'fixture' }).entity;
+      clearHistory(e);
+      const same = e.session.submit('Замени текст заметки Одинаковая: Без изменений');
+      ok('S184 идентичный replace завершается no-op без pending и History',
+        same.ok && same.status === 'info' && n.body === 'Без изменений' &&
+        e.state.history.length === 0 && e.session.pending() === null);
+      const bulk = e.session.submit('Дополни все заметки: текст');
+      ok('S185 bulk edit отклоняется без pending/mutation/History',
+        bulk.status === 'unsupported' && n.body === 'Без изменений' &&
+        e.state.history.length === 0 && e.session.pending() === null);
+    }
+  }
+
   ['первую', 'вторая', 'вторую', 'отмена', 'нет', 'подтвердить'].forEach((word, i) => {
     const e = sandbox(); const a = task(e, 'Тест один'), b = task(e, 'Тест два'); clearHistory(e);
     e.session.submit('Отметь тест выполненным');
