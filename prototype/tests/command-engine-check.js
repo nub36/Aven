@@ -88,6 +88,7 @@ function coreSandbox() {
 
 function partA() {
   const src = fs.readFileSync(path.join(ROOT, 'js/command.js'), 'utf8');
+  const srcNoComments = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
   /* ---- A0. Ядро действительно без DOM ---- */
   const env = coreSandbox();
@@ -202,8 +203,8 @@ function partA() {
       JSON.stringify(env3.state) === before && env3.state.history.length === 0);
 
     const del = env3.K.run('удали все задачи', { source: 'test' });
-    ok('A74 удаление текстом честно отклоняется и ничего не меняет',
-      del.ok === false && del.intent.error.code === 'UNSUPPORTED_DELETE' &&
+    ok('A74 массовое удаление текстом честно отклоняется и ничего не меняет',
+      del.ok === false && del.intent.error.code === 'UNSUPPORTED_BULK_DELETE' &&
       /удал/i.test(del.response) && env3.state.history.length === 0);
     const fin = env3.K.run('запиши 850 рублей продукты', { source: 'test' });
     ok('A75 запись расхода текстом отклоняется с подсказкой про раздел «Финансы»',
@@ -399,10 +400,18 @@ function partA() {
       over.result.data.items.length === C9.tasks.getOverdueTasks(FIXED).items.length);
     const cap = K9.run('что ты умеешь', { source: 'test' });
     ok('A143 список возможностей честно перечисляет и то, чего движок не умеет',
-      /Пока не умею/.test(cap.response) && /удаление записей текстом/.test(cap.response));
+      /Пока не умею/.test(cap.response) && /удаление сразу нескольких записей/.test(cap.response));
     ok('A144 перечень возможностей доступен как данные для интерфейса и справки',
-      K9.supported().queries.length >= 6 && K9.supported().mutations.length === 11 &&
+      K9.supported().queries.length >= 6 && K9.supported().mutations.length === 16 &&
       K9.supported().notYet.length >= 4 && K9.examples().length >= 6);
+    /* Удаление обязано быть перечислено как умение, а не остаться скрытым:
+       иначе «Что ты умеешь?» умалчивало бы о разрушительной операции. */
+    ok('A144a удаление перечислено в возможностях по всем пяти доменам',
+      ['task.delete', 'event.delete', 'note.delete', 'reminder.delete', 'shopping.purchase.delete']
+        .every((x) => K9.supported().mutations.some((m) => m.action === x)));
+    ok('A144b каждое удаление в перечне честно предупреждает о подтверждении',
+      K9.supported().mutations.filter((m) => /\.delete$/.test(m.action))
+        .every((m) => /подтвержден/i.test(m.about)));
   }
 
   /* ---- A13. Заметки текстом (Stage 2, итерация 3) ----
@@ -514,8 +523,9 @@ function partA() {
       arch.ok === false && arch.intent.error.code === 'UNSUPPORTED_NOTE_ARCHIVE' &&
       K11env.state.notes.length === before173.notes && K11env.state.history.length === before173.history, arch.response);
     const delNote = K11.run('удали заметку купить билет', { source: 'test' });
-    ok('A173c «удали заметку …» остаётся неподдержанным удалением, как и раньше',
-      delNote.ok === false && delNote.intent.error.code === 'UNSUPPORTED_DELETE' &&
+    ok('A173c «удали заметку …» распознаётся как удаление заметки и требует подтверждения',
+      delNote.ok === false && delNote.result.status === 'confirmation_required' &&
+      delNote.intent.action === 'note.delete' &&
       K11env.state.notes.length === before173.notes && K11env.state.history.length === before173.history, delNote.response);
 
     /* A174 — parse() для заметок остаётся чистым: разбор без исполнения не мутирует. */
@@ -707,8 +717,9 @@ function partA() {
       dismiss.ok === false && dismiss.intent.error.code === 'UNSUPPORTED_REMINDER' &&
       env14.state.reminders.length === before200.reminders && env14.state.history.length === before200.history);
     const delRem = K14.run('удали напоминание про интернет', { source: 'test' });
-    ok('A200d «удали напоминание …» остаётся неподдержанным удалением, как и другие домены',
-      delRem.ok === false && delRem.intent.error.code === 'UNSUPPORTED_DELETE' &&
+    ok('A200d «удали напоминание …» распознаётся как удаление и ждёт подтверждения (без мутации)',
+      delRem.ok === false && delRem.intent.action === 'reminder.delete' &&
+      ['confirmation_required', 'not_found'].indexOf(delRem.result.status) >= 0 &&
       env14.state.reminders.length === before200.reminders && env14.state.history.length === before200.history);
 
     /* A200e — review-фикс: широкая (неанкорированная) проверка «слово напоминание/напомни
@@ -987,9 +998,9 @@ function partA() {
     const envR = finSandbox();
     const KR = envR.K;
     const parseCode = (t) => { const x = KR.parse(t, { source: 'test' }); return x.ok ? x.action : x.error.code; };
-    ok('A273 «удали расход …» не отвечает сводкой расходов, а честно отказывает',
-      parseCode('удали расход 500') === 'UNSUPPORTED_DELETE' &&
-      parseCode('удали последний расход') === 'UNSUPPORTED_DELETE');
+    ok('A273 «удали расход …» не отвечает сводкой расходов, а честно отказывает по своему домену',
+      parseCode('удали расход 500') === 'UNSUPPORTED_FINANCE_DELETE' &&
+      parseCode('удали последний расход') === 'UNSUPPORTED_FINANCE_DELETE');
     ok('A274 «измени расход …» — честный отказ об изменении операции, а не сводка',
       parseCode('измени расход 500') === 'UNSUPPORTED_FINANCE_UPDATE' &&
       parseCode('исправь сумму расхода') === 'UNSUPPORTED_FINANCE_UPDATE');
@@ -1220,7 +1231,10 @@ function partA() {
       K.parse('Измени покупку телефон').error.code === 'UNSUPPORTED_PURCHASE_UPDATE' &&
       K.parse('Поставь гарантию до 12.05').error.code === 'UNSUPPORTED_PURCHASE_UPDATE');
     ok('A440 ремонт покупки текстом — честный отказ без мутаций', K.parse('Запиши ремонт покупки').error.code === 'UNSUPPORTED_PURCHASE_REPAIR');
-    ok('A441 удаление покупки текстом — общий честный отказ', K.parse('Удали покупку').error.code === 'UNSUPPORTED_DELETE');
+    ok('A441 удаление покупки без названия не выбирает запись наугад',
+      K.parse('Удали покупку').error.code === 'DELETE_QUERY_REQUIRED');
+    ok('A441a удаление покупки с названием распознаётся как удаление покупки',
+      K.parse('Удали покупку телефон').action === 'shopping.purchase.delete');
     ok('A442 файлы/чеки/OCR к покупкам — честный отказ',
       K.parse('Приложи чек к покупке').error.code === 'UNSUPPORTED_PURCHASE_FILE' &&
       K.parse('Распознай чек').error.code === 'UNSUPPORTED_PURCHASE_FILE');
@@ -1277,8 +1291,9 @@ function partA() {
       K.parse('Создай заметку перенести встречу').action === 'note.create' &&
       K.parse('Напомни перенести встречу завтра').action === 'reminder.create' &&
       K.parse('Добавь покупку календарь').action === 'shopping.purchase.create');
-    ok('A459 удаление события текстом по-прежнему честно не поддержано',
-      K.parse('Удали встречу с Сергеем').error.code === 'UNSUPPORTED_DELETE');
+    ok('A459 удаление события текстом распознаётся как удаление события, а не как перенос',
+      K.parse('Удали встречу с Сергеем').action === 'event.delete' &&
+      K.parse('Удали встречу с Сергеем').params.query === 'с Сергеем');
     ok('A460 изменение других полей события — честный отказ, а не догадка',
       K.parse('Переименуй встречу с Сергеем в планёрку').error.code === 'UNSUPPORTED_EVENT_FIELD' &&
       K.parse('Измени место встречи с Сергеем на офис').error.code === 'UNSUPPORTED_EVENT_FIELD');
@@ -1431,6 +1446,238 @@ function partA() {
       JSON.stringify(env.state) === warrantyBefore);
   }
 
+  /* ---- A18. Удаление записи текстом (Stage 2, итерация 9) ----
+     Разрушительная операция: проверяется не только «сработало», но и что она
+     НЕ срабатывает там, где не должна, и ничего не трогает до подтверждения.
+     Контракт — COMMAND_ENGINE.md §17, политика подтверждений — §6, ADR-005. */
+  {
+    const env = coreSandbox();
+    const K = env.K, C = env.C;
+    const mk = () => {
+      C.tasks.createTask({ title: 'Купить масло', date: '2026-09-29' }, { source: 'test' });
+      C.events.createEvent({ title: 'Стоматолог', date: '2026-09-29', startTime: '10:00', endTime: '10:45' }, { source: 'test' });
+      C.notes.createNote({ title: 'Идеи отпуска' }, { source: 'test' });
+      C.reminders.create({ title: 'Оплатить интернет', dateISO: '2026-09-30' }, { source: 'test' });
+      C.shopping.createPurchase({ name: 'Телефон', price: 45000, dateISO: '2026-09-01' }, { source: 'test' });
+    };
+    mk();
+
+    /* --- грамматика: домен определяется явным словом, а не догадкой --- */
+    ok('A500 удаление распознаётся по всем пяти доменам',
+      K.parse('Удали задачу купить масло').action === 'task.delete' &&
+      K.parse('Удали событие стоматолог').action === 'event.delete' &&
+      K.parse('Удали заметку про отпуск').action === 'note.delete' &&
+      K.parse('Удали напоминание про интернет').action === 'reminder.delete' &&
+      K.parse('Удали покупку телефон').action === 'shopping.purchase.delete');
+    ok('A501 синонимы глагола удаления понимаются одинаково',
+      ['Удали задачу купить масло', 'Удалить задачу купить масло', 'Сотри задачу купить масло',
+       'Убери задачу купить масло'].every((t) => K.parse(t).action === 'task.delete'));
+    ok('A502 предлог «про/о/об» не попадает в название цели',
+      K.parse('Удали заметку про отпуск').params.query === 'отпуск' &&
+      K.parse('Удали напоминание о интернет').params.query === 'интернет');
+    ok('A503 без типа записи движок НЕ угадывает домен',
+      K.parse('Удали купить масло').error.code === 'DELETE_TARGET_REQUIRED');
+    ok('A504 без названия движок не выбирает запись наугад',
+      K.parse('Удали задачу').error.code === 'DELETE_QUERY_REQUIRED' &&
+      K.parse('Удали заметку').error.code === 'DELETE_QUERY_REQUIRED' &&
+      K.parse('Удали событие').error.code === 'DELETE_QUERY_REQUIRED');
+
+    /* --- массовое удаление не выполняется никогда --- */
+    const bulkSnapshot = JSON.stringify(env.state);
+    const bulkPhrases = ['Удали все задачи', 'Удали всё', 'Удали все заметки', 'Очисти список',
+      'Очисти историю', 'Удали задачи полностью', 'Сотри все покупки'];
+    ok('A505 массовое удаление отклоняется во всех формулировках',
+      bulkPhrases.every((t) => { const r = K.parse(t); return !r.ok && r.error.code === 'UNSUPPORTED_BULK_DELETE'; }));
+    bulkPhrases.forEach((t) => K.run(t, { source: 'assistant' }));
+    ok('A506 ни одна массовая фраза ничего не изменила и не попала в «Историю»',
+      JSON.stringify(env.state) === bulkSnapshot);
+    ok('A507 отказ о массовом удалении объясняет причину человеку, без жаргона',
+      /по одной/i.test(K.run('Удали все задачи', { source: 'assistant' }).response) &&
+      !/(intent|payload|action|DOM|JSON)/i.test(K.run('Удали все задачи', { source: 'assistant' }).response));
+
+    /* --- домены без надёжного имени: честный отказ, а не догадка --- */
+    ok('A508 деньги и авто текстом не удаляются — отдельные честные отказы',
+      K.parse('Удали расход 500').error.code === 'UNSUPPORTED_FINANCE_DELETE' &&
+      K.parse('Удали последнюю операцию').error.code === 'UNSUPPORTED_FINANCE_DELETE' &&
+      K.parse('Удали доход').error.code === 'UNSUPPORTED_FINANCE_DELETE' &&
+      K.parse('Удали заправку').error.code === 'UNSUPPORTED_AUTO_DELETE' &&
+      K.parse('Удали обслуживание').error.code === 'UNSUPPORTED_AUTO_DELETE');
+    ok('A509 отказ по деньгам объясняет, где это делается, и не врёт про причину',
+      /Финанс/.test(K.run('Удали расход 500', { source: 'assistant' }).response) &&
+      /названи/i.test(K.run('Удали расход 500', { source: 'assistant' }).response));
+
+    /* --- разбор чист: parse() ничего не меняет --- */
+    const pureBefore = JSON.stringify(env.state);
+    ['Удали задачу купить масло', 'Удали все задачи', 'Удали расход 500', 'Удали покупку телефон',
+     'Удали событие стоматолог'].forEach((t) => K.parse(t, { source: 'assistant' }));
+    ok('A510 parse() удаления не мутирует состояние', JSON.stringify(env.state) === pureBefore);
+
+    /* --- доменный приоритет: удаление не крадёт чужие команды --- */
+    ok('A511 слово «удали» внутри содержимого не превращает команду в удаление',
+      K.parse('Создай заметку удали задачу купить масло').action === 'note.create' &&
+      K.parse('Напомни удалить старые файлы завтра').action === 'reminder.create' &&
+      K.parse('Создай задачу удалить старые файлы').action === 'task.create');
+    ok('A512 удаление не ломает соседние домены',
+      K.parse('Перенеси событие стоматолог на 12:00').action === 'event.reschedule' &&
+      K.parse('Отметь купить масло выполненной').action === 'task.complete' &&
+      K.parse('Покажи заметки про отпуск').action === 'note.search');
+
+    /* --- подтверждение обязательно ВСЕГДА, даже при точном совпадении --- */
+    const beforeAsk = JSON.stringify(env.state);
+    const ask = K.run('Удали задачу купить масло', { source: 'assistant' });
+    ok('A513 EXACT удаление НЕ выполняется сразу — требуется подтверждение',
+      ask.ok === false && ask.result.status === 'confirmation_required' && ask.result.resolution === 'EXACT');
+    ok('A514 до Confirm не изменилось ничего и «История» не выросла',
+      JSON.stringify(env.state) === beforeAsk);
+    ok('A515 сводка показывает, ЧТО именно исчезнет, без id/JSON/имён действий',
+      /Купить масло/.test(ask.response) && /Подтвердите/.test(ask.response) &&
+      !/(task\.|intent|JSON|"id")/i.test(ask.response), ask.response);
+
+    /* --- выполнение: ровно один Common Action, одна запись «Истории», Undo --- */
+    const histBefore = env.state.history.length;
+    const doneDel = K.execute(ask.intent, { source: 'assistant', confirmed: true });
+    ok('A516 Confirm удаляет через существующий Common Action', doneDel.ok && doneDel.action === 'task.delete');
+    ok('A517 задачи больше нет в общем запросе', !C.tasks.getTasks({}).items.some((t) => t.title === 'Купить масло'));
+    ok('A518 удаление пишет ровно одну запись «Истории» с возможностью Undo',
+      env.state.history.length === histBefore + 1 && env.state.history[0].action === 'task.delete' &&
+      env.state.history[0].undoable === true && env.state.history[0].danger === true);
+    ok('A519 запись «Истории» содержит восстановление на прежнюю позицию',
+      env.state.history[0].undo.type === 'restore' && typeof env.state.history[0].undo.index === 'number' &&
+      env.state.history[0].undo.item && env.state.history[0].undo.item.title === 'Купить масло');
+    ok('A520 ответ об удалении говорит, где это видно и как вернуть',
+      /Истории/.test(doneDel && K.respond(doneDel)) && /Undo|вернуть/i.test(K.respond(doneDel)));
+
+    /* --- Undo действительно возвращает запись на своё место --- */
+    const env2 = coreSandbox();
+    const C2 = env2.C, K2 = env2.K;
+    C2.tasks.createTask({ title: 'Первая', date: '2026-09-29' }, { source: 'test' });
+    C2.tasks.createTask({ title: 'Вторая', date: '2026-09-29' }, { source: 'test' });
+    C2.tasks.createTask({ title: 'Третья', date: '2026-09-29' }, { source: 'test' });
+    const orderBefore = env2.state.tasks.map((t) => t.title).join(',');
+    const ask2 = K2.run('Удали задачу вторая', { source: 'assistant' });
+    K2.execute(ask2.intent, { source: 'assistant', confirmed: true });
+    const undo2 = env2.state.history[0].undo;
+    env2.state.tasks.splice(undo2.index, 0, undo2.item);
+    ok('A521 Undo возвращает удалённую запись на исходную позицию списка',
+      env2.state.tasks.map((t) => t.title).join(',') === orderBefore);
+
+    /* --- отказ и повторное подтверждение --- */
+    const env3 = coreSandbox();
+    const C3 = env3.C, K3 = env3.K;
+    C3.events.createEvent({ title: 'Созвон', date: '2026-09-29', startTime: '10:00', endTime: '10:30' }, { source: 'test' });
+    const ask3 = K3.run('Удали событие созвон', { source: 'assistant' });
+    const eventsSnap = JSON.stringify(env3.state.events);
+    const hist3 = env3.state.history.length;
+    ok('A522 отказ (нет Confirm) оставляет событие и «Историю» нетронутыми',
+      ask3.result.status === 'confirmation_required' &&
+      JSON.stringify(env3.state.events) === eventsSnap && env3.state.history.length === hist3);
+    K3.execute(ask3.intent, { source: 'assistant', confirmed: true });
+    const afterFirst = env3.state.events.length, histAfterFirst = env3.state.history.length;
+    const second = K3.execute(ask3.intent, { source: 'assistant', confirmed: true });
+    ok('A523 повторное подтверждение не удаляет второй раз и не пишет вторую «Историю»',
+      second.ok === false && env3.state.events.length === afterFirst &&
+      env3.state.history.length === histAfterFirst);
+
+    /* --- stale: цель изменилась или исчезла между вопросом и подтверждением --- */
+    const env4 = coreSandbox();
+    const C4 = env4.C, K4 = env4.K;
+    const ev4 = C4.events.createEvent({ title: 'Планёрка', date: '2026-09-29', startTime: '10:00', endTime: '10:45' }, { source: 'test' });
+    const ask4 = K4.run('Удали событие планёрка', { source: 'assistant' });
+    C4.events.updateEvent(ev4.entity.id, { startTime: '15:00', endTime: '15:45' }, { source: 'test' });
+    const hist4 = env4.state.history.length;
+    const stale4 = K4.execute(ask4.intent, {
+      source: 'assistant', confirmed: true, targetId: ev4.entity.id,
+      expectedTitle: 'Планёрка', expected: { title: 'Планёрка', dateISO: '2026-09-29', time: '10:00', endTime: '10:45', allDay: false }
+    });
+    ok('A524 изменившаяся снаружи цель безопасно отклоняется, а не удаляется',
+      stale4.ok === false && stale4.status === 'stale' &&
+      env4.state.events.length === 1 && env4.state.history.length === hist4);
+    ok('A525 сообщение о stale честно говорит, что ничего не удалено',
+      /не удалено|Ничего не/i.test(K4.respond(stale4)));
+
+    const env5 = coreSandbox();
+    const C5 = env5.C, K5 = env5.K;
+    const ev5 = C5.events.createEvent({ title: 'Визит', date: '2026-09-29', startTime: '09:00', endTime: '09:30' }, { source: 'test' });
+    const ask5 = K5.run('Удали событие визит', { source: 'assistant' });
+    C5.events.deleteEvent(ev5.entity.id, { source: 'test' });
+    const hist5 = env5.state.history.length;
+    const stale5 = K5.execute(ask5.intent, { source: 'assistant', confirmed: true, targetId: ev5.entity.id, expectedTitle: 'Визит' });
+    ok('A526 уже удалённая снаружи цель не создаёт вторую запись «Истории»',
+      stale5.ok === false && stale5.status === 'stale' && env5.state.history.length === hist5);
+
+    /* --- разрешение цели: EXACT / INFERRED / AMBIGUOUS / не найдено --- */
+    const env6 = coreSandbox();
+    const C6 = env6.C, K6 = env6.K;
+    C6.notes.createNote({ title: 'Отпуск летом' }, { source: 'test' });
+    C6.notes.createNote({ title: 'Отпуск зимой' }, { source: 'test' });
+    const amb = K6.run('Удали заметку отпуск', { source: 'assistant' });
+    ok('A527 несколько подходящих записей → выбор, а не удаление',
+      amb.ok === false && amb.result.status === 'ambiguous' &&
+      amb.result.candidates.length === 2 && env6.state.notes.length === 2);
+    ok('A528 варианты показывают отличия и не раскрывают внутренние id',
+      /Отпуск летом/.test(amb.response) && /Отпуск зимой/.test(amb.response) &&
+      !/"id"|n1|n2/.test(amb.response), amb.response);
+    const notFound = K6.run('Удали заметку такой точно нет', { source: 'assistant' });
+    ok('A529 несуществующая цель: честное «не нашла», ноль удалений',
+      notFound.ok === false && notFound.result.status === 'not_found' &&
+      env6.state.notes.length === 2 && /не удалила/i.test(notFound.response));
+    const one = C6.notes.createNote({ title: 'Ремонт квартиры' }, { source: 'test' });
+    const inferred = K6.run('Удали заметку ремонт', { source: 'assistant' });
+    ok('A530 частичное совпадение единственной записи → INFERRED + подтверждение',
+      inferred.result.status === 'confirmation_required' && inferred.result.resolution === 'INFERRED' &&
+      /части названия/i.test(inferred.response) && C6.notes.getNote(one.entity.id).ok);
+
+    /* --- выполненная задача: существует, значит должна удаляться и честно называться --- */
+    const env7 = coreSandbox();
+    const C7 = env7.C, K7 = env7.K;
+    const t7 = C7.tasks.createTask({ title: 'Уже сделано', date: '2026-09-29' }, { source: 'test' });
+    C7.tasks.completeTask(t7.entity.id, { source: 'test' });
+    const ask7 = K7.run('Удали задачу уже сделано', { source: 'assistant' });
+    ok('A531 выполненная задача находится для удаления (ответ «не нашла» был бы неправдой)',
+      ask7.result.status === 'confirmation_required' && /выполнена/.test(ask7.response), ask7.response);
+    K7.execute(ask7.intent, { source: 'assistant', confirmed: true });
+    ok('A532 выполненная задача действительно удаляется через общий слой',
+      !C7.tasks.getTask(t7.entity.id).ok);
+
+    /* --- архив: запись существует, поэтому «не нашла» было бы неправдой (ADR-010) --- */
+    const env8 = coreSandbox();
+    const C8 = env8.C, K8 = env8.K;
+    const n8 = C8.notes.createNote({ title: 'Архивная заметка' }, { source: 'test' });
+    C8.notes.setNoteArchived(n8.entity.id, true, { source: 'test' });
+    const arch = K8.run('Удали заметку архивная заметка', { source: 'assistant' });
+    ok('A533 архивная запись не удаляется текстом, но и не объявляется несуществующей',
+      arch.ok === false && arch.result.code === 'ARCHIVED_TARGET' &&
+      /архив/i.test(arch.response) && C8.notes.getNote(n8.entity.id).ok);
+
+    /* --- удаление во всех доменах реально доходит до общего слоя --- */
+    const env9 = coreSandbox();
+    const C9 = env9.C, K9d = env9.K;
+    C9.tasks.createTask({ title: 'Задача Д', date: '2026-09-29' }, { source: 'test' });
+    C9.events.createEvent({ title: 'Событие Д', date: '2026-09-29', startTime: '10:00', endTime: '10:30' }, { source: 'test' });
+    C9.notes.createNote({ title: 'Заметка Д' }, { source: 'test' });
+    C9.reminders.create({ title: 'Напоминание Д', dateISO: '2026-09-30' }, { source: 'test' });
+    C9.shopping.createPurchase({ name: 'Покупка Д', price: 100, dateISO: '2026-09-01' }, { source: 'test' });
+    const domainCmds = [
+      ['Удали задачу задача д', 'task.delete', () => C9.tasks.getTasks({}).items.length],
+      ['Удали событие событие д', 'event.delete', () => C9.events.getEvents({}).items.length],
+      ['Удали заметку заметка д', 'note.delete', () => C9.notes.getNotes({ status: 'active' }).items.length],
+      ['Удали напоминание напоминание д', 'reminder.delete', () => C9.reminders.list({}).items.length],
+      ['Удали покупку покупка д', 'shopping.purchase.delete', () => C9.shopping.getPurchases({}).items.length]
+    ];
+    let allDomainsOk = true;
+    domainCmds.forEach(([text, action, count]) => {
+      const before = count();
+      const a9 = K9d.run(text, { source: 'assistant' });
+      if (a9.result.status !== 'confirmation_required' || count() !== before) { allDomainsOk = false; return; }
+      const d9 = K9d.execute(a9.intent, { source: 'assistant', confirmed: true });
+      if (!d9.ok || d9.action !== action || count() !== before - 1) allDomainsOk = false;
+    });
+    ok('A534 во всех пяти доменах: вопрос → ноль изменений → Confirm → ровно одна запись исчезла', allDomainsOk);
+    ok('A535 каждое удаление оставило свою запись в общей «Истории»',
+      ['task.delete', 'event.delete', 'note.delete', 'reminder.delete', 'purchase.delete']
+        .every((a) => env9.state.history.some((h) => h.action === a)));
+  }
+
   /* ---- A12. Второго слоя действий и своей истории не появилось ---- */
   ok('A150 движок не пишет в состояние напрямую',
     !/AvenState|\.save\s*\(\)|state\s*\./.test(src.replace(/\/\*[\s\S]*?\*\//g, '')));
@@ -1439,10 +1686,18 @@ function partA() {
   ok('A152 изменения идут только через существующие общие действия',
     /\bC\.tasks\.createTask\(/.test(src) && /\bC\.tasks\.completeTask\(/.test(src) &&
     /\bC\.tasks\.updateTask\(/.test(src) && /\bC\.events\.createEvent\(/.test(src) &&
-    /\bC\.notes\.createNote\(/.test(src) && !/\bC\.notes\.(updateNote|deleteNote|setNoteArchived)\(/.test(src));
+    /\bC\.notes\.createNote\(/.test(src) && !/\bC\.notes\.(updateNote|setNoteArchived)\(/.test(src));
+  /* Итерация 9: удаление выполняется ИМЕННО существующими Common Actions —
+     теми же, что и кнопка в разделе. Своего удаления движок не пишет. */
+  ok('A152a удаление во всех пяти доменах идёт через существующие Common Actions',
+    /\.tasks\.deleteTask\(/.test(src) && /\.events\.deleteEvent\(/.test(src) &&
+    /\.notes\.deleteNote\(/.test(src) && /\.reminders\.delete\(/.test(src) &&
+    /\.shopping\.deletePurchase\(/.test(src));
+  ok('A152b движок не удаляет записи сам и не заводит второй путь удаления',
+    !/\.splice\s*\(/.test(srcNoComments) && !/DeleteEngine|CommandDelete|voiceDelete/i.test(src));
   ok('A153 напоминания идут только через существующий фасад reminders (не через собственный движок)',
     /\bC\.reminders\.create\(/.test(src) && /\bC\.reminders\.list\(/.test(src) &&
-    !/\bC\.reminders\.(update|delete|snooze|dismiss|markRead)\(/.test(src) &&
+    !/\bC\.reminders\.(update|snooze|dismiss|markRead)\(/.test(src) &&
     !/window\.AvenNotify\s*=/.test(src) && !/CommandReminders|ReminderCommandStore/.test(src));
 }
 
@@ -1745,8 +2000,10 @@ async function partB() {
     ok('B55 «измени напоминание …» не редактирует данные',
       /не умею/i.test(updReply) && p.st().reminders.length === remindersBeforeGuard);
     const delReply = await p.say('удали напоминание про страховку');
-    ok('B56 «удали напоминание …» остаётся неподдержанным удалением, как и другие домены',
-      /не умею/i.test(delReply) && p.st().reminders.length === remindersBeforeGuard);
+    /* Удаление напоминания поддержано (итерация 9), но обязано СНАЧАЛА спросить:
+       после одной фразы ни одно напоминание исчезнуть не должно. */
+    ok('B56 «удали напоминание …» сначала спрашивает подтверждение и ничего не удаляет',
+      /Удалить:|Не нашла/i.test(delReply) && p.st().reminders.length === remindersBeforeGuard);
     p.dom.window.close();
   }
 
@@ -2256,8 +2513,10 @@ async function partB() {
     ok('B141 повторяющееся событие честно не переносится текстом',
       /повторяющ/i.test(rep) && JSON.stringify(p.st().events) === eventsSnapshot && p.H().length === histAfterUndo, rep);
     const del = await p.say('Удали встречу с Сергеем');
-    ok('B142 удаление события текстом по-прежнему не выполняется',
-      /Удалять/i.test(del) && JSON.stringify(p.st().events) === eventsSnapshot && p.H().length === histAfterUndo, del);
+    /* Удаление события поддержано (итерация 9): одна фраза обязана привести к
+       вопросу, а не к исчезнувшему событию — состояние и «История» не меняются. */
+    ok('B142 удаление события текстом сначала спрашивает и не удаляет само по себе',
+      /Удалить:|Не нашла/i.test(del) && JSON.stringify(p.st().events) === eventsSnapshot && p.H().length === histAfterUndo, del);
 
     /* Уточнение: два подходящих события */
     C.events.createEvent({ title: 'Встреча с Сергеем', date: today, startTime: '15:00', endTime: '16:00' }, { source: 'test' });
@@ -2346,9 +2605,11 @@ async function partB() {
       /не переключают/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-reminders') || {}).body || ''));
     ok('B67i справка объясняет поиск напоминаний текстом',
       /Покажи напоминания/.test(bodies) && /Найди напоминание/.test(bodies));
-    ok('B67j справка честно говорит, что изменение/откладывание/удаление напоминания текстом не поддерживаются',
-      /изменить, отложить, скрыть или удалить уже существующее напоминание[^.]*пока нельзя/i.test(bodies) ||
-      /изменить.{0,20}отложить.{0,20}(?:отметить прочитанным.{0,20})?скрыть.{0,20}удалить уже существующее напоминание/i.test(bodies));
+    ok('B67j справка честно говорит, что изменение/откладывание/скрытие напоминания текстом не поддерживаются',
+      /изменить, отложить или скрыть уже существующее напоминание[^.]*пока нельзя/i.test(bodies) ||
+      /изменить.{0,30}отложить.{0,30}(?:отметить прочитанным.{0,30})?скрыть уже существующее напоминание/i.test(bodies));
+    ok('B67j2 справка при этом честно говорит, что удалить напоминание текстом уже можно',
+      /Удали напоминание/i.test(bodies));
     ok('B67k справка честно не обещает доставку при закрытом сайте',
       /не придёт по почте или push/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-reminders') || {}).body || ''));
     /* Stage 2, итерация 5: расходы текстом — справка объясняет запись, форматы суммы,
@@ -2418,13 +2679,59 @@ async function partB() {
     ok('B100f справка объясняет History/Undo для переноса',
       /«Историю» одной записью/.test(evArticle) && /прежние дату и время/.test(evArticle));
     ok('B100g справка честно перечисляет, чего перенос текстом не умеет',
-      /повторяющиеся события/i.test(evArticle) && /весь день/.test(evArticle) && /удалять событие/i.test(evArticle));
+      /повторяющиеся события/i.test(evArticle) && /весь день/.test(evArticle) &&
+      !/удалять событие/i.test(evArticle));
+    ok('B100g2 справка о событиях больше не утверждает, что удаление невозможно',
+      /Удали событие стоматолог/.test(evArticle) && /подтверждения/.test(evArticle));
     ok('B100h справка простыми словами говорит про часовые пояса',
       /Часовые пояса прототип не пересчитывает/.test(evArticle) && !/timezone|UTC/i.test(evArticle));
     ok('B100i раздел «Календарь» в справке тоже упоминает перенос текстом',
       /текстовой командой|короткой фразой/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'calendar-move-command') || {}).body || ''));
     ok('B100j статья о переносе события находится поиском',
       p.w.AvenHelp.search('перенести событие').some((a) => a.id === 'cmd-events'));
+    /* Stage 2, итерация 9: удаление текстом — справка и обучение обязаны
+       объяснить человеку, что это, как отменить и чего Aven делать не станет. */
+    const delArticle = (p.w.AvenHelp.articles.find((a) => a.id === 'cmd-delete') || {}).body || '';
+    ok('B101a в справке есть отдельная статья об удалении текстом',
+      delArticle.length > 400 && /Удали задачу купить масло/.test(delArticle));
+    ok('B101b статья объясняет, что это и зачем, простыми словами',
+      /Что это\./.test(delArticle) && /Зачем\./.test(delArticle) && /С чего начать\./.test(delArticle));
+    ok('B101c статья объясняет обязательное подтверждение и что до него ничего не удалено',
+      /Подтвердить/.test(delArticle) && /ничего не удалено/i.test(delArticle));
+    ok('B101d статья объясняет отмену до и после удаления',
+      /Escape/.test(delArticle) && /Undo/.test(delArticle) && /Истори/.test(delArticle));
+    ok('B101e статья говорит, где ещё виден результат',
+      /Где ещё виден результат\./.test(delArticle) && /Главной/.test(delArticle));
+    ok('B101f статья честно перечисляет ограничения, включая массовое удаление',
+      /Ограничения\./.test(delArticle) && /по одной/i.test(delArticle) &&
+      /Финанс/.test(delArticle) && /архив/i.test(delArticle));
+    ok('B101g статья разбирает типичные проблемы, включая архив и изменившуюся запись',
+      /Типичные проблемы\./.test(delArticle) && /уже изменилась/i.test(delArticle));
+    ok('B101h статья написана без жаргона разработчика',
+      !/(DOM|payload|provider|action layer|route|intent|JSON|API)/i.test(delArticle));
+    ok('B101i статья об удалении находится поиском по обычным словам',
+      p.w.AvenHelp.search('удалить').some((a) => a.id === 'cmd-delete'));
+    ok('B101j статья о подтверждениях больше не утверждает, что удаление не поддержано',
+      !/Удаление текстом по-прежнему не поддерживается/.test(
+        (p.w.AvenHelp.articles.find((a) => a.id === 'cmd-confirm') || {}).body || ''));
+    ok('B101k перечень команд включает примеры удаления по всем доменам',
+      ['Удали задачу', 'Удали событие', 'Удали заметку', 'Удали напоминание', 'Удали покупку']
+        .every((x) => new RegExp(x).test((p.w.AvenHelp.articles.find((a) => a.id === 'cmd-supported') || {}).body || '')));
+    ok('B101l обучение по командам содержит сценарий удаления с подтверждением и Undo',
+      p.w.AvenTutorial.definitions.commands.steps.some((x) => /Удалите ненужную запись/.test(x.title)) &&
+      p.w.AvenTutorial.definitions.commands.steps.some((x) => /Верните удалённое/.test(x.title)));
+    ok('B101m обучение честно предупреждает, что всё сразу Aven не удалит',
+      p.w.AvenTutorial.definitions.commands.steps.some((x) => /Удалять всё сразу/.test(x.title)));
+    /* Новый tutorial-фреймворк не создавался: шаги про удаление обязаны
+       переиспользовать уже существующие data-tour хуки командного тура. */
+    {
+      const steps = p.w.AvenTutorial.definitions.commands.steps;
+      const known = steps.map((x) => x.target).filter((t) => typeof t === 'string');
+      const delSteps = steps.filter((x) => /[Уу]дал/.test(x.title));
+      ok('B101n шаги про удаление используют существующие хуки обучения, без нового фреймворка',
+        delSteps.length >= 3 && delSteps.every((x) => known.indexOf(x.target) >= 0) &&
+        delSteps.every((x) => ['command-chat', 'command-limits'].indexOf(x.target) >= 0));
+    }
     ok('B100k обучение по командам включает сценарий переноса события с подтверждением',
       p.w.AvenTutorial.definitions.commands.steps.some((x) => /Найдите событие и попросите перенести/.test(x.title)) &&
       p.w.AvenTutorial.definitions.commands.steps.some((x) => /было → станет/.test(x.title)) &&
@@ -2434,6 +2741,141 @@ async function partB() {
     ok('B67l раздел «Уведомления» тоже упоминает создание текстом',
       /текстовой командой/i.test((p.w.AvenHelp.articles.find((a) => a.id === 'notif-reminders') || {}).body || ''));
     p.dom.window.close();
+  }
+
+  /* ---- B11. Удаление записи текстом сквозь настоящий Assistant (итерация 9) ----
+     Здесь важен не разбор, а ПОВЕДЕНИЕ на настоящем экране: кнопки подтверждения,
+     отказ, Escape, двойное нажатие, согласованность разделов, «История» и Undo. */
+  {
+    const p = await load('#/assistant');
+    const C = p.C();
+    C.tasks.createTask({ title: 'Удаляемая задача', date: C.dates.todayISO(0) }, { source: 'test' });
+    await p.go('#/assistant');
+
+    const tasksBefore = p.st().tasks.length, histBefore = p.H().length;
+    const ask = await p.say('Удали задачу удаляемая задача');
+    ok('B200 удаление одной фразой не удаляет сразу, а показывает вопрос',
+      /Удалить:/.test(ask) && /Удаляемая задача/.test(ask) &&
+      p.st().tasks.length === tasksBefore && p.H().length === histBefore, ask);
+    ok('B201 на экране появились настоящие кнопки «Подтвердить» и «Отмена»',
+      !!p.q('[data-action="command-confirm"]') && !!p.q('[data-action="command-cancel"]'));
+    ok('B202 блок подтверждения объявлен для вспомогательных технологий',
+      (p.q('.command-confirm') || {}).getAttribute &&
+      p.q('.command-confirm').getAttribute('aria-label') === 'Подтверждение действия');
+    ok('B203 в вопросе нет служебных терминов',
+      !/(intent|payload|task\.delete|JSON|provider)/i.test(ask));
+
+    /* Отмена кнопкой: ничего не исчезло */
+    p.click(p.q('[data-action="command-cancel"]'));
+    await sleep(350);
+    ok('B204 «Отмена» оставляет задачу и не пишет «Историю»',
+      p.st().tasks.length === tasksBefore && p.H().length === histBefore &&
+      !p.q('[data-action="command-confirm"]'));
+
+    /* Escape тоже отказ */
+    await p.say('Удали задачу удаляемая задача');
+    p.d.dispatchEvent(new p.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await sleep(350);
+    ok('B205 Escape отменяет удаление и ничего не трогает',
+      p.st().tasks.length === tasksBefore && p.H().length === histBefore);
+
+    /* Подтверждение: ровно одно удаление даже при двойном нажатии */
+    await p.say('Удали задачу удаляемая задача');
+    const btn = p.q('[data-action="command-confirm"]');
+    p.click(btn); p.click(btn);
+    await sleep(500);
+    ok('B206 Confirm удаляет ровно один раз даже при двойном нажатии',
+      p.st().tasks.length === tasksBefore - 1 && p.H().length === histBefore + 1);
+    ok('B207 запись «Истории» — это удаление задачи с возможностью отмены',
+      p.H()[0].action === 'task.delete' && p.H()[0].undoable === true);
+    ok('B208 ответ говорит человеку, что запись можно вернуть',
+      /Истории/.test(p.w.Aven._lastReply || '') && /Undo|вернуть/i.test(p.w.Aven._lastReply || ''));
+
+    /* Задача действительно исчезла из обычных разделов */
+    await p.go('#/tasks');
+    ok('B209 удалённой задачи больше нет в разделе «Задачи»', !/Удаляемая задача/.test(p.text()) && !p.broken());
+    await p.go('#/home');
+    /* На «Главной» название ещё встречается в карточке «Последние действия» —
+       это запись «Истории» об удалении, а не сама задача. Поэтому проверяется
+       именно карточка задач, а не весь текст страницы. */
+    const homeTasksCard = p.qa('.card').filter((c) => /Задачи/.test(c.textContent || ''))[0];
+    ok('B210 удалённой задачи больше нет в карточке задач на «Главной»',
+      !!homeTasksCard && !/Удаляемая задача/.test(homeTasksCard.textContent || '') && !p.broken());
+
+    /* Undo из «Истории» возвращает её везде */
+    await p.go('#/history');
+    const delEntryId = p.H()[0].id;
+    const undoBtn = p.q('[data-action="hist-undo"][data-id="' + delEntryId + '"]');
+    ok('B211 в «Истории» есть кнопка отмены именно этого удаления', !!undoBtn);
+    p.click(undoBtn);
+    await sleep(400);
+    ok('B212 Undo вернул задачу в состояние', p.st().tasks.length === tasksBefore);
+    await p.go('#/tasks');
+    ok('B213 после Undo задача снова видна в разделе «Задачи»',
+      /Удаляемая задача/.test(p.text()) && !p.broken());
+    p.dom.window.close();
+  }
+
+  /* ---- B12. Удаление: уточнение, массовый отказ, другие домены ---- */
+  {
+    const p = await load('#/assistant');
+    const C = p.C();
+    C.notes.createNote({ title: 'Отпуск летом' }, { source: 'test' });
+    C.notes.createNote({ title: 'Отпуск зимой' }, { source: 'test' });
+    await p.go('#/assistant');
+
+    const notesBefore = p.st().notes.length, histBefore = p.H().length;
+    const amb = await p.say('Удали заметку отпуск');
+    ok('B214 несколько подходящих заметок → выбор, а не удаление',
+      /Уточните выбор|подходящ/i.test(amb) && p.st().notes.length === notesBefore);
+    ok('B215 варианты отрисованы настоящими кнопками с понятной группой',
+      p.qa('[data-action="command-choice"]').length === 2 &&
+      (p.q('.command-choices') || {}).getAttribute &&
+      p.q('.command-choices').getAttribute('aria-label') === 'Выберите заметку');
+    ok('B216 подпись варианта показывает папку, а не статус задачи',
+      /Папка/i.test((p.qa('[data-action="command-choice"]')[0] || {}).textContent || '') &&
+      !/Открыта|Выполнена/.test((p.qa('[data-action="command-choice"]')[0] || {}).textContent || ''));
+
+    p.click(p.qa('[data-action="command-choice"]')[0]);
+    await sleep(400);
+    ok('B217 выбор варианта — ещё не удаление: спрашивается подтверждение',
+      /Удалить:/.test(p.w.Aven._lastReply || '') && p.st().notes.length === notesBefore &&
+      p.H().length === histBefore);
+    p.click(p.q('[data-action="command-confirm"]'));
+    await sleep(400);
+    ok('B218 после подтверждения исчезла ровно одна заметка',
+      p.st().notes.length === notesBefore - 1 && p.H()[0].action === 'note.delete');
+
+    /* Массовое удаление на настоящем экране не выполняется */
+    const before = JSON.stringify(p.st().notes), h = p.H().length;
+    const bulk = await p.say('Удали все заметки');
+    ok('B219 «Удали все заметки» на экране отклоняется и ничего не трогает',
+      /по одной/i.test(bulk) && JSON.stringify(p.st().notes) === before && p.H().length === h);
+    ok('B220 отказ не предлагает кнопку подтверждения', !p.q('[data-action="command-confirm"]'));
+
+    /* Финансы текстом не удаляются — и операции целы */
+    const opsBefore = (p.st().ops || []).length;
+    const fin = await p.say('Удали расход 500');
+    ok('B221 удаление расхода текстом честно отклоняется и не трогает операции',
+      /Финанс/.test(fin) && (p.st().ops || []).length === opsBefore);
+    p.dom.window.close();
+  }
+
+  /* ---- B13. Удаление на узких экранах и в тёмной теме ---- */
+  {
+    for (const width of [320, 360, 390, 412, 430]) {
+      const p = await load('#/assistant', width);
+      const C = p.C();
+      C.tasks.createTask({ title: 'Мобильная задача', date: C.dates.todayISO(0) }, { source: 'test' });
+      await p.go('#/assistant');
+      const reply = await p.say('Удали задачу мобильная задача');
+      const confirm = p.q('[data-action="command-confirm"]');
+      ok('B222[' + width + '] вопрос об удалении и кнопки доступны на ширине ' + width,
+        /Удалить:/.test(reply) && !!confirm && !!p.q('[data-action="command-cancel"]') && !p.broken());
+      ok('B223[' + width + '] кнопки подтверждения — настоящие button, доступные с клавиатуры',
+        confirm.tagName === 'BUTTON' && confirm.disabled !== true);
+      p.dom.window.close();
+    }
   }
 
   /* ---- B7. Обучение реально работает на экране помощника ---- */

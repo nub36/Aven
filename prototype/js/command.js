@@ -216,7 +216,8 @@ window.AvenCommand = (function () {
     'Покажи напоминания',
     'Запиши расход 850 ₽ на продукты',
     'Покажи расходы за сегодня',
-    'Перенеси событие стоматолог на 12:00'
+    'Перенеси событие стоматолог на 12:00',
+    'Удали задачу купить масло'
   ];
   const PARSE_MESSAGES = {
     EMPTY: 'Напишите команду — например: «Что у меня сегодня?»',
@@ -258,7 +259,14 @@ window.AvenCommand = (function () {
     UNSUPPORTED_FINANCE_UPDATE: 'Изменять уже записанную финансовую операцию текстовой командой я пока не умею. Откройте «Финансы» — там операцию можно отредактировать, и изменение попадёт в «Историю».',
     FINANCE_PERIOD_UNSUPPORTED: 'Показывать расходы за такой период я пока не умею. Могу за сегодня, за неделю или за месяц — например: «Покажи расходы за неделю». Остальные периоды есть в разделе «Финансы» с фильтрами.',
     AMOUNT_AMBIGUOUS: 'Не поняла, какая именно сумма расхода — в команде несколько чисел. Напишите одну сумму: «Запиши расход 850 ₽ на продукты».',
-    REMINDER_DATE_REQUIRED: 'Не поняла, на какую дату напомнить — у напоминания обязательно должна быть дата. Напишите так: «Напомни купить масло на завтра» или «Напомни завтра в 10 позвонить Сергею».'
+    REMINDER_DATE_REQUIRED: 'Не поняла, на какую дату напомнить — у напоминания обязательно должна быть дата. Напишите так: «Напомни купить масло на завтра» или «Напомни завтра в 10 позвонить Сергею».',
+    /* Удаление текстом (итерация 9). Формулировки обязаны говорить человеку, ЧТО
+       именно нужно уточнить, и подчёркивать, что пока ничего не изменилось. */
+    DELETE_TARGET_REQUIRED: 'Не поняла, что именно удалить. Скажите тип записи и название: «Удали задачу купить масло», «Удали событие стоматолог», «Удали заметку про отпуск», «Удали напоминание про интернет» или «Удали покупку телефон». Я ничего не удалила.',
+    DELETE_QUERY_REQUIRED: 'Не поняла, какую именно запись удалить — нужно название. Напишите, например: «Удали задачу купить масло». Я ничего не удалила.',
+    UNSUPPORTED_BULK_DELETE: 'Удалять всё сразу я не буду: массовое удаление невозможно проверить глазами и легко потерять нужное. Удаляю строго по одной записи и всегда спрашиваю подтверждение — например: «Удали задачу купить масло». Если нужно очистить раздел целиком, это делается в самом разделе. Я ничего не удалила.',
+    UNSUPPORTED_FINANCE_DELETE: 'Удалять уже записанную операцию текстовой командой я пока не умею: у расходов и доходов нет короткого названия, по которому я могла бы надёжно понять, какую именно запись вы имеете в виду, а ошибиться с деньгами нельзя. Откройте «Финансы» — там операцию можно удалить, баланс пересчитается, а действие попадёт в «Историю». Я ничего не удалила.',
+    UNSUPPORTED_AUTO_DELETE: 'Удалять заправки и записи обслуживания текстовой командой я пока не умею: они различаются датой и пробегом, а не названием, и перепутать их слишком легко. Откройте «Авто» — там запись можно удалить, и это попадёт в «Историю». Я ничего не удалила.'
   };
   function intent(action, kind, params, rule, extra) {
     return Object.assign({
@@ -305,6 +313,71 @@ window.AvenCommand = (function () {
     { rx: startRx('визит', 'i'), label: 'Визит' },
     { rx: startRx('событи[а-яе]*', 'i'), label: '' }
   ];
+
+  /* ---------- Удаление текстом (Stage 2, итерация 9) ----------
+     Удаление — разрушительная операция, поэтому грамматика намеренно УЖЕ, чем у
+     остальных команд, а не шире (COMMAND_ENGINE §6, ADR-005):
+     1) глагол удаления обязан стоять В НАЧАЛЕ фразы — иначе «Создай заметку удали
+        задачу» перестало бы быть заметкой;
+     2) тип записи обязателен — без слова «задачу/событие/заметку/напоминание/
+        покупку» движок НЕ угадывает домен, потому что цена ошибки — чужая
+        удалённая запись;
+     3) название обязательно — «Удали задачу» без названия ничего не выбирает;
+     4) «все/всё/всех» и «очисти» никогда не выполняются, а честно отклоняются:
+        массовое удаление из текста не поддерживается вовсе.
+     Новых Common Actions здесь нет: выполняют существующие
+     tasks.deleteTask / events.deleteEvent / notes.deleteNote /
+     reminders.delete / shopping.deletePurchase — те же, что и кнопка в разделе. */
+  const DELETE_VERB = '(?:удали(?:те)?|удалить|удаляй|сотри(?:те)?|стереть|стирай|убери(?:те)?|убрать)';
+  const CLEAR_VERB = '(?:очисти(?:те)?|очистить)';
+  const BULK_WORD = '(?:все|всё|все[хм]|всю|весь|любые|подряд|полностью|целиком)';
+  const REMINDER_DELETE_WORD = '(?:напоминани[а-яе]*)';
+  /* Список строится лениво: PURCHASE_WORD объявлен ниже по файлу, и вычисление
+     массива на этапе загрузки модуля упало бы в temporal dead zone. */
+  let DELETE_DOMAINS = null;
+  function deleteDomains() {
+    if (!DELETE_DOMAINS) {
+      DELETE_DOMAINS = [
+        { action: 'task.delete', word: TASK_WORD, label: 'задачу' },
+        { action: 'note.delete', word: NOTE_WORD, label: 'заметку' },
+        { action: 'reminder.delete', word: REMINDER_DELETE_WORD, label: 'напоминание' },
+        { action: 'shopping.purchase.delete', word: PURCHASE_WORD, label: 'покупку' },
+        { action: 'event.delete', word: '(?:встреч[уаией]|событи[а-яе]*|созвон[а-яё]*|звонок|при[её]м|визит)', label: 'событие' }
+      ];
+    }
+    return DELETE_DOMAINS;
+  }
+  function parseDelete(n, raw) {
+    const startsDelete = startRx(DELETE_VERB, 'i').test(n);
+    const startsClear = startRx(CLEAR_VERB, 'i').test(n);
+    if (!startsDelete && !startsClear) return null;
+    /* «Очисти историю», «Очисти список» и любое «удали все …» — массовая
+       операция. Она не выполняется никогда, независимо от домена. */
+    if (startsClear || hasWord(n, BULK_WORD)) return fail('UNSUPPORTED_BULK_DELETE', 'guard.delete.bulk');
+    /* Домены, у которых записи не адресуются названием: деньги различаются суммой
+       и датой, авто-записи — пробегом. Угадывать «последний расход» нельзя. */
+    if (/(расход[а-яе]*|доход[а-яе]*|операци[а-яе]*|трат[а-яе]*|платеж[а-яе]*|платёж)/.test(n)) {
+      return fail('UNSUPPORTED_FINANCE_DELETE', 'guard.delete.finance');
+    }
+    if (/(заправк[а-яе]*|обслуживани[а-яе]*|то\b|топлив[а-яе]*|бензин[а-яе]*)/.test(n)) {
+      return fail('UNSUPPORTED_AUTO_DELETE', 'guard.delete.auto');
+    }
+    const domains = deleteDomains();
+    for (let i = 0; i < domains.length; i++) {
+      const d = domains[i];
+      const rx = new RegExp('^' + DELETE_VERB + '\\s+(?:мо[юийё]\\s+|эт[уоа]т?\\s+)?' + d.word + NOT_AFTER + '\\s*(.*)$', 'i');
+      if (!rx.test(n)) continue;
+      const m = rx.exec(raw) || rx.exec(n);
+      /* «про/о/об» — обычный способ назвать заметку или напоминание;
+         на выбор записи это не влияет, поэтому предлог просто отбрасывается. */
+      const query = tidy(String(m[1] || '').replace(/^(?:про|о|об|на тему)\s+/i, ''));
+      if (!query) return fail('DELETE_QUERY_REQUIRED', 'delete.query');
+      return intent(d.action, 'mutation', { query }, 'delete', { requiresConfirmation: true });
+    }
+    /* Глагол удаления есть, а типа записи нет: «Удали купить масло» могло бы быть
+       и задачей, и заметкой, и покупкой. Молча выбрать домен нельзя. */
+    return fail('DELETE_TARGET_REQUIRED', 'delete.target');
+  }
 
   function parseTaskCreate(n, raw, context) {
     const rx = new RegExp('^' + CREATE_VERB + '\\s+(?:нов(?:ую|ое|ый)\\s+)?' + TASK_WORD + NOT_AFTER + '\\s*(.*)$', 'i');
@@ -966,6 +1039,11 @@ window.AvenCommand = (function () {
   }
 
   const RULES = [
+    /* Удаление стоит первым сознательно: правило срабатывает только когда глагол
+       удаления стоит в начале фразы, поэтому «Создай заметку удали задачу»
+       остаётся заметкой, а разрушительная команда не может быть случайно
+       перехвачена другим доменом и выполнена как что-то иное. */
+    parseDelete,
     parseTaskCreate, parseNoteCreate, parseNoteSearch, parseReminderCreate, parseReminderSearch,
     parseFuelCreate, parseServiceCreate, parseExpenseCreate, parseExpenseList,
     parsePurchaseCreate, parsePurchaseWarranty, parsePurchaseSearch, parseIncomeUnsupported,
@@ -1063,6 +1141,65 @@ window.AvenCommand = (function () {
     if (partial.length > 1) return { ok: false, status: 'ambiguous', resolution: 'AMBIGUOUS', code: 'AMBIGUOUS_EVENT', candidates: partial.map(eventCandidate) };
     return { ok: false, status: 'not_found', resolution: 'UNSUPPORTED', code: 'EVENT_NOT_FOUND', candidates: [] };
   }
+  /* Общий безымянный резолвер для доменов, у которых цель адресуется названием
+     (заметка, напоминание, покупка). Правила РОВНО те же дискретные, что у
+     resolveTask/resolveEvent: полное совпадение — EXACT, единственное вхождение
+     целым словом с содержательным словом 3+ символа — INFERRED, несколько —
+     AMBIGUOUS, ничего — not_found. Fuzzy/морфологии здесь нет намеренно: для
+     удаления «похоже» не должно означать «достаточно похоже, чтобы стереть». */
+  function resolveNamed(list, query, makeCandidate, notFoundCode) {
+    const q = normalize(query);
+    const none = { ok: false, status: 'not_found', resolution: 'UNSUPPORTED', code: notFoundCode, candidates: [] };
+    if (!q) return none;
+    const titleOf = (x) => normalize(makeCandidate(x).title);
+    const exact = list.filter((x) => titleOf(x) === q);
+    if (exact.length === 1) return { ok: true, status: 'resolved', resolution: 'EXACT', entity: makeCandidate(exact[0]) };
+    if (exact.length > 1) return { ok: false, status: 'ambiguous', resolution: 'AMBIGUOUS', code: 'AMBIGUOUS', candidates: exact.map(makeCandidate) };
+    const meaningful = q.split(/\s+/).some((part) => part.length >= 3);
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const rx = meaningful ? wordRx(escaped) : null;
+    const partial = rx ? list.filter((x) => rx.test(titleOf(x))) : [];
+    if (partial.length === 1) return { ok: true, status: 'resolved', resolution: 'INFERRED', entity: makeCandidate(partial[0]) };
+    if (partial.length > 1) return { ok: false, status: 'ambiguous', resolution: 'AMBIGUOUS', code: 'AMBIGUOUS', candidates: partial.map(makeCandidate) };
+    return none;
+  }
+  /* Кандидаты показывают пользователю только то, что помогает отличить одну
+     запись от другой; id нужен лишь для продолжения flow. */
+  function noteCandidate(x) {
+    const C = Core();
+    return { id: x.id, kind: 'note', title: x.title || 'Без названия', folder: C.notes.folderOf(x), dateISO: x.updatedISO || '' };
+  }
+  function reminderCandidate(x) {
+    return { id: x.id, kind: 'reminder', title: x.title || '', dateISO: x.dateISO || '', time: x.time || '' };
+  }
+  function purchaseCandidate(x) {
+    const C = Core();
+    return { id: x.id, kind: 'purchase', title: x.name || '', dateISO: C.shopping.dateISO(x) || '', price: Number(x.price) || 0 };
+  }
+  /* Удаление задачи намеренно видит и ВЫПОЛНЕННЫЕ задачи, в отличие от
+     «отметь выполненной»/«перенеси»: выполненная задача существует, и ответ
+     «не нашла» на неё был бы неправдой (ADR-010). Архивные по-прежнему вне
+     обычного списка — для них есть отдельный честный ответ ниже. */
+  function resolveTaskForDelete(query, context) {
+    return resolveNamed(Core().tasks.getTasks({ today: context.todayISO }).items || [],
+      query, taskCandidate, 'TASK_NOT_FOUND');
+  }
+  /* Архив — не «нет записи». Если имя совпало с архивной записью, Aven обязана
+     сказать правду: запись существует, но лежит в архиве. */
+  function resolveArchived(list, query, makeCandidate) {
+    const res = resolveNamed(list.filter((x) => x && x.archived), query, makeCandidate, 'ARCHIVED');
+    return res.ok || res.status === 'ambiguous';
+  }
+  function resolveNote(query) {
+    return resolveNamed(Core().notes.getNotes({ status: 'active' }).items || [], query, noteCandidate, 'NOTE_NOT_FOUND');
+  }
+  function resolveReminder(query) {
+    return resolveNamed(Core().reminders.list({}).items || [], query, reminderCandidate, 'REMINDER_NOT_FOUND');
+  }
+  function resolvePurchase(query) {
+    return resolveNamed(Core().shopping.getPurchases({}).items || [], query, purchaseCandidate, 'PURCHASE_NOT_FOUND');
+  }
+
   function toMinutes(hm) {
     const m = /^(\d{2}):(\d{2})$/.exec(String(hm || ''));
     return m ? (+m[1]) * 60 + (+m[2]) : -1;
@@ -1119,6 +1256,11 @@ window.AvenCommand = (function () {
     }
     if (intentObj.action === 'event.reschedule') {
       return resolveEvent((intentObj.params || {}).query, context);
+    }
+    /* Удаление отвечает на resolve() тем же контрактом, что и остальные команды:
+       это позволяет проверить цель, ничего не удаляя. */
+    if (DELETE_ACTIONS[intentObj.action]) {
+      return deleteSpec()[intentObj.action].resolve((intentObj.params || {}).query, context);
     }
     if ((intentObj.action === 'auto.fuel.create' || intentObj.action === 'auto.service.create') &&
         (intentObj.params || {}).linkFinance) {
@@ -1640,6 +1782,65 @@ window.AvenCommand = (function () {
           }
         });
       }
+      /* ---------- Удаление записи текстом (Stage 2, итерация 9) ----------
+         Один общий путь на пять доменов. Инварианты, обязательные для КАЖДОГО:
+         — подтверждение ВСЕГДА, даже при точном совпадении названия (COMMAND_ENGINE §6);
+         — до подтверждения нет ни мутации, ни записи в «Историю»;
+         — перед самим удалением цель перечитывается общим запросом и сверяется
+           со слепком: изменившаяся или уже исчезнувшая запись безопасно отклоняется;
+         — удаляет только существующий Common Action — тот же, что и кнопка
+           в разделе, поэтому «История» и Undo работают без отдельного кода. */
+      case 'task.delete':
+      case 'event.delete':
+      case 'note.delete':
+      case 'reminder.delete':
+      case 'shopping.purchase.delete': {
+        const spec = deleteSpec()[intentObj.action];
+        const act = intentObj.action;
+        let found;
+        if (context.targetId) {
+          const staleFail = () => result(false, 'stale', act, {
+            code: 'STALE_TARGET', intent: intentObj,
+            message: 'Эта запись уже изменилась или её больше нет. Ничего не удалено — повторите команду.'
+          });
+          const fresh = spec.get(context.targetId);
+          if (!fresh.ok || !fresh.entity || fresh.entity.archived) return staleFail();
+          const cand = spec.candidate(fresh.entity);
+          const exp = context.expected;
+          if (context.expectedTitle && normalize(cand.title) !== normalize(context.expectedTitle)) return staleFail();
+          if (exp && ((cand.dateISO || '') !== (exp.dateISO || '') || (cand.time || '') !== (exp.time || ''))) return staleFail();
+          found = { ok: true, resolution: context.selected ? 'EXACT' : 'INFERRED', entity: cand };
+        } else found = spec.resolve(p.query, context);
+        if (!found.ok && found.status === 'ambiguous') {
+          return result(false, 'ambiguous', act, {
+            code: 'AMBIGUOUS_DELETE', resolution: 'AMBIGUOUS', intent: intentObj, candidates: found.candidates
+          });
+        }
+        if (!found.ok) {
+          /* Запись может существовать, но лежать в архиве. Сказать «не нашла»
+             было бы неправдой (ADR-010) — честно объясняем, где она. */
+          const inArchive = typeof spec.archived === 'function' && spec.archived(p.query);
+          return result(false, 'not_found', act, {
+            code: inArchive ? 'ARCHIVED_TARGET' : spec.notFound,
+            resolution: 'UNSUPPORTED', intent: intentObj, query: p.query, archived: !!inArchive
+          });
+        }
+        const target = found.entity;
+        /* Подтверждение обязательно всегда: уровень распознавания влияет только на
+           формулировку, но никогда не разрешает удалить сразу. */
+        if (!context.confirmed) {
+          return result(false, 'confirmation_required', act, {
+            code: 'CONFIRMATION_REQUIRED', resolution: found.resolution, intent: intentObj,
+            target, summary: deleteSummary(act, target, found.resolution)
+          });
+        }
+        const res = spec.del(target.id, opts);
+        if (!res.ok) return actionFailed(act, res, intentObj);
+        return result(true, 'done', act, {
+          resolution: found.resolution, intent: intentObj, entity: res.entity, historyId: res.entry && res.entry.id,
+          data: { title: target.title, dateISO: target.dateISO || '', time: target.time || '', kind: target.kind }
+        });
+      }
       case 'day.plan': {
         const dateISO = ISO_RE.test(String(p.dateISO || '')) ? p.dateISO : context.todayISO;
         const events = C.events.getEventsForDate(dateISO).items || [];
@@ -1688,6 +1889,98 @@ window.AvenCommand = (function () {
     return n + ' ' + (x > 10 && x < 20 ? many : y === 1 ? one : y > 1 && y < 5 ? few : many);
   }
   function quote(v) { return '«' + String(v || '') + '»'; }
+
+  /* ---------- Таблица доменов удаления (Stage 2, итерация 9) ----------
+     Здесь нет ни одной собственной операции над данными: только ссылки на уже
+     существующие Common Actions и Common Queries. Строится лениво — Core()
+     на этапе загрузки модуля ещё недоступен. */
+  let DELETE_SPEC = null;
+  function deleteSpec() {
+    if (!DELETE_SPEC) {
+      const C = () => Core();
+      DELETE_SPEC = {
+        'task.delete': {
+          noun: 'Задача', where: '«Задачах»', section: '«Задачи»', notFound: 'TASK_NOT_FOUND',
+          get: (id) => C().tasks.getTask(id), candidate: taskCandidate,
+          resolve: (q, ctx) => resolveTaskForDelete(q, ctx), del: (id, o) => C().tasks.deleteTask(id, o),
+          archived: (q) => resolveArchived(C().tasks.getTasks({ includeArchived: true }).items || [], q, taskCandidate)
+        },
+        'event.delete': {
+          noun: 'Событие', where: '«Календаре»', section: '«Календарь»', notFound: 'EVENT_NOT_FOUND',
+          get: (id) => C().events.getEvent(id), candidate: eventCandidate,
+          resolve: (q, ctx) => resolveEvent(q, ctx), del: (id, o) => C().events.deleteEvent(id, o),
+          archived: (q) => resolveArchived(C().events.getEvents({}).items || [], q, eventCandidate)
+        },
+        'note.delete': {
+          noun: 'Заметка', where: '«Заметках»', section: '«Заметки»', notFound: 'NOTE_NOT_FOUND',
+          get: (id) => C().notes.getNote(id), candidate: noteCandidate,
+          resolve: (q) => resolveNote(q), del: (id, o) => C().notes.deleteNote(id, o),
+          archived: (q) => resolveArchived(C().notes.getNotes({ status: 'all' }).items || [], q, noteCandidate)
+        },
+        'reminder.delete': {
+          noun: 'Напоминание', where: '«Уведомлениях»', section: '«Уведомления»', notFound: 'REMINDER_NOT_FOUND',
+          get: (id) => C().reminders.get(id), candidate: reminderCandidate,
+          resolve: (q) => resolveReminder(q), del: (id, o) => C().reminders.delete(id, o)
+        },
+        'shopping.purchase.delete': {
+          noun: 'Покупка', where: '«Покупках»', section: '«Покупки»', notFound: 'PURCHASE_NOT_FOUND',
+          get: (id) => C().shopping.getPurchase(id), candidate: purchaseCandidate,
+          resolve: (q) => resolvePurchase(q), del: (id, o) => C().shopping.deletePurchase(id, o)
+        }
+      };
+    }
+    return DELETE_SPEC;
+  }
+  /* Что именно исчезнет — человек обязан увидеть ДО подтверждения: тип записи,
+     её название и отличающие детали (дата, время, папка, цена). */
+  function deleteDetails(target) {
+    const C = Core();
+    const bits = [];
+    if (target.kind === 'event') {
+      if (target.dateISO) bits.push(C.dates.dateLabel(target.dateISO));
+      if (target.allDay) bits.push('весь день');
+      else if (target.time) bits.push(C.format.time(target.time) + (target.endTime ? '–' + C.format.time(target.endTime) : ''));
+    } else if (target.kind === 'note') {
+      if (target.folder) bits.push('папка ' + quote(target.folder));
+    } else if (target.kind === 'purchase') {
+      if (target.price > 0) bits.push(C.money.exact(target.price));
+      if (target.dateISO) bits.push('куплено ' + C.dates.dateLabel(target.dateISO));
+    } else {
+      if (target.dateISO) bits.push(C.dates.dateLabel(target.dateISO));
+      if (target.time) bits.push(C.format.time(target.time));
+      /* Выполненная задача тоже удаляется, поэтому её состояние обязано быть
+         видно в подтверждении — иначе легко стереть не ту. */
+      if (target.status) bits.push(target.status === 'completed' ? 'выполнена' : 'открыта');
+    }
+    return bits.join(' · ');
+  }
+  function deleteSummary(action, target, resolution) {
+    const spec = deleteSpec()[action];
+    const details = deleteDetails(target);
+    return 'Удалить: ' + spec.noun.toLowerCase() + ' ' + quote(target.title) +
+      (details ? ' · ' + details : '') +
+      (resolution === 'INFERRED' ? ' (нашла по части названия)' : '') +
+      '. Запись исчезнет из раздела, но останется в «Истории» — оттуда её можно вернуть. ' +
+      'Подтвердите — пока ничего не удалено.';
+  }
+  const DELETE_ACTIONS = {
+    'task.delete': true, 'event.delete': true, 'note.delete': true,
+    'reminder.delete': true, 'shopping.purchase.delete': true
+  };
+  /* Род существительного задаётся явно: «Событие удалено», но «Задача удалена».
+     Вычислять род из строки нельзя — получилось бы «удолена». Подлежащее второго
+     предложения — всегда «Запись» (женский род), поэтому там форма постоянна. */
+  const DELETE_GONE = {
+    'task.delete': 'удалена', 'event.delete': 'удалено', 'note.delete': 'удалена',
+    'reminder.delete': 'удалено', 'shopping.purchase.delete': 'удалена'
+  };
+  function deleteDoneText(res) {
+    const spec = deleteSpec()[res.action];
+    const d = res.data || {};
+    return spec.noun + ' ' + quote(d.title) + ' ' + (DELETE_GONE[res.action] || 'удалена') +
+      '. Запись исчезла из раздела ' + spec.section +
+      ', но осталась в «Истории» — там же её можно вернуть кнопкой «Undo».';
+  }
   function whenPhrase(dateISO, time) {
     const C = Core();
     const label = C.dates.dateLabel(dateISO);
@@ -1935,6 +2228,11 @@ window.AvenCommand = (function () {
             eventWhenText(res.data.fromDateISO, res.data.fromTime, res.data.fromEndTime, res.data.allDay) + ' → ' +
             eventWhenText(res.data.dateISO, res.data.time, res.data.endTime, res.data.allDay) +
             '. Оно уже на новом месте в «Календаре» и в «Дне»; отменить можно в «Истории».';
+        case 'task.delete':
+        case 'event.delete':
+        case 'note.delete':
+        case 'reminder.delete':
+        case 'shopping.purchase.delete': return deleteDoneText(res);
         case 'day.plan': return dayText(res.data);
         case 'tasks.overdue':
           return res.data.items.length
@@ -1969,6 +2267,28 @@ window.AvenCommand = (function () {
     if (res.status === 'ambiguous' && res.slot) {
       return (res.question || 'Уточните выбор.') + ' Варианты: ' +
         (res.candidates || []).map((x, i) => (i + 1) + '. ' + x.title).join('; ') + '. Пока ничего не изменилось.';
+    }
+    /* Удаление обязано отвечать про свой домен: общий текст «Нашла несколько
+       задач» или «Не нашла подходящую открытую задачу» ввёл бы в заблуждение,
+       когда речь о заметке или покупке. */
+    if (DELETE_ACTIONS[res.action]) {
+      const spec = deleteSpec()[res.action];
+      if (res.status === 'ambiguous') {
+        return 'Под это название подходит несколько записей: ' +
+          (res.candidates || []).slice(0, 5).map((c, i) => {
+            const det = deleteDetails(c);
+            return (i + 1) + '. ' + quote(c.title) + (det ? ' — ' + det : '');
+          }).join('; ') +
+          '. Уточните, какую удалить — пока ничего не удалено.';
+      }
+      if (res.status === 'not_found') {
+        if (res.code === 'ARCHIVED_TARGET') {
+          return 'Запись ' + quote(p.query || res.query || '') + ' есть, но она в архиве, а архивные записи текстом я не удаляю. ' +
+            'Откройте раздел ' + spec.section + ', покажите архив — и удалите её там. Я ничего не удалила.';
+        }
+        return 'Не нашла в ' + spec.where + ' запись ' + quote(p.query || res.query || '') +
+          '. Проверьте название — я ничего не удалила.';
+      }
     }
     if (res.status === 'ambiguous' && res.code === 'AMBIGUOUS_EVENT') {
       return 'Нашла несколько подходящих событий: ' +
@@ -2050,17 +2370,23 @@ window.AvenCommand = (function () {
         { action: 'finance.expense.create', example: 'Запиши расход 850 ₽ на продукты', about: 'записывает расход — всегда после вашего подтверждения' },
         { action: 'auto.fuel.create', example: 'Запиши заправку 45 л на 2500 рублей', about: 'создаёт заправку в разделе «Авто»' },
         { action: 'auto.service.create', example: 'Запиши обслуживание замена масла на 3500 рублей', about: 'создаёт обслуживание в разделе «Авто»' },
-        { action: 'shopping.purchase.create', example: 'Добавь покупку телефон за 45000 рублей', about: 'создаёт покупку в «Покупках»; связанный расход — только по явной просьбе и после подтверждения' }
+        { action: 'shopping.purchase.create', example: 'Добавь покупку телефон за 45000 рублей', about: 'создаёт покупку в «Покупках»; связанный расход — только по явной просьбе и после подтверждения' },
+        { action: 'task.delete', example: 'Удали задачу купить масло', about: 'удаляет задачу — всегда после вашего подтверждения, вернуть можно в «Истории»' },
+        { action: 'event.delete', example: 'Удали событие стоматолог', about: 'удаляет событие — всегда после вашего подтверждения, вернуть можно в «Истории»' },
+        { action: 'note.delete', example: 'Удали заметку про отпуск', about: 'удаляет заметку — всегда после вашего подтверждения, вернуть можно в «Истории»' },
+        { action: 'reminder.delete', example: 'Удали напоминание про интернет', about: 'удаляет напоминание — всегда после вашего подтверждения, вернуть можно в «Истории»' },
+        { action: 'shopping.purchase.delete', example: 'Удали покупку телефон', about: 'удаляет покупку — всегда после вашего подтверждения, вернуть можно в «Истории»' }
       ],
       notYet: [
-        'удаление записей текстом',
+        'удаление сразу нескольких записей одной фразой («удали все задачи») — удаляю строго по одной',
         'доходы текстом (расходы уже умею)',
-        'изменение и удаление уже записанной финансовой операции текстом',
+        'изменение уже записанной финансовой операции текстом; удаление операции — только в «Финансах»',
+        'удаление заправок и обслуживания текстом — только в «Авто»',
         'создание новых категорий и счетов текстом',
         'сокращения сумм вроде «5к» и пересчёт валют',
-        'изменение, архивирование и удаление уже существующих заметок текстом',
-        'изменение, откладывание, скрытие и удаление уже существующих напоминаний текстом',
-        'изменение, ведение ремонтов, смена статуса и удаление покупок текстом (создание, поиск и гарантии уже умею)',
+        'изменение и архивирование уже существующих заметок текстом (создать, найти и удалить уже умею)',
+        'изменение, откладывание и скрытие уже существующих напоминаний текстом (создать, показать и удалить уже умею)',
+        'изменение, ведение ремонтов и смена статуса покупок текстом (создание, поиск, гарантии и удаление уже умею)',
         'чеки, фото и файлы к покупкам — ждут сервис хранения',
         'изменение названия, места, описания, участников и повторения события текстом (дату и время уже переношу)',
         'перенос повторяющихся событий текстом',

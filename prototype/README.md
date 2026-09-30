@@ -96,10 +96,10 @@ prototype/tests/
 │                           восстановление после перезагрузки, отсутствие второго пути записи,
 │                           согласованность #/profile ↔ Настройки, честность данных, Help/Tutorial,
 │                           доступность, ширины 320–1280)
-├── command-engine-check.js — Текстовые команды, заметки, напоминания, финансы/авто/покупки и перенос
-│                           события, Assistant UI (ядро без DOM + jsdom: multi-step controls, Escape,
-│                           обязательное подтверждение, stale/double confirm, History/Undo, разделы,
-│                           Home, Help/Tutorial, 320–430)
+├── command-engine-check.js — Текстовые команды, заметки, напоминания, финансы/авто/покупки, перенос
+│                           события и удаление записи текстом, Assistant UI (ядро без DOM + jsdom:
+│                           multi-step controls, Escape, обязательное подтверждение, stale/double
+│                           confirm, History/Undo, разделы, Home, Help/Tutorial, 320–430)
 ├── command-session-check.js — transient flow без DOM: ambiguity/choice, inferred confirmation/cancel,
 │                           stale/double-submit, reset (включая сброс новой командой о заметке/напоминании),
 │                           owner policy, кириллица и отсутствие hidden memory
@@ -548,7 +548,7 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 **Проверка:** `node prototype/tests/actions-core-check.js` — **18 проверок Common Actions без DOM**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/help-tutorial-check.js` — **33 проверки Help/Tutorial/responsive/TTS narration**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js`
-(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage13-entities-check.js` — **124 проверки заметок, финансов, авто, покупок и напоминаний** (контракт слоя без DOM на часах приложения, производные итоги «Финансов», сценарии через интерфейс, история и Undo, согласованность Главной/Истории/помощника/уведомлений, справка и обучение, темы и ширины, запрет записи в обход слоя). `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` — **613 проверок текстовых команд, заметок, напоминаний, расходов и Assistant UI** (включая обязательное подтверждение финансовой мутации, отмену/Escape/double confirm, уточнение счёта и категории, stale-защиту, форматы суммы и отказ от `5к`/валют); `node prototype/tests/command-session-check.js` — **140 проверок transient clarification/confirmation flow** (включая финансовые slots и сброс pending в обе стороны); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/data-integrity-check.js` — **127 проверок целостности данных** (календарный контракт даты и високосные годы, матрица невозможных дат по шести разделам, инвариант безопасных денег с границей, вычисленной из `Number.MAX_SAFE_INTEGER`, переполнение баланса, атомарность связанных Auto/Shopping, запрет обхода слоя через команду и форму, Undo и перезагрузка, детерминированные property-проверки); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tutorial2-interactive-check.js` — **90 проверок Tutorial 2.0**. Полный набор из шестнадцати suite — **1918 проверок, 0 провалов**.
+(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage13-entities-check.js` — **124 проверки заметок, финансов, авто, покупок и напоминаний** (контракт слоя без DOM на часах приложения, производные итоги «Финансов», сценарии через интерфейс, история и Undo, согласованность Главной/Истории/помощника/уведомлений, справка и обучение, темы и ширины, запрет записи в обход слоя). `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` — **702 проверки текстовых команд, заметок, напоминаний, расходов, удаления записи и Assistant UI** (включая обязательное подтверждение финансовой мутации и удаления, отмену/Escape/double confirm, уточнение счёта и категории, stale-защиту, форматы суммы и отказ от `5к`/валют, отказ от массового удаления); `node prototype/tests/command-session-check.js` — **155 проверок transient clarification/confirmation flow** (включая финансовые slots, flow удаления и сброс pending в обе стороны); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/data-integrity-check.js` — **127 проверок целостности данных** (календарный контракт даты и високосные годы, матрица невозможных дат по шести разделам, инвариант безопасных денег с границей, вычисленной из `Number.MAX_SAFE_INTEGER`, переполнение баланса, атомарность связанных Auto/Shopping, запрет обхода слоя через команду и форму, Undo и перезагрузка, детерминированные property-проверки); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tutorial2-interactive-check.js` — **90 проверок Tutorial 2.0**. Полный набор из шестнадцати suite — **2049 проверок, 0 провалов**.
 `stage1-proto-check.js` покрывает: меню и метки этапов, история с
 Undo/фильтрами/экспортом, все 8 разделов админки с подтверждениями и аудитом, тема, экраны аккаунта,
 роут-гард, сквозная история и настоящий Undo в задачах/заметках/финансах/авто/покупках/автоматизациях,
@@ -707,5 +707,19 @@ Assistant и строка Главной понимают создание по�
 `Number.MAX_SAFE_INTEGER`; переполнение баланса; атомарность связанных Auto/Shopping; невозможность
 обойти слой через команду и через форму «Финансов»; Undo и перезагрузка; детерминированные
 property-проверки границ месяцев за 9 лет, 29 февраля за 221 год и 400 сумм у границы диапазона).
-Полный набор — **15 suite, 1810/1810, 0 провалов**. Реальный браузер (Chromium/Playwright) в
+Полный набор — **16 suite, 2049/2049, 0 провалов**. Реальный браузер (Chromium/Playwright) в
 окружении недоступен — jsdom за него не выдаётся.
+
+### Iteration 9 — удаление записи текстом (2026-09-30)
+
+Первая разрушительная команда: «Удали задачу купить масло», «Удали событие стоматолог», «Удали
+заметку про отпуск», «Удали напоминание про интернет», «Удали покупку телефон». Подтверждение
+требуется ВСЕГДА, до него нет ни одной мутации и ни одной записи «Истории»; отмена возможна словом,
+кнопкой и Escape; удалённое возвращается обычным Undo на исходную позицию. Массовое удаление не
+выполняется никогда; удаление финансовой операции, заправки и обслуживания текстом честно не
+поддержано; архивная запись даёт ответ «она в архиве», а не «не нашла».
+
+Проверка: `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` —
+**702/702**, `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-session-check.js` —
+**155/155**. Полный набор — **16 suite, 2049/2049, 0 провалов**. Реальный браузер
+(Chromium/Playwright) в окружении по-прежнему недоступен — jsdom за него не выдаётся.

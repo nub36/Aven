@@ -700,9 +700,10 @@
         /* Варианты бывают двух видов: задача (дата/время/статус) и значение
            справочника «Финансов» — счёт или категория (только название и подпись). */
         const slot = (m.flow.pending && m.flow.pending.slot) || '';
-        const isEvent = !slot && (m.flow.candidates || []).some((c) => c && c.kind === 'event');
+        const kind = slot ? '' : (((m.flow.candidates || []).filter((c) => c && c.kind)[0] || {}).kind || '');
         /* Подпись варианта: у события — дата и интервал времени, у задачи —
-           дата, время и статус, у справочника «Финансов» — подсказка вида. */
+           дата, время и статус, у заметки — папка, у покупки — цена,
+           у справочника «Финансов» — подсказка вида. */
         const choiceHint = (c) => {
           if (slot) return c.hint || '';
           const date = c.dateISO ? window.AvenActions.dates.dateLabel(c.dateISO) : '';
@@ -711,9 +712,15 @@
               : (c.time ? window.AvenActions.format.time(c.time) + (c.endTime ? '–' + window.AvenActions.format.time(c.endTime) : '') : 'Без времени');
             return [date, when].filter(Boolean).join(' · ');
           }
+          if (c.kind === 'note') return c.folder ? 'Папка «' + c.folder + '»' : '';
+          if (c.kind === 'reminder') return [date, c.time ? window.AvenActions.format.time(c.time) : ''].filter(Boolean).join(' · ');
+          if (c.kind === 'purchase') {
+            return [Number(c.price) > 0 ? window.AvenActions.money.exact(c.price) : '', date].filter(Boolean).join(' · ');
+          }
           return [date, c.time ? window.AvenActions.format.time(c.time) : '', c.status === 'completed' ? 'Выполнена' : 'Открыта'].filter(Boolean).join(' · ');
         };
-        controls = `<div class="command-choices" role="group" aria-label="${slot === 'account' ? 'Выберите счёт' : slot === 'cat' ? 'Выберите категорию' : isEvent ? 'Выберите событие' : 'Выберите задачу'}">${(m.flow.candidates || []).map((c, n) =>
+        const CHOICE_LABEL = { event: 'Выберите событие', note: 'Выберите заметку', reminder: 'Выберите напоминание', purchase: 'Выберите покупку' };
+        controls = `<div class="command-choices" role="group" aria-label="${slot === 'account' ? 'Выберите счёт' : slot === 'cat' ? 'Выберите категорию' : (CHOICE_LABEL[kind] || 'Выберите задачу')}">${(m.flow.candidates || []).map((c, n) =>
           `<button type="button" class="command-choice" data-action="command-choice" data-index="${n}"><b>${n + 1}. ${A.esc(c.title)}</b><span>${A.esc(choiceHint(c))}</span></button>`).join('')}</div>`;
       } else if (m.flow && m.flow.status === 'confirmation_required') {
         controls = `<div class="command-confirm" role="group" aria-label="Подтверждение действия">

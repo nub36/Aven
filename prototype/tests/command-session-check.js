@@ -228,8 +228,11 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
   {
     const e = sandbox(); const t = task(e, 'Удалить нельзя'); clearHistory(e);
     const del = e.session.submit('Удалить задачу удалить нельзя');
-    ok('S73 destructive command без confirmation/поддержки невозможна', del.status === 'unsupported' && e.C.tasks.getTask(t.id).ok);
-    ok('S74 unsupported не мутирует и не пишет History', e.state.history.length === 0);
+    /* Удаление стало поддержанным (итерация 9), но остаётся разрушительным:
+       само по себе оно НИКОГДА не выполняется — только через подтверждение. */
+    ok('S73 destructive command без confirmation не выполняется',
+      del.status === 'confirmation_required' && e.C.tasks.getTask(t.id).ok);
+    ok('S74 destructive command до подтверждения не мутирует и не пишет History', e.state.history.length === 0);
   }
   {
     const e = sandbox(); task(e, 'Отчёт за август'); task(e, 'Отчёт для Сергея'); clearHistory(e);
@@ -588,6 +591,91 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
       ok('S155 повторяющееся событие честно не переносится и не создаёт pending',
         rep.ok === false && e.session.pending() === null &&
         e.C.events.getEvent(x.id).entity.date === '2026-09-29' && e.state.history.length === 0);
+    }
+  }
+
+  /* ---- S156–S170: удаление записи текстом (Stage 2, итерация 9) ----
+     Проверяется именно многошаговый flow: подтверждение обязательно, отказ в
+     любой форме безопасен, повторное подтверждение не удаляет дважды. */
+  {
+    {
+      const e = sandbox(); const t = task(e, 'Удалить меня'); clearHistory(e);
+      const ask = e.session.submit('Удали задачу удалить меня');
+      ok('S156 удаление всегда уходит в подтверждение, даже при точном совпадении',
+        ask.status === 'confirmation_required' && e.session.pending() !== null &&
+        e.C.tasks.getTask(t.id).ok && e.state.history.length === 0);
+      ok('S157 pending удаления сериализуем и не хранит closures',
+        typeof JSON.stringify(e.session.pending()) === 'string' &&
+        e.session.pending().type === 'confirmation');
+      const done = e.session.confirm();
+      ok('S158 confirm удаляет ровно один раз и пишет одну «Историю»',
+        done.ok && done.status === 'done' && !e.C.tasks.getTask(t.id).ok &&
+        e.state.history.length === 1 && e.state.history[0].action === 'task.delete');
+      const again = e.session.confirm();
+      ok('S159 повторный confirm ничего не делает — pending уже снят',
+        again.status === 'no_pending' && e.state.history.length === 1);
+    }
+    ['нет', 'отмена', 'не надо'].forEach((word, i) => {
+      const e = sandbox(); const t = task(e, 'Не трогать'); clearHistory(e);
+      e.session.submit('Удали задачу не трогать');
+      const r = e.session.submit(word);
+      ok('S16' + i + ' отказ словом «' + word + '» отменяет удаление без изменений',
+        r.status === 'cancelled' && e.C.tasks.getTask(t.id).ok &&
+        e.state.history.length === 0 && e.session.pending() === null);
+    });
+    {
+      const e = sandbox(); const t = task(e, 'Через cancel'); clearHistory(e);
+      e.session.submit('Удали задачу через cancel');
+      const r = e.session.cancel();
+      ok('S163 cancel() (кнопка/Escape) отменяет удаление без изменений',
+        r.status === 'cancelled' && e.C.tasks.getTask(t.id).ok && e.state.history.length === 0);
+    }
+    {
+      const e = sandbox(); const t = task(e, 'Замена команды'); clearHistory(e);
+      e.session.submit('Удали задачу замена команды');
+      const other = e.session.submit('Что у меня сегодня?');
+      ok('S164 новая команда сбрасывает pending удаление, не выполняя его',
+        other.status !== 'done' && e.C.tasks.getTask(t.id).ok &&
+        e.state.history.length === 0 && e.session.pending() === null);
+    }
+    {
+      const e = sandbox(); const t = task(e, 'Мусорный ответ'); clearHistory(e);
+      e.session.submit('Удали задачу мусорный ответ');
+      const junk = e.session.submit('ыва');
+      ok('S165 непонятный ответ на подтверждение не удаляет и держит вопрос',
+        junk.status === 'confirmation_required' && e.C.tasks.getTask(t.id).ok &&
+        e.state.history.length === 0 && e.session.pending() !== null);
+    }
+    {
+      const e = sandbox(); task(e, 'Отчёт один'); task(e, 'Отчёт два'); clearHistory(e);
+      const amb = e.session.submit('Удали задачу отчёт');
+      ok('S166 два подходящих кандидата → выбор, а не удаление',
+        amb.status === 'clarification_required' && amb.candidates.length === 2 &&
+        e.state.tasks.length === 2 && e.state.history.length === 0);
+      const picked = e.session.submit('первая');
+      ok('S167 выбор варианта не удаляет сразу — спрашивается подтверждение',
+        picked.status === 'confirmation_required' && e.state.tasks.length === 2 &&
+        e.state.history.length === 0);
+      const done = e.session.confirm();
+      ok('S168 после подтверждения удалена ровно одна задача',
+        done.ok && e.state.tasks.length === 1 && e.state.history.length === 1);
+    }
+    {
+      const e = sandbox(); const t = task(e, 'Массовое'); clearHistory(e);
+      const bulk = e.session.submit('Удали все задачи');
+      ok('S169 массовое удаление не создаёт pending и ничего не трогает',
+        bulk.status === 'unsupported' && e.session.pending() === null &&
+        e.C.tasks.getTask(t.id).ok && e.state.history.length === 0);
+    }
+    {
+      const e = sandbox(); const t = task(e, 'Устаревшая цель'); clearHistory(e);
+      e.session.submit('Удали задачу устаревшая цель');
+      /* Цель удалена другим путём, пока висел вопрос. */
+      e.C.tasks.deleteTask(t.id, { source: 'test' });
+      const histAfter = e.state.history.length;
+      const r = e.session.confirm();
+      ok('S170 исчезнувшая цель безопасно отклоняется и не пишет вторую «Историю»',
+        r.ok === false && r.status === 'stale' && e.state.history.length === histAfter);
     }
   }
 
