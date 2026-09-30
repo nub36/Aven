@@ -1035,4 +1035,4 @@ text commands», DECISIONS.md). Выбор кандидата не заменя�
 
 - `command-engine-check.js` — **786/786** (+80 проверок: разбор, отказы, подтверждение, stale, Undo, domain preservation, UI Assistant, мобильные ширины, a11y, Help & Tutorial).
 - `command-session-check.js` — **155/155**.
-- **Полный набор тестов:** 17 suites, **2185/2185**, 0 провалов.
+- **Полный набор тестов:** 17 suites, **2198/2198**, 0 провалов.
