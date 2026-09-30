@@ -148,7 +148,7 @@ Morning/Evening, Settings, Profile, Help) остаются информацио�
 Проверки: `tests/tutorial2-interactive-check.js` — 90 behavioral checks; существующий
 `tests/help-tutorial-check.js` — 33 checks совместимости.
 
-## Текстовые команды (Stage 2, итерации 1–8, 2026-09-28 … 2026-09-29)
+## Текстовые команды (Stage 2, итерации 1–11, 2026-09-28 … 2026-09-30)
 
 `js/command.js` (`window.AvenCommand`) — ядро текстовых команд **без DOM, без AI/LLM, без сети и без
 голоса**: `normalize → parse → structured intent → execute → structured result → respond`. Разбор
@@ -746,6 +746,26 @@ property-проверки границ месяцев за 9 лет, 29 февр
 Проверка: `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` —
 **786/786**, `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-session-check.js` —
 **155/155**. Полный набор из семнадцати suite — **2198 проверок, 0 провалов**.
+
+### Iteration 11 — изменение текста существующей заметки (2026-09-30)
+
+Две отдельные команды: «Замени текст заметки План отпуска: Купить билеты» полностью заменяет body,
+а «Дополни заметку План отпуска: Забронировать отель» сохраняет старый текст и добавляет новую строку.
+Двоеточие отделяет название цели от нового текста; расплывчатое «измени заметку …» безопасно
+подсказывает точные формы вместо догадки.
+
+Обе операции всегда требуют подтверждения. До Confirm нет мутации и History; Cancel/«нет»/Escape
+ничего не меняют, двойной Confirm не выполняет действие дважды. Одинаковые названия дают выбор с
+папками; изменённая или удалённая до Confirm цель отклоняется как stale; архивная заметка определяется
+честно. Запись выполняется только через `AvenActions.notes.updateNote`, поэтому title/folder/tags/
+pinned/archive сохраняются, а обычный History/Undo возвращает прежний текст. Массовое редактирование,
+архивирование, форматирование и вложения текстом не добавлены.
+
+Help получил статью «Изменение текста заметки», существующие туры Commands и Notes расширены;
+компактный экран Assistant по-прежнему показывает три примера. Контракт —
+[docs/COMMAND_ENGINE.md §20](../docs/COMMAND_ENGINE.md). Проверка: `command-engine-check.js` —
+**858/858**, `command-session-check.js` — **170/170**, полный regression — **17 suites,
+2285/2285**, 0 failures. Реальный браузер недоступен; jsdom за него не выдаётся.
 
 ### UI Readability & Layout Polish (2026-09-30)
 

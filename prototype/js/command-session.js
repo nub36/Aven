@@ -95,11 +95,13 @@ window.AvenCommandSession = (function () {
           targetId: result.target && result.target.id,
           targetTitle: result.target && result.target.title,
           /* Минимальный слепок ожидаемого состояния цели — только для повторной
-             проверки перед выполнением (stale detection), не копия сущности. */
+             проверки перед выполнением (stale detection), не копия сущности.
+             Для заметки body — именно версия, показанная перед подтверждением. */
           expected: result.target ? {
             title: result.target.title || '', dateISO: result.target.dateISO || '',
             time: result.target.time || '', endTime: result.target.endTime || '',
-            allDay: result.target.allDay === true
+            allDay: result.target.allDay === true,
+            body: String(result.target.body || ''), folder: String(result.target.folder || '')
           } : null,
           slots: carried,
           summary: result.summary
