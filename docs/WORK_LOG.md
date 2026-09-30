@@ -6,6 +6,217 @@
 
 ---
 
+## 2026-09-30 — P0 REOPENED: Mobile Interaction still blocked after PR #38 — asset cache-busting hotfix
+
+### Контрольная точка (проверено самостоятельно, не со слов)
+
+- `git fetch origin --prune`; `origin/main` = `020f15115e42be8d299599e3db1768274262ebd4` (совпадает с
+  переданным HEAD). Рабочая ветка сессии `arena/01a0f0e1-aven` уже указывала на этот же коммит —
+  отдельная новая ветка от `main` не создавалась (сессия зафиксирована за `arena/01a0f0e1-aven`).
+  `git status` — чисто, `git log --all --graph --oneline --decorate` — один грейфнутый коммит-мерж
+  PR #38, `git branch -a` — только `main`/`arena/01a0f0e1-aven`/`origin/HEAD`.
+- PR #38 (`gh pr view 38`) — MERGED, `mergeCommit.oid = 020f151…` (совпадает с `origin/main`), дифф
+  затронул ровно 5 файлов: `docs/CHANGELOG.md`, `docs/WORK_LOG.md`, `prototype/README.md`,
+  `prototype/css/style.css`, `prototype/tests/mobile-ui-polish-check.js`.
+- Workflow «Prototype Pages» run `36673467182` — success, job `deploy` — success, задеплоен на
+  `https://nub36.github.io/Aven/` (проверено `gh run list`/`gh run view`).
+- **Production проверен напрямую (не только исходники):** `https://nub36.github.io/Aven/` и
+  `https://nub36.github.io/Aven/css/style.css` получены постранично и посимвольно сверены с
+  `prototype/index.html`/`prototype/css/style.css` из `origin/main` — включая точный текст
+  `@media (max-width: 860px) { .nav-backdrop { display: none; ... pointer-events: none; } }` и
+  `body.nav-open .nav-backdrop { display: block; ...; pointer-events: auto; }`. **Продакшен-байты
+  идентичны источнику** — фикс PR #38 реально лежит на сервере.
+- **Baseline тестов установлен самостоятельно**, не принят на веру: jsdom@30 в `/tmp/lab` (проектные
+  зависимости не менялись), прогнаны все 16 файлов из `prototype/tests/*.js`:
+  `actions-core-check` 18/18, `aven3d-viewer-check` 43/43, `command-engine-check` 613/613,
+  `command-session-check` 140/140, `daily-check` 139/139, `data-integrity-check` 127/127,
+  `help-tutorial-check` 33/33, `mobile-ui-polish-check` 45/45, `navigation-check` 63/63,
+  `notifications-check` 49/49, `settings-profile-check` 121/121, `stage1-proto-check` 232/232,
+  `stage13-entities-check` 124/124, `suggestions-check` 46/46, `tts-proto-check` 42/42,
+  `tutorial2-interactive-check` 90/90 — Σ **1925/1925, 0 провалов** (совпало с переданным числом).
+  `node --check` по всем `prototype/**/*.js` — чисто.
+
+### P0 факт от владельца
+
+Реальный Android после деплоя PR #38 остался полностью некликабельным (hamburger, navigation, Home
+controls/cards, forms, кнопки). Статус PR #38 переквалифицирован: **DEPLOYED, но FAILED OWNER ANDROID
+VALIDATION** — P0 не закрыт.
+
+### Расследование (что проверено, прежде чем менять код)
+
+Прочитаны полностью: `README.md`, `docs/AGENT_GUIDE.md`, `docs/WORK_LOG.md` (актуальный хвост),
+`docs/CHANGELOG.md`, `docs/ARCHITECTURE.md`, `prototype/README.md`, `prototype/index.html`,
+`prototype/css/style.css`, `prototype/css/character.css`, JS навигации/модалей/tutorial/overlay
+(`app.js`, `ui.js`, `character.js`, `tutorial.js`, `state.js`).
+
+1. **Попытка реального браузера (обязательный шаг, честно задокументирована):**
+   - `npm install playwright` — успешно (реестр npm доступен), но
+     `npx playwright install --with-deps chromium` упал: `apt-get` не смог обратиться к
+     `deb.debian.org` (сеть песочницы это блокирует), пакеты GL/шрифтов недоступны.
+   - `npx playwright install chromium` (без deps) — TLS-обрыв соединения к `cdn.playwright.dev`
+     (`ECONNRESET`) на каждой попытке (3 повтора самим Playwright).
+   - `npm install puppeteer` + `npx puppeteer browsers install chrome` — та же ошибка:
+     «Client network socket disconnected before secure TLS connection was established» ко всем
+     провайдерам загрузки.
+   - **Вывод: реальный Chromium/Playwright/Puppeteer недоступен в этой песочнице — сеть пропускает
+     npm-реестр, но блокирует бинарные CDN браузеров и apt-зеркала.** Real-browser/real-device
+     hit-testing (`elementFromPoint`/`elementsFromPoint`, pointerdown/click capture-phase диагностика)
+     **не выполнялся** — попытки документированы выше, jsdom за него не выдаётся нигде в отчёте.
+2. **Полный статический аудит всех потенциальных screen-covering блокеров** (не ограничиваясь
+   `nav-backdrop`, как явно требовалось): написан повторяемый построчный CSS-парсер (учитывает
+   вложенность `@media`, не путает объявления с текстом вложенных правил) и найдены ВСЕ правила,
+   сочетающие `position: fixed` и `inset: 0` в `style.css`+`character.css`: `body::before`,
+   `.modal-overlay`, `.assistant`, `.tour-layer`, `.sidebar` (мобильный drawer), `.nav-backdrop`.
+   Для каждого проверен фактический контракт непересечения с кликами:
+   - `body::before` — `pointer-events: none` в том же правиле;
+   - `.modal-overlay` — существует в DOM только пока `ui.js openModal()` его создал (не в статической
+     разметке `index.html`);
+   - `.assistant` — рендерится только внутри `#page` при активном маршруте `assistant` (не присутствует
+     в статической разметке `index.html`);
+   - `.tour-layer` — сам слой имеет `pointer-events: none`, интерактивен только вложенный `.tour-pop`;
+   - `.sidebar` (мобильный) — по умолчанию `transform: translate3d(calc(-100% - 24px), 0, 0)` уводит
+     его за пределы экрана, `z-index: 220` строго выше `.nav-backdrop` (`210`); включается только
+     `body.nav-open .sidebar { transform: translateX(0); }`;
+   - `.nav-backdrop` (закрыт) — `display: none; pointer-events: none;` (это и есть фикс PR #38).
+   - **Седьмого, ещё не исправленного блокера в текущем исходном коде не найдено.** Проверены также
+     JS-инъекции стилей (`grep` на `style.position=`, `cssText`, `.style.zIndex` по всем
+     `prototype/js/*.js`) — их нет; инъекции DOM в `document.body` ограничены `tutorial.js`
+     (корректно удаляет слой при закрытии) и разовой временной `<a>` для скачивания в `history.js`.
+   - Аудит формализован в тест (см. ниже) — он универсален и поймал бы саму исходную регрессию PR #37,
+     если бы её не исправили.
+3. **Аудит production assets и кэша (по требованию — не «просто посоветовать очистить кэш» без
+   доказательств):**
+   - Прямой запрос `https://nub36.github.io/Aven/` и `.../css/style.css` — содержимое побайтово
+     совпадает с `origin/main` (см. выше) — сервер отдаёт правильные, уже исправленные файлы.
+   - **Найдено и подтверждено внешним источником:** GitHub Pages отдаёт **все** файлы сайта с
+     фиксированным `Cache-Control: max-age=600`, который нельзя изменить из репозитория —
+     официально подтверждено поддержкой GitHub
+     (https://webapps.stackexchange.com/questions/119286), это не специфика данного репозитория.
+   - `prototype/index.html` до этой сессии ссылался на `css/style.css`, `css/character.css` и все
+     `js/*.js` БЕЗ какой-либо версии/хэша в URL — типичный шаблон, из-за которого HTTP-кэш (браузер
+     и/или кэш мобильного оператора) может отдавать СТАРУЮ версию файла ещё до истечения `max-age`,
+     даже когда HTML уже новый.
+   - **Вывод (доказанный механизм, честно помечен как наиболее вероятное, а не 100%-но подтверждённое
+     на конкретном устройстве владельца объяснение):** устройство, уже открывавшее прототип раньше
+     (например, при проверке PR #37 в тот же день — деплои шли подряд с интервалом в минуты/часы по
+     `gh run list`), могло продолжать получать из кэша СТАРЫЙ `style.css`/`app.js` при уже свежем,
+     правильном `index.html` — то есть воспроизводить в точности исходный P0-баг несмотря на
+     технически корректный и подтверждённо задеплоенный фикс PR #38. Это объясняет и то, почему
+     production-байты верны, и то, почему устройство владельца всё равно сломано.
+   - Это НЕ «просто почисти кэш»: реализован код-фикс (ниже), который делает эту проблему
+     структурно невозможной для всех БУДУЩИХ деплоев, а не разовый совет пользователю.
+4. **Гипотеза о hybrid-скриншоте (sidebar + X + hamburger одновременно):** при текущем исходном коде
+   такое сочетание физически возможно только если `.sidebar` отрисован с активными
+   `position: fixed; inset: 0 auto 0 0;` (мобильные правила) БЕЗ применённого `transform` (то есть
+   действует часть мобильного `@media`-блока, но не вся) — например, именно то, что происходит при
+   использовании УСТАРЕВШЕЙ версии `style.css`, где могла отсутствовать текущая связка
+   transform+z-index (тот самый класс проблем, что и выше). Прямых доказательств с конкретного
+   устройства владельца нет (real-browser недоступен) — гипотеза зафиксирована честно как наиболее
+   правдоподобная, не как подтверждённый факт.
+
+### Root cause (доказанный в рамках доступных инструментов)
+
+**Не новый CSS-баг.** PR #38 корректно исправил `nav-backdrop` и это подтверждено побайтовым
+сравнением production. Доказанный на уровне репозитория дефект — **отсутствие cache-busting для
+статических ассетов прототипа в сочетании с неотключаемым `Cache-Control: max-age=600` GitHub
+Pages**: любой экстренный hotfix мог (и, по всей видимости, в этот раз — реально) не долетать до уже
+посещавшего сайт устройства в течение по крайней мере нескольких минут после деплоя, воспроизводя уже
+устранённый на сервере баг. Это дефект пайплайна доставки, а не дефект логики UI.
+
+### Исправление (минимальный P0-скоуп, без feature work)
+
+1. `prototype/index.html`: у каждого локального `<link>`/`<script src>` (css/js/assets) добавлен
+   `?v=__ASSET_VERSION__`.
+2. `.github/workflows/prototype-pages.yml`: новый шаг перед `upload-pages-artifact` подставляет
+   `__ASSET_VERSION__` → `${{ github.sha }}` через `sed` в артефакте деплоя (в git не коммитится);
+   шаг явно падает (`exit 1`), если плейсхолдер не найден или не полностью заменён — сборка не может
+   тихо задеплоить неверсионированные ассеты.
+3. `prototype/css/style.css` и весь остальной UI-код **не менялись** — root cause не в CSS-логике,
+   а в доставке; трогать уже верно работающий и production-подтверждённый `nav-backdrop`-фикс не
+   было причины (минимизация скоупа и диффа).
+4. `prototype/tests/mobile-ui-polish-check.js`: +20 новых проверок:
+   - 6 проверок cache-busting-контракта (версия есть у каждого локального ресурса; используется именно
+     плейсхолдер `__ASSET_VERSION__`, а не вручную вписанная дата; workflow содержит подстановку SHA
+     ДО шага `upload-pages-artifact`; workflow падает при отсутствии плейсхолдера).
+   - Универсальный CSS-аудит (`extractCssRules`, учитывает вложенность `@media`) всех правил
+     `position: fixed` + `inset: 0` в обеих таблицах стилей с allow-list и проверкой контракта
+     непересечения кликов для каждого найденного селектора; неизвестный новый селектор такого рода
+     **провалит тест** — регрессионная защита от повторения класса бага PR #37 для ЛЮБОГО будущего
+     оверлея, не только `nav-backdrop`.
+   - **Доказано, что новые тесты действительно ловят баг:** тест прогонялся против оригинальных
+     (немодифицированных) `prototype/index.html` и `.github/workflows/prototype-pages.yml` из
+     `origin/main` — 5 из 6 cache-busting-проверок **падают** на них; после применения фикса —
+     все 65 проверок в файле проходят.
+
+### Тесты и регрессия
+
+- `mobile-ui-polish-check.js`: 45 → **65** (+20), все проходят.
+- Полный прогон всех 16 наборов (jsdom@30, `/tmp/lab`, зависимости проекта не менялись):
+  `actions-core-check` 18/18, `aven3d-viewer-check` 43/43, `command-engine-check` 613/613,
+  `command-session-check` 140/140, `daily-check` 139/139, `data-integrity-check` 127/127,
+  `help-tutorial-check` 33/33, `mobile-ui-polish-check` **65/65**, `navigation-check` 63/63,
+  `notifications-check` 49/49, `settings-profile-check` 121/121, `stage1-proto-check` 232/232,
+  `stage13-entities-check` 124/124, `suggestions-check` 46/46, `tts-proto-check` 42/42,
+  `tutorial2-interactive-check` 90/90. **Итого: 16 наборов, 1945/1945, 0 провалов.**
+- `node --check` по всем изменённым и по всем `prototype/**/*.js` — чисто.
+- `git diff --check` — чисто (пробельных артефактов нет).
+- `.github/workflows/prototype-pages.yml` — валидность YAML проверена (`python3 -c "import yaml..."`),
+  порядок шагов проверен программно; сама подстановка (`sed`) отдельно смоделирована локально на копии
+  файла — все 29 вхождений `__ASSET_VERSION__` заменяются корректно.
+
+### Честно не сделано / ограничения
+
+- **Real-browser validation НЕ ВЫПОЛНЕН** — Chromium/Playwright/Puppeteer недоступны в песочнице
+  (см. задокументированные попытки выше). `elementFromPoint`/`elementsFromPoint`, event-path
+  (pointerdown/click capture, preventDefault/stopPropagation) диагностика на реальном движке
+  **не проводились**; jsdom нигде не выдаётся за такую проверку.
+- Гипотеза о причине persistent breakage (устаревший кэш ассетов на устройстве владельца) —
+  **наиболее вероятное, evidence-based, но не 100%-но подтверждённое на конкретном устройстве
+  владельца** объяснение; она не отменяет ценности нового CSS-аудита (пункт 2 выше), который
+  независимо подтвердил отсутствие иных известных blocker'ов в текущем исходном коде.
+- Если владелец, ОБЯЗАТЕЛЬНО удалив кэш/данные сайта (или через режим инкогнито) на реальном Android,
+  всё равно увидит некликабельный UI — это исключит кэш как причину и потребует именно real-device
+  remote-debugging сессии (`chrome://inspect` с подключённым Android по USB) для получения настоящих
+  `elementFromPoint`/event-target доказательств, которые в этой песочнице получить нельзя.
+
+### Что рекомендуется владельцу (Android checklist)
+
+1. Открыть `https://nub36.github.io/Aven/` на Android **в режиме инкогнито** (гарантированно без кэша)
+   ПОСЛЕ мерджа и деплоя этого PR.
+2. Проверить: hamburger, sidebar-пункты, X закрытия, backdrop-закрытие тапом вне drawer, Home
+   command bar (ввод + отправить), карточки Home, кнопки Задачи/Финансы/Авто, формы (создание
+   задачи/расхода), Tutorial (открыть и закрыть).
+3. Если всё кликабельно — сообщить и закрыть P0.
+4. Если НЕТ (даже в инкогнито/после явной очистки данных сайта) — это исключает кэш и означает
+   отдельный, ещё не воспроизведённый в песочнице баг; в этом случае нужен реальный
+   `chrome://inspect` remote debugging сеанс с этого устройства для честного `elementFromPoint`
+   доказательства (следующий шаг для следующей сессии).
+
+### Финальный статус
+
+**DEPLOYED — AWAITING OWNER ANDROID VALIDATION.** P0 самостоятельно не закрывается.
+
+### Не тронуто (подтверждено)
+
+- PR #8 / Natural Voice / TTS / Aigul / Xenia / Fish Audio / VPS / nginx — не тронуто
+  (`prototype/js/voice.js`, `prototype/js/tts/*`, `research/tts/**`, VPS/nginx-конфигурация не
+  менялись; только query-параметр `?v=` добавлен к УЖЕ существующим тегам `<script src="js/voice.js">`
+  и т.д. — сам код/логика TTS не изменены ни на байт).
+- PR #15 / 3D / Female Aven asset / Blender / Meshy / rig/morph/lip-sync — не тронуто
+  (`prototype/js/aven3d.js`, `prototype/aven-3d*.html`, `research/3d/**` не менялись и не открывались
+  для правки).
+- Новый PROJECT_PLAN stage не начинался; feature work/redesign/refactor не выполнялись — изменения
+  строго ограничены доставкой ассетов (`index.html` + workflow) и regression-тестами/докой.
+
+### Файлы, изменённые в этой сессии
+
+- `prototype/index.html`
+- `.github/workflows/prototype-pages.yml`
+- `prototype/tests/mobile-ui-polish-check.js`
+- `docs/CHANGELOG.md`, `docs/WORK_LOG.md` (этот файл), `prototype/README.md`
+
+---
+
 ## 2026-09-29 — P0 Hotfix: Mobile Interaction Recovery (Android Touch & Click Blocker)
 
 ### Задача
