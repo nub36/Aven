@@ -22,6 +22,12 @@ window.AvenCommandSession = (function () {
   function candidateLabel(c) {
     const C = window.AvenActions;
     const bits = [c.title];
+    /* Заметка описывается папкой, а не датой: «обновлена вчера» не помогает
+       отличить одну заметку от другой, а папка помогает. */
+    if (c.kind === 'note') {
+      if (c.folder) bits.push('папка «' + c.folder + '»');
+      return bits.join(' · ');
+    }
     if (c.dateISO || c.due) bits.push(C.dates.dateLabel(c.dateISO || c.due));
     /* Событие описывается датой и интервалом времени, задача — датой и статусом.
        Второй session для событий не создавался: отличается только подпись. */
@@ -31,6 +37,13 @@ window.AvenCommandSession = (function () {
       return bits.join(' · ');
     }
     if (c.time) bits.push(C.format.time(c.time));
+    /* Напоминание и покупка не имеют статуса «открыта/выполнена»: приписывать
+       его было бы неправдой. У покупки полезнее цена. */
+    if (c.kind === 'reminder') return bits.join(' · ');
+    if (c.kind === 'purchase') {
+      if (Number(c.price) > 0) bits.push(C.money.exact(c.price));
+      return bits.join(' · ');
+    }
     bits.push(c.status === 'completed' ? 'выполнена' : 'открыта');
     return bits.join(' · ');
   }
@@ -38,12 +51,16 @@ window.AvenCommandSession = (function () {
      справочника финансов — счёт или категория (у них только название). Второй
      session для этого не создавался: различается лишь подпись варианта. */
   function slotLabel(c) { return c.title; }
+  const KIND_QUESTION = {
+    event: 'Нашла несколько подходящих событий. Уточните выбор:',
+    note: 'Нашла несколько подходящих заметок. Уточните выбор:',
+    reminder: 'Нашла несколько подходящих напоминаний. Уточните выбор:',
+    purchase: 'Нашла несколько подходящих покупок. Уточните выбор:'
+  };
   function clarificationResponse(candidates, question, slot) {
     const label = slot ? slotLabel : candidateLabel;
-    const isEvent = !slot && (candidates || []).some((c) => c && c.kind === 'event');
-    return (question || (isEvent
-      ? 'Нашла несколько подходящих событий. Уточните выбор:'
-      : 'Нашла несколько подходящих задач. Уточните выбор:')) + ' ' +
+    const kind = slot ? '' : (((candidates || []).filter((c) => c && c.kind)[0] || {}).kind || '');
+    return (question || KIND_QUESTION[kind] || 'Нашла несколько подходящих задач. Уточните выбор:') + ' ' +
       candidates.map((c, i) => (i + 1) + '. ' + label(c)).join('; ') + '. Пока ничего не изменилось.';
   }
 
