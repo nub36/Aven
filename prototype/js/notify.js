@@ -414,16 +414,18 @@ window.AvenNotify = (function () {
     const isSnoozed = n.snoozed, isDismissed = n.dismissed;
     return `
     <div class="card notif-item sev-${n.severity} ${n.read ? 'is-read' : 'is-unread'}" data-key="${A.esc(n.key)}">
-      <div class="notif-ico" aria-hidden="true">${n.icon}</div>
-      <div class="grow">
-        <div class="notif-top">
-          ${n.read ? '' : '<span class="notif-dot" title="Непрочитано" aria-label="Непрочитано"></span>'}
-          <b>${A.esc(n.title)}</b>
-          <span class="pill ${sevPill[n.severity]}">${sevLabel[n.severity]}</span>
-          ${isSnoozed ? `<span class="pill">отложено до ${A.esc(D().humanDate(n.snoozeUntilISO))}</span>` : ''}
-          ${isDismissed ? '<span class="pill">скрыто</span>' : ''}
-        </div>
+      <div class="notif-ico">
+        <span aria-hidden="true">${n.icon}</span>
+        ${n.read ? '' : '<span class="notif-dot" title="Непрочитано" aria-label="Непрочитано" role="img"></span>'}
+      </div>
+      <div class="notif-main">
+        <span class="notif-title">${A.esc(n.title)}</span>
         <div class="notif-sub">${A.esc(n.sub)}</div>
+      </div>
+      <div class="notif-status">
+        <span class="pill ${sevPill[n.severity]}">${sevLabel[n.severity]}</span>
+        ${isSnoozed ? `<span class="pill">отложено до ${A.esc(D().humanDate(n.snoozeUntilISO))}</span>` : ''}
+        ${isDismissed ? '<span class="pill">скрыто</span>' : ''}
       </div>
       <div class="notif-actions">
         <a class="btn small" href="${A.esc(n.href)}" data-action="notif-open" data-key="${A.esc(n.key)}">Открыть</a>

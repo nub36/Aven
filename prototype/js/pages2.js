@@ -639,8 +639,9 @@
     }
     const assistantSuggestions = window.AvenSuggestions ? window.AvenSuggestions.getSuggestions({ surface: 'assistant', dateISO: window.AvenActions.dates.todayISO() }).slice(0, 2) : [];
     const E = commandEngine();
-    const examples = E ? E.examples() : [];
-    const notYet = E ? E.supported().notYet : [];
+    /* Только самые полезные примеры: экран помощника — не каталог команд.
+       Полный перечень и границы — в справке (раздел «Команды»). */
+    const examples = (E ? E.examples() : []).slice(0, 3);
     const html = `
     <div class="assistant">
       <div class="a-inner">
@@ -668,10 +669,9 @@
           <input type="text" id="chat-input" name="command" data-tour="command-input" placeholder="Например: что у меня сегодня?" aria-describedby="cmd-hint">
           <button class="btn primary" type="button" data-action="chat-send" data-tour="command-send" title="Отправить" aria-label="Отправить команду">→</button>
         </form>
-        <div class="s" id="cmd-hint" data-tour="command-limits" style="color:var(--muted);font-size:.78rem;text-align:center;padding:8px 0 14px">
-          Команды разбираются по понятным правилам на вашем устройстве: это не свободный разговор и не внешний AI.
-          Всё, что создано командой, попадает в обычные разделы и в «Историю» — там же это можно отменить.
-          Пока не умею: ${A.esc(notYet.join(' · '))}. Assistant не заменяет обычные страницы сайта.
+        <div class="s a-hint" id="cmd-hint" data-tour="command-limits">
+          <span>Короткая команда или вопрос обычными словами — это не свободный разговор и не внешний AI.</span>
+          <button class="btn small" type="button" data-action="help-topic" data-topic="commands">Что умею и чего пока нет</button>
         </div>
       </div>
     </div>`;

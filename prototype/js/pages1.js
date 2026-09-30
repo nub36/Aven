@@ -289,7 +289,7 @@
       </div>` : ''}
 
       ${cards.reminders ? `
-      <div class="card">
+      <div class="card wide" data-card="notifications">
         <div class="head"><h3>Уведомления</h3><a href="#/notifications" class="btn small">Все →</a></div>
         ${notifTop.length ? notifTop.slice(0, 4).map((n) => `
           <a class="row-item" href="${A.esc(n.href)}"><span class="time" aria-hidden="true">${A.esc(n.icon)}</span><div class="grow"><div class="t">${A.esc(n.title)}</div><div class="s">${A.esc(n.sub)}</div></div>${n.read ? '' : '<span class="pill accent">новое</span>'}</a>`).join('') : '<div class="empty">Ничего не требует внимания</div>'}
@@ -300,7 +300,7 @@
       </div>` : ''}
 
       ${cards.actions ? `
-      <div class="card">
+      <div class="card wide" data-card="actions">
         <div class="head"><h3>Последние действия</h3><a href="#/history" class="btn small">История →</a></div>
         ${latestHistory.length ? latestHistory.map((h) => `
           <div class="row-item"><div class="grow"><div class="t">${A.esc(h.title)}</div><div class="s">${A.esc(h.object || h.action)} · ${A.esc(h.when || '')}</div></div>${h.undoable && !h.undone ? '<span class="pill">Undo</span>' : ''}</div>`).join('') : '<div class="empty">История появится после первого изменения данных</div>'}
@@ -451,7 +451,7 @@
     </section>
     <div class="card" style="margin-top:16px" data-tour="day-attention">
       <div class="head"><h3>Требует внимания</h3><span class="pill">расчёт по текущим данным</span></div>
-      ${attention.length ? `<div class="grid cols-3">${attention.map((i) => `
+      ${attention.length ? `<div class="attention-grid">${attention.map((i) => `
         <a class="row-item" href="${A.esc(i.href)}"><span class="time">${A.esc(i.icon)}</span><div class="grow"><div class="t">${A.esc(i.title)}</div><div class="s">${A.esc(i.sub)}</div></div><span class="pill ${i.cls}">${A.esc(i.label || '')}</span></a>`).join('')}</div>` : '<div class="empty">Просроченных задач, истекающих документов и гарантий нет</div>'}
       <div class="s" style="color:var(--muted);font-size:.82rem;margin-top:10px">Единый список и настройка источников — в разделе <a href="#/notifications">«Уведомления»</a>. Здесь показано только срочное по текущим данным; фоновых оповещений и доставки при закрытой вкладке в прототипе нет (Stage 1.1, MVP_SCOPE §4.2).</div>
     </div>`;

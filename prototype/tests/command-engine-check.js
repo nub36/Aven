@@ -1754,15 +1754,34 @@ async function partB() {
       !!p.q('#cmd-form') && !!p.q('label[for="chat-input"]') && !!p.q('#chat-input'));
     ok('B2 область ответов объявляется вспомогательным технологиям',
       (p.q('#chat') || {}).getAttribute && p.q('#chat').getAttribute('aria-live') === 'polite');
-    ok('B3 показаны примеры команд, и они подставляются в поле, а не выполняются сразу',
-      p.qa('[data-action="cmd-example"]').length >= 4);
+    /* Owner UI review: экран помощника — не каталог команд. Примеров должно быть
+       мало (2–3), полный перечень живёт в справке. */
+    ok('B3 показаны 2–3 примера команд, и они подставляются в поле, а не выполняются сразу',
+      p.qa('[data-action="cmd-example"]').length >= 2 && p.qa('[data-action="cmd-example"]').length <= 3);
     const before = p.st().tasks.length;
     p.click(p.qa('[data-action="cmd-example"]')[0]);
     await sleep(150);
     ok('B4 нажатие на пример только заполняет поле',
       (p.q('#chat-input').value || '').length > 0 && p.st().tasks.length === before);
     ok('B5 экран честно говорит, что это не свободный разговор и не внешний AI',
-      /не свободный разговор/i.test(p.text()) && /Пока не умею/i.test(p.text()));
+      /не свободный разговор/i.test(p.text()) && /не внешний AI/i.test(p.text()));
+    /* Подсказка под полем стала короткой, но честность не потеряна: подробности
+       обязаны существовать в справке и быть достижимы прямо отсюда. */
+    {
+      const hint = p.q('#cmd-hint');
+      ok('B5a подсказка под полем короткая, а не технический абзац',
+        !!hint && (hint.textContent || '').trim().length < 220);
+      ok('B5b из подсказки можно попасть в справку по командам',
+        !!hint && !!hint.querySelector('[data-action="help-topic"][data-topic="commands"]'));
+      const notYet = p.w.AvenCommand.supported().notYet;
+      const helpBodies = p.w.AvenHelp.articles.filter((x) => x.cat === 'commands')
+        .map((x) => x.title + ' ' + x.body).join(' ');
+      ok('B5c перечень «чего пока нет» не пропал, а переехал в справку',
+        notYet.length >= 4 && /Удалить всё сразу/i.test(helpBodies) &&
+        /доход/i.test(helpBodies) && /не свободный разговор/i.test(helpBodies));
+      ok('B5d длинный перечень ограничений больше не вывален под поле ввода',
+        !/Пока не умею/i.test((hint || {}).textContent || ''));
+    }
     ok('B6 у экрана есть кнопки справки и обучения по командам',
       p.qa('[data-action="tutorial-start"][data-tour-id="commands"]').length > 0 &&
       p.qa('[data-action="help-topic"][data-topic="commands"]').length > 0);

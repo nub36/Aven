@@ -329,8 +329,12 @@ body.assistant-mode .content { padding: 0; max-width: none; }
 .cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.home-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; min-width: 0; }
-.home-grid .span-2 { grid-column: span 2; }
+.home-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; min-width: 0; }
+.home-grid > .card { grid-column: span 2; min-width: 0; }
+/* Карточки с живым русским текстом: половина строки вместо трети, иначе
+   заголовки переносятся почти по одному слову. */
+.home-grid > .card.wide { grid-column: span 3; }
+.home-grid .span-2 { grid-column: span 4; }
 
 /* Buttons */
 .btn {
@@ -421,6 +425,16 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: .92rem; }
 /* List Rows */
 .row-item { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border); min-width: 0; }
 .row-item:last-child { border-bottom: none; }
+.attention-grid {
+  display: grid;
+  /* auto-fit: один пункт занимает полезную ширину карточки, три — по трети.
+     Пустые колонки справа не остаются. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 2px 16px;
+  min-width: 0;
+}
+.attention-grid > .row-item { min-width: 0; }
+.attention-grid .t, .attention-grid .s { max-width: 72ch; overflow-wrap: anywhere; }
 .row-item .grow { flex: 1; min-width: 0; }
 .row-item .t { font-weight: 600; }
 .row-item .s { color: var(--muted); font-size: .85rem; margin-top: 2px; }
@@ -718,14 +732,21 @@ html[data-theme="dark"] .cmdbar {
   align-items: center; padding: 28px 16px;
   height: 100vh; height: 100dvh;
 }
-.assistant .a-inner { width: 100%; max-width: 720px; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.assistant .a-inner {
+  width: 100%;
+  /* Чат занимает практически всю доступную ширину content area. Верхний предел
+     нужен только для того, чтобы на широком мониторе строка не превращалась в
+     неудобную «бесконечную». */
+  max-width: min(100%, 1080px);
+  display: flex; flex-direction: column; flex: 1; min-height: 0;
+}
 .assistant .a-top { display: flex; justify-content: flex-end; margin-bottom: 8px; }
 .assistant .a-logo { text-align: center; margin: 4px 0 16px; }
 .assistant .a-logo .mark { margin: 0 auto 10px; width: 52px; height: 52px; font-size: 1.5rem; }
 .assistant .a-logo h1 { margin: 0; font-size: 1.5rem; }
 .assistant .a-logo p { color: var(--muted); margin: 4px 0 0; }
 .chat { flex: 1; overflow-y: auto; padding: 6px 4px 14px; display: flex; flex-direction: column; gap: 12px; }
-.msg { max-width: 82%; padding: 12px 16px; border-radius: 16px; line-height: 1.5; font-size: .97rem; }
+.msg { max-width: min(82%, 68ch); padding: 12px 16px; border-radius: 16px; line-height: 1.5; font-size: .97rem; overflow-wrap: anywhere; }
 .msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-text); border-bottom-right-radius: 4px; box-shadow: var(--shadow-sm); }
 .msg.aven { align-self: flex-start; background: var(--panel); border: 1px solid var(--border); border-bottom-left-radius: 4px; box-shadow: var(--shadow); }
 .msg .speak {
@@ -740,6 +761,14 @@ html[data-theme="dark"] .cmdbar {
 .a-input input { flex: 1; height: 50px; font-size: 1.02rem; border-radius: 14px; min-width: 0; }
 .a-input button { width: 50px; height: 50px; border-radius: 14px; font-size: 1.2rem; flex: 0 0 50px; }
 .sugg { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; padding: 12px 0 2px; }
+/* Короткая подсказка под полем ввода: одна человеческая фраза + вход в справку. */
+.a-hint {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  align-items: center; justify-content: center;
+  color: var(--muted); font-size: .8rem; line-height: 1.5;
+  text-align: center; padding: 8px 0 14px;
+}
+.a-hint > span { max-width: 62ch; }
 .sugg .dc-label { flex: 0 0 100%; text-align: center; color: var(--muted); font-size: .78rem; }
 .sugg .btn { max-width: 100%; white-space: normal; text-align: left; }
 .command-flow { width: min(100%, 620px); max-width: 94%; }
@@ -809,7 +838,32 @@ html[data-theme="dark"] .cmdbar {
 
 /* Notifications list */
 .notif-list { display: flex; flex-direction: column; gap: 10px; }
-.notif-item { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: start; padding: 14px 16px; }
+.notif-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "ico main status" ".   actions actions";
+  gap: 10px 12px;
+  align-items: start;
+  padding: 14px 16px;
+}
+.notif-ico {
+  grid-area: ico;
+  position: relative;
+  /* Фиксированная ширина — чтобы заголовки всех карточек начинались по одной линии. */
+  flex: 0 0 auto; width: 1.7em; min-width: 1.7em;
+  font-size: 1.1rem; line-height: 1.45; text-align: center;
+}
+.notif-main { grid-area: main; min-width: 0; }
+.notif-title { display: block; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.notif-sub { color: var(--muted); font-size: .86rem; line-height: 1.45; margin-top: 3px; max-width: 78ch; overflow-wrap: anywhere; }
+.notif-status { grid-area: status; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: center; }
+.notif-actions { grid-area: actions; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* Точка «непрочитано» вынесена из строки заголовка: раньше она сдвигала текст вбок. */
+.notif-dot {
+  position: absolute; top: 0; right: -2px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 2px var(--panel);
+}
 
 /* Account screens */
 body.auth-mode .sidebar, body.auth-mode .topbar { display: none; }
@@ -1017,7 +1071,11 @@ body.auth-mode .content { max-width: 480px; padding: 0 16px; margin: 6vh auto; }
    13. RESPONSIVE BREAKPOINTS (MOBILE-FIRST POLISH)
    ========================================================================== */
 @media (max-width: 1100px) {
-  .home-grid { grid-template-columns: 1fr 1fr; }
+  .home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .home-grid > .card { grid-column: span 1; }
+  /* На двух колонках делить текстовую карточку пополам уже нечем —
+     «Уведомления» и «Последние действия» занимают строку целиком. */
+  .home-grid > .card.wide, .home-grid .span-2 { grid-column: span 2; }
   .cols-4, .tools-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .shop-grid { grid-template-columns: 1fr 1fr; }
 }
@@ -1094,7 +1152,10 @@ body.auth-mode .content { max-width: 480px; padding: 0 16px; margin: 6vh auto; }
   .page-head .btn-row { justify-content: flex-start; }
   .context-help { margin-left: 0; }
   .cols-2, .cols-3, .cols-4, .home-grid, .shop-grid, .tools-grid, .notes-layout, .help-layout { grid-template-columns: minmax(0, 1fr); }
-  .home-grid .span-2 { grid-column: auto; }
+  .home-grid > .card, .home-grid > .card.wide, .home-grid .span-2 { grid-column: auto; }
+  /* Помощник: на узком экране поля и так во всю ширину, предел не нужен. */
+  .assistant .a-inner { max-width: 100%; }
+  .msg { max-width: 88%; }
   .field-row { flex-direction: column; gap: 10px; }
   .btn-row.compact, .tbl .btn-row.compact { flex-wrap: wrap; justify-content: flex-start; white-space: normal; }
   .btn, .icon-btn { min-height: 42px; }
@@ -1221,6 +1282,15 @@ body.auth-mode .content { max-width: 480px; padding: 0 16px; margin: 6vh auto; }
 }
 
 @media (max-width: 640px) {
+  /* Уведомления: stacked-форма. Иконка остаётся слева от заголовка,
+     статус и действия уходят под текст, но по-прежнему по одной линии. */
+  .notif-item {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "ico main" ".   status" ".   actions";
+    gap: 8px 10px;
+  }
+  .notif-status { justify-content: flex-start; }
+  .notif-actions .btn { flex: 1 1 auto; justify-content: center; }
   .daily-banner .btn-row { margin-left: 0; width: 100%; }
   .daily-banner .btn-row .btn { flex: 1 1 160px; justify-content: center; }
   .daily-row-actions { margin-left: 0; width: 100%; }

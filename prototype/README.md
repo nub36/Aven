@@ -96,6 +96,12 @@ prototype/tests/
 │                           восстановление после перезагрузки, отсутствие второго пути записи,
 │                           согласованность #/profile ↔ Настройки, честность данных, Help/Tutorial,
 │                           доступность, ширины 320–1280)
+├── ui-readability-check.js — Инварианты раскладки после UI review владельца (65 проверок:
+│                           контракт CSS — колонки Главной и span текстовых карточек, auto-fit
+│                           «Требует внимания», сетка и grid-areas карточки уведомления, ширина
+│                           помощника и мера строки; структура DOM — единый макет уведомлений,
+│                           бейдж вне заголовка, 2–3 примера команд, короткая подсказка,
+│                           сохранность data-tour после изменения помощника, ширины 320–1440)
 ├── command-engine-check.js — Текстовые команды, заметки, напоминания, финансы/авто/покупки, перенос
 │                           события и удаление записи текстом, Assistant UI (ядро без DOM + jsdom:
 │                           multi-step controls, Escape, обязательное подтверждение, stale/double
@@ -548,7 +554,7 @@ LAN-тест, а HTTPS-страница не может обращаться к 
 **Проверка:** `node prototype/tests/actions-core-check.js` — **18 проверок Common Actions без DOM**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/help-tutorial-check.js` — **33 проверки Help/Tutorial/responsive/TTS narration**;
 `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage1-proto-check.js`
-(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage13-entities-check.js` — **124 проверки заметок, финансов, авто, покупок и напоминаний** (контракт слоя без DOM на часах приложения, производные итоги «Финансов», сценарии через интерфейс, история и Undo, согласованность Главной/Истории/помощника/уведомлений, справка и обучение, темы и ширины, запрет записи в обход слоя). `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` — **702 проверки текстовых команд, заметок, напоминаний, расходов, удаления записи и Assistant UI** (включая обязательное подтверждение финансовой мутации и удаления, отмену/Escape/double confirm, уточнение счёта и категории, stale-защиту, форматы суммы и отказ от `5к`/валют, отказ от массового удаления); `node prototype/tests/command-session-check.js` — **155 проверок transient clarification/confirmation flow** (включая финансовые slots, flow удаления и сброс pending в обе стороны); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/data-integrity-check.js` — **127 проверок целостности данных** (календарный контракт даты и високосные годы, матрица невозможных дат по шести разделам, инвариант безопасных денег с границей, вычисленной из `Number.MAX_SAFE_INTEGER`, переполнение баланса, атомарность связанных Auto/Shopping, запрет обхода слоя через команду и форму, Undo и перезагрузка, детерминированные property-проверки); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tutorial2-interactive-check.js` — **90 проверок Tutorial 2.0**. Полный набор из шестнадцати suite — **2049 проверок, 0 провалов**.
+(нужен `npm install jsdom@30` во временном каталоге) — **232 проверки**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tts-proto-check.js` — **42 проверки Natural Voice/fallback без изменений runtime**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/notifications-check.js` — **49 проверок раздела «Уведомления»** (движок/Undo/CRUD/настройки/страница/Help/Tutorial); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/suggestions-check.js` — **46 проверок Suggestions**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/daily-check.js` — **139 проверок дневных сценариев «Утро/Вечер»**; `NODE_PATH=/tmp/lab/node_modules node prototype/tests/settings-profile-check.js` — **121 проверка Профиля и Настроек** (контракт слоя действий, проверка ввода, применение форматов во всех разделах, история и Undo, восстановление после перезагрузки, отсутствие второго пути записи, справка, обучение, доступность, ширины 320–1280); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/stage13-entities-check.js` — **124 проверки заметок, финансов, авто, покупок и напоминаний** (контракт слоя без DOM на часах приложения, производные итоги «Финансов», сценарии через интерфейс, история и Undo, согласованность Главной/Истории/помощника/уведомлений, справка и обучение, темы и ширины, запрет записи в обход слоя). `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` — **706 проверок текстовых команд, заметок, напоминаний, расходов, удаления записи и Assistant UI** (включая обязательное подтверждение финансовой мутации и удаления, отмену/Escape/double confirm, уточнение счёта и категории, stale-защиту, форматы суммы и отказ от `5к`/валют, отказ от массового удаления); `node prototype/tests/command-session-check.js` — **155 проверок transient clarification/confirmation flow** (включая финансовые slots, flow удаления и сброс pending в обе стороны); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/data-integrity-check.js` — **127 проверок целостности данных** (календарный контракт даты и високосные годы, матрица невозможных дат по шести разделам, инвариант безопасных денег с границей, вычисленной из `Number.MAX_SAFE_INTEGER`, переполнение баланса, атомарность связанных Auto/Shopping, запрет обхода слоя через команду и форму, Undo и перезагрузка, детерминированные property-проверки); `NODE_PATH=/tmp/lab/node_modules node prototype/tests/tutorial2-interactive-check.js` — **90 проверок Tutorial 2.0**. Полный набор из семнадцати suite — **2118 проверок, 0 провалов**.
 `stage1-proto-check.js` покрывает: меню и метки этапов, история с
 Undo/фильтрами/экспортом, все 8 разделов админки с подтверждениями и аудитом, тема, экраны аккаунта,
 роут-гард, сквозная история и настоящий Undo в задачах/заметках/финансах/авто/покупках/автоматизациях,
@@ -720,6 +726,23 @@ property-проверки границ месяцев за 9 лет, 29 февр
 поддержано; архивная запись даёт ответ «она в архиве», а не «не нашла».
 
 Проверка: `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-engine-check.js` —
-**702/702**, `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-session-check.js` —
-**155/155**. Полный набор — **16 suite, 2049/2049, 0 провалов**. Реальный браузер
-(Chromium/Playwright) в окружении по-прежнему недоступен — jsdom за него не выдаётся.
+**706/706**, `NODE_PATH=/tmp/lab/node_modules node prototype/tests/command-session-check.js` —
+**155/155**. Реальный браузер (Chromium/Playwright) в окружении по-прежнему недоступен — jsdom за
+него не выдаётся.
+
+### UI Readability & Layout Polish (2026-09-30)
+
+Четыре дефекта читаемости из визуального review владельца: узкая рабочая область помощника и
+избыток примеров команд; «Уведомления» и «Последние действия» на Главной, режущие русский текст
+почти по одному слову; блок «Требует внимания» в «Дне», занимающий треть широкой карточки;
+невыровненные карточки уведомлений. Исправлена раскладка (сетки, span-ы, grid-areas, мера строки),
+размер шрифта не уменьшался, бизнес-логика не менялась.
+
+Проверка: `NODE_PATH=/tmp/lab/node_modules node prototype/tests/ui-readability-check.js` —
+**65 проверок** (контракт раскладки в CSS + структура DOM, на которую он опирается). Проверки
+подтверждены мутациями: возврат помощника к 720px ломает 3 проверки, возврат Главной к трём равным
+колонкам — 1, возврат карточки уведомления к двум колонкам — 3, возврат точки «непрочитано» в
+строку заголовка — 1, возврат «Требует внимания» к `cols-3` — 2.
+
+Полный набор — **17 suite, 2118/2118, 0 провалов**. jsdom не считает раскладку: реальная ширина
+колонки и реальное горизонтальное переполнение в нём не измеряются и за проверенные не выдаются.
