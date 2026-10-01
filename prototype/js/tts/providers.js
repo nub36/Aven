@@ -283,14 +283,33 @@
     getVoice: function () { return cfg().natural.voice || ''; },
     speak: function (text, o) {
       var self = this;
-      var key = [o.voice, o.rate, text].join('|');
-      var cached = o.cacheable ? Cache.get(key) : null;
-      if (cached) { self.lastSource = 'кэш сессии'; return playUrl(cached, o); }
+      /* Быстрый путь кэша ДО health (как раньше): сохранённый голос обычно валиден —
+       * кэшированная фраза играется мгновенно и при кратковременной недоступности сервера.
+       * Запись со «старым» голосом в кэше безопасна: она попала туда после УСПЕШНОГО
+       * синтеза этим голосом. Ниже — валидация по свежему health с самовосстановлением. */
+      var fastKey = [o.voice, o.rate, text].join('|');
+      var fastCached = o.cacheable ? Cache.get(fastKey) : null;
+      if (fastCached) { self.lastSource = 'кэш сессии'; return playUrl(fastCached, o); }
       return checkServer().then(function (st) {
-        if (st.ok && st.voices.some(function (v) { return v.id === o.voice; })) {
+        /* Самовосстановление маппинга голоса по СВЕЖЕМУ health (§12): менеджер выбирал
+         * голос по снимку serverState, который на новой вкладке мог быть ещё пустым
+         * (пользователь не заходил в Настройки) — сохранённый ключ голоса тогда не
+         * совпадал бы с серверным ID и Natural падал бы в fallback, хотя сервер жив.
+         * Здесь health уже ответил: если голоса нет в списке, но сервер жив — берём
+         * default_voice сервера, иначе первый голос. Ошибку даём только когда восстановить
+         * нечем (сервер мёртв или список голосов пуст). Ключ кэша — по РАЗРЕШЁННОМУ голосу. */
+        var voice = o.voice;
+        if (st.ok && st.voices.length && !st.voices.some(function (v) { return v.id === voice; })) {
+          var dv = st.defaultVoice;
+          voice = (dv && st.voices.some(function (v) { return v.id === dv; })) ? dv : st.voices[0].id;
+        }
+        if (st.ok && st.voices.some(function (v) { return v.id === voice; })) {
+          var key = [voice, o.rate, text].join('|');
+          var cached = o.cacheable ? Cache.get(key) : null;
+          if (cached) { self.lastSource = 'кэш сессии'; return playUrl(cached, o); }
           self.lastSource = 'self-hosted сервер';
           return synthesizeFetch(text, {
-            voice: o.voice, rate: o.rate, volume: o.volume, signal: o.signal,
+            voice: voice, rate: o.rate, volume: o.volume, signal: o.signal,
             onStart: o.onStart, cacheable: o.cacheable, cacheKey: key
           });
         }

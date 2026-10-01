@@ -21,21 +21,29 @@
   /* статус self-hosted TTS-сервера (асинхронно, без перерисовки всей страницы).
      Кнопка «Проверить» вызывает реальный health endpoint: при успехе — сервер/движки/число голосов/
      latency, при неудаче — конкретная причина (HTTP-код, timeout, mixed content, сеть/CORS),
-     а не общее «не работает». */
+     а не общее «не работает».
+     Формулировка честная: health доказывает только ДОСТУПНОСТЬ сервера — «сервер доступен»,
+     а не работу озвучивания. «Озвучивание работает» показывается только после того, как
+     «Прослушать» реально дошёл до воспроизведения Natural (onplaying, не просто fetch) —
+     и только для того же адреса сервера (смена URL/движка сбрасывает подтверждение). */
   let lastServerKey = null;
+  let naturalOkBase = null; // адрес сервера, для которого «Прослушать» доказал звук в ЭТОЙ сессии
   const serverKey = (st) => (st && st.checked ? st.ok + ':' + st.voices.map((v) => v.id).join(',') : 'unchecked');
+  function serverStatusText(st, works) {
+    // minimal health (VPS) не отдаёт список движков — не показываем «движков нет»
+    const eng = st.info && st.info.engines ? Object.keys(st.info.engines) : [];
+    return (works ? 'озвучивание работает · ' : 'сервер доступен · ') + ((st.info && st.info.server) || 'сервер') +
+      (st.info && st.info.version ? ' ' + st.info.version : '') +
+      (eng.length ? ' · ' + eng.join(', ') : '') +
+      ' · голосов: ' + st.voices.length + (st.latencyMs != null ? ' · ' + st.latencyMs + ' мс' : '');
+  }
   function refreshTtsServer(force) {
     if (!window.AvenTTS) return;
     window.AvenTTS.checkServer(force).then((st) => {
       const el = document.getElementById('tts-server-status');
       if (el) {
         if (st.ok) {
-          // minimal health (VPS) не отдаёт список движков — не показываем «движков нет»
-          const eng = st.info && st.info.engines ? Object.keys(st.info.engines) : [];
-          el.textContent = 'подключён · ' + ((st.info && st.info.server) || 'сервер') +
-            (st.info && st.info.version ? ' ' + st.info.version : '') +
-            (eng.length ? ' · ' + eng.join(', ') : '') +
-            ' · голосов: ' + st.voices.length + (st.latencyMs != null ? ' · ' + st.latencyMs + ' мс' : '');
+          el.textContent = serverStatusText(st, !!(naturalOkBase && naturalOkBase === st.base));
         } else {
           el.textContent = 'сервер недоступен — ответы озвучатся системным голосом · ' + (st.error || 'нет ответа');
         }
@@ -553,12 +561,16 @@
     'set-voice': (el) => { write('settings.voice.voiceURI', el.value); A.render(); },
     'set-voice-engine': (el) => {
       if (window.AvenTTS) window.AvenTTS.stop();
+      naturalOkBase = null; // смена движка сбрасывает «озвучивание работает»
       write('settings.voice.engine', el.value === 'natural' ? 'natural' : 'system');
       A.render();
       if (el.value === 'natural') A.toast('Natural Voice: произвольный текст озвучивается вашим TTS-сервером (Silero Aigul на VPS). Без сервера — системный голос');
     },
     'set-natural-voice': (el) => { write('settings.voice.natural.voice', el.value); A.render(); },
-    'set-natural-server': (el) => { write('settings.voice.natural.serverUrl', el.value.trim()); },
+    'set-natural-server': (el) => {
+      naturalOkBase = null; // новый адрес — «озвучивание работает» нужно доказать заново
+      write('settings.voice.natural.serverUrl', el.value.trim());
+    },
     'set-natural-timeout': (el) => {
       const t = Math.round(parseFloat(el.value));
       write('settings.voice.natural.timeoutSec', (isFinite(t) && t >= 2 && t <= 600) ? t : 10, { silent: true });
@@ -586,7 +598,20 @@
       const phrase = (V.engine === 'natural')
         ? 'Авен проверяет натуральный голос. Сейчас 18 часов 43 минуты, пробег автомобиля 104520 километров.'
         : 'Здравствуйте. Я Aven, ваш персональный помощник. Чем могу помочь?';
-      const upd = (st) => { const o = document.getElementById('tts-last'); if (o && st) o.textContent = (st.lastLatencyMs != null ? st.lastLatencyMs + ' мс · ' : '') + (st.lastSource || st.lastEngine || ''); };
+      const upd = (st) => {
+        const o = document.getElementById('tts-last');
+        if (o && st) o.textContent = (st.lastLatencyMs != null ? st.lastLatencyMs + ' мс · ' : '') + (st.lastSource || st.lastEngine || '');
+        // Дошло до реального воспроизведения Natural (onplaying) → статус может честно
+        // сказать «озвучивание работает» (только для текущего адреса сервера).
+        if (st && st.lastEngine === 'natural' && window.AvenTTS) {
+          const srv = window.AvenTTS.server();
+          if (srv && srv.ok) {
+            naturalOkBase = srv.base;
+            const pill = document.getElementById('tts-server-status');
+            if (pill) pill.textContent = serverStatusText(srv, true);
+          }
+        }
+      };
       if (window.AvenVoice) window.AvenVoice.speak(phrase, el, { charProfile: true, onStart: upd, onEnd: (ok, st) => upd(st) });
       else A.speak(phrase, null);
     },
