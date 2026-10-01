@@ -4,3 +4,4 @@
 run: 1 — первая сборка обёртки после создания android/ (2026-10-01)
 run: 2 — фикс подписи: ephemeral release-key вместо Secrets-bootstrap (secrets: write недоступен) (2026-10-01)
 run: 3 — фикс валидации workflow: кавычки в step-именах с ':' (runs 36839639562/36840289507 падали до создания jobs) + push-триггер переведён на текущую сессионную ветку (2026-10-01)
+run: 4 — фикс PKCS12-подписи: ephemeral один пароль store/key (run 36844417480 падал: keytool игнорирует -keypass для PKCS12 → AGP "final block not properly padded"); README-инструкция владельца синхронизирована (2026-10-01)

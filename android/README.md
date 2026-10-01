@@ -44,13 +44,18 @@ GitHub Actions (основной путь): Actions → **Android APK** → Run 
   ```bash
   keytool -genkeypair -keystore /tmp/aven-release.keystore -alias aven-release \
     -keyalg RSA -keysize 4096 -sigalg SHA256withRSA -validity 10950 -storetype PKCS12 \
-    -dname "CN=Aven Android Release, O=Aven" -storepass ПАРОЛЬ_ХРАНИЛИЩА -keypass ПАРОЛЬ_КЛЮЧА
+    -dname "CN=Aven Android Release, O=Aven" \
+    -storepass ОДИН_ПАРОЛЬ -keypass ОДИН_ПАРОЛЬ
   base64 -w0 /tmp/aven-release.keystore | gh secret set AVEN_ANDROID_KEYSTORE_BASE64 --repos nub36/Aven
-  gh secret set AVEN_ANDROID_KEYSTORE_PASSWORD --body "ПАРОЛЬ_ХРАНИЛИЩА" --repos nub36/Aven
+  gh secret set AVEN_ANDROID_KEYSTORE_PASSWORD --body "ОДИН_ПАРОЛЬ" --repos nub36/Aven
   gh secret set AVEN_ANDROID_KEYSTORE_ALIAS --body "aven-release" --repos nub36/Aven
-  gh secret set AVEN_ANDROID_KEY_PASSWORD --body "ПАРОЛЬ_КЛЮЧА" --repos nub36/Aven
+  gh secret set AVEN_ANDROID_KEY_PASSWORD --body "ОДИН_ПАРОЛЬ" --repos nub36/Aven
   # keystore дополнительно держать в безопасном месте вне репозитория (менеджер паролей/сейф)
   ```
+  ⚠️ PKCS12 в Java шифрует ключ ВСЕГДА паролем хранилища — отдельный `-keypass` keytool молча
+  игнорирует. Поэтому `-storepass` и `-keypass` обязаны совпадать, и оба секрета
+  (`AVEN_ANDROID_KEYSTORE_PASSWORD`/`AVEN_ANDROID_KEY_PASSWORD`) получают одно значение —
+  иначе сборка падает «Get Key failed: Given final block not properly padded».
   (Автоматический bootstrap из workflow НЕВОЗМОЖЕН: GITHUB_TOKEN/GitHub-App токен агента не
   имеет scope на запись Actions Secrets — проверено 2026-10-01, 403 «Resource not accessible
   by integration».)

@@ -6,6 +6,46 @@
 
 ---
 
+## 2026-10-01 (продолжение) — восстановление stage после смерти GitHub auth: фикс валидации workflow + PKCS12-подписи
+
+### Контекст восстановления
+
+Сессия-предшественник реализовала весь stage (коммиты ниже в этом логе), но GitHub auth
+умер до завершения remote lifecycle: два Android-коммита (`d2ab63c`, `fec8271`) остались
+запушенными в ветку PR #47 `arena/01a0f644-aven` ПОСЛЕ merge PR #47 (main = `5724f82`), оба
+marker-запуска workflow упали. Восстановление: cherry-pick обоих коммититов на свежий main
+в новую сессионную ветку (дерево идентично `fec8271`), реализация не переписывалась.
+
+### Инцидент 1 — workflow не проходил валидацию (runs 36839639562, 36840289507)
+
+0 созданных jobs = падение на парсинге YAML: три step-имени содержали незакавыченный
+`«: »` (`Подпись: Secrets…`, `Проверка APK: подпись…`, `Static Android checks (без SDK: …)`)
+— «mapping values are not allowed here». Закавычены; push-триггер marker-паттерна переведён
+на текущую сессионную ветку. Локально добавлен YAML-парсер в проверочный цикл.
+
+### Инцидент 2 — run 36844417480: PKCS12 ephemeral-подпись падала в AGP
+
+Все шаги до сборки зелёные; `assembleRelease` падал:
+`KeytoolException: Failed to read key aven-release from store "/tmp/aven.keystore":
+Get Key failed: Given final block not properly padded`.
+Root cause: Java PKCS12 шифрует ключ ВСЕГДА паролем STORE — отдельный `-keypass`
+keytool молча игнорирует. Workflow генерировал два разных пароля (`AVEN_KEYSTORE_PASSWORD`
+= STORE_PASS, `AVEN_KEY_PASSWORD` = KEY_PASS) → AGP не мог расшифровать ключ. Фикс: один
+пароль (`KEY_PASS="$STORE_PASS"`); та же ловушка закрыта в инструкции владельцу
+(android/README.md: `-storepass`/`-keypass` совпадают, оба секрета — одно значение).
+Regression-чеки F7/F8 добавлены в android-apk-check.js.
+
+### Проверено (после фиксов)
+
+- `android-apk-check` — **61/61 PASS** (было 59/59 до recovery-фиксов).
+- Полный регресс: **18 suites, 2431/2431, 0 провалов** (jsdom через NODE_PATH=/tmp/lab).
+  Расхождение с handoff-басelayном 2429 объяснимо: +2 проверки приходили с фикс-коммитом
+  подписи (57→59) и не были пересчитаны в handoff; после recovery-фиксов +2 (F7/F8) → 61.
+- `node --check` всех 52 js — OK; `git diff --check` — OK; YAML-валидность android-apk.yml
+  подтверждена парсером (PyYAML) перед push.
+
+---
+
 ## 2026-10-01 — Android distribution stage: APK-shell прототипа + CTA скачивания (ADR-114)
 
 ### Независимая контрольная точка

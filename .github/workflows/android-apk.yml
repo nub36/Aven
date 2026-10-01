@@ -94,7 +94,10 @@ jobs:
           else
             echo "::notice::Actions Secrets не заданы — эфемерный release-key этого запуска (mode=ephemeral); поверхустановка между сборками НЕ сработает (см. android/README.md)"
             STORE_PASS="$(openssl rand -hex 24)"
-            KEY_PASS="$(openssl rand -hex 24)"
+            # PKCS12 в Java: ключ внутри хранилища всегда шифруется паролем STORE (keytool молча
+            # игнорирует отдельный -keypass). Поэтому ОДИН пароль на store и key — иначе AGP падает
+            # «Get Key failed: Given final block not properly padded» (run 36844417480, 2026-10-01).
+            KEY_PASS="$STORE_PASS"
             echo "::add-mask::$STORE_PASS"
             echo "::add-mask::$KEY_PASS"
             export STORE_PASS KEY_PASS
@@ -102,7 +105,7 @@ jobs:
               -alias aven-release -keyalg RSA -keysize 4096 -sigalg SHA256withRSA \
               -validity 10950 -storetype PKCS12 \
               -dname "CN=Aven Android Release (ephemeral), OU=prototype, O=Aven" \
-              -storepass:env STORE_PASS -keypass:env KEY_PASS >/dev/null 2>&1
+              -storepass:env STORE_PASS >/dev/null 2>&1
             {
               echo "AVEN_KEYSTORE_FILE=/tmp/aven.keystore"
               echo "AVEN_KEYSTORE_PASSWORD=$STORE_PASS"

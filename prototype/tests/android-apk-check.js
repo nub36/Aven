@@ -184,6 +184,12 @@ const exists = (p) => fs.existsSync(path.join(ROOT, p));
   ok('F5 workflow: нет невалидных permission-scopes / попыток записи Secrets (GITHUB_TOKEN не умеет)',
     !/^\s+secrets\s*:/m.test(wf) && !/gh secret set/.test(wf), 'запись Secrets только владельцем — android/README.md');
   ok('F6 workflow: режим подписи фиксируется в build-info (ephemeral|secrets)', /signing_mode=/.test(wf) && /AVEN_SIGNING_MODE/.test(wf));
+  // PKCS12: Java всегда шифрует ключ паролем STORE — отдельный -keypass keytool игнорирует,
+  // и AGP падает «Get Key failed: Given final block not properly padded» (run 36844417480).
+  ok('F7 workflow: ephemeral PKCS12 — один пароль для store и key (KEY_PASS=STORE_PASS, без отдельного -keypass)',
+    /KEY_PASS="\$STORE_PASS"/.test(wf) && !/-keypass:env/.test(wf));
+  ok('F8 android/README: инструкция стабильного ключа не разводит store/key пароли PKCS12',
+    !/ПАРОЛЬ_КЛЮЧА/.test(read('android/README.md')) && /ОДИН_ПАРОЛЬ/.test(read('android/README.md')));
 }
 
 console.log('\nИТОГО: ' + pass + ' PASS, ' + fail + ' FAIL');
