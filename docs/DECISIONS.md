@@ -527,8 +527,10 @@
     `publish-prerelease:` в marker-файле `.github/triggers/android-apk.txt` (агентский токен
     не имеет actions:write — dispatch из сессии агента невозможен, 403; директива удаляется
     из файла сразу после публикации; guard: prerelease-режим совместим только с ephemeral-
-    подписью и не может перезаписать полный релиз). Такой pre-release помечен latest, чтобы
-    `releases/latest/download/aven-latest.apk` работал с момента появления CTA на сайте.
+    подписью и не может перезаписать полный релиз). Prerelease НЕ помечается latest — API GitHub
+    это запрещает («Latest release cannot be draft or prerelease», 422, run 36846707195),
+    поэтому `releases/latest/download/aven-latest.apk` начинает отдавать APK только с первого
+    ПОЛНОГО релиза; merge PR с CTA сайта — после этого шага (gate в чек-листе владельца).
   - **Подпись**: целевая модель — release-key в GitHub Actions Secrets
     (`AVEN_ANDROID_KEYSTORE_*`), создаётся владельцем один раз (готовые команды —
     android/README.md; агент/CI значений не видят). **Уточнение 2026-10-01 (инфраструктурное

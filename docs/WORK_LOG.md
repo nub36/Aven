@@ -33,11 +33,18 @@ Run **36845006746** (commit `2d5f6e7`, ветка `arena/01a0f6ca-aven`): все
 marker-директива `publish-prerelease:` → job `release` публикует PRERELEASE (guard'ы:
 только push-event, только ephemeral-подпись — иначе ошибка; не может перезаписать полный
 релиз; тег через `--target $GITHUB_SHA` = коммит сборки; флаг `--prerelease`, пометка
-«ПРЕ-РЕЛИЗ / TEST BUILD» в notes; prerelease помечается latest, чтобы
-`releases/latest/download/aven-latest.apk` работал сразу). При последующем полном
-dispatch-релизе ассеты перезаливаются (--clobber), notes обновляются, prerelease-флаг
-снимается автоматически (PATCH API). Директива удаляется из marker-файла сразу после
-публикации.
+«ПРЕ-РЕЛИЗ / TEST BUILD» в notes). При последующем полном dispatch-релизе ассеты
+перезаливаются (--clobber), notes обновляются, prerelease-флаг снимается автоматически
+(PATCH API). Директива удаляется из marker-файла сразу после публикации.
+
+Run 36846707195 (первый прогон release-джобы) выявил два бага и они исправлены:
+(1) download-artifact с pattern кладёт файлы в подкаталог out/android-apk-<run_id>/
+→ «sed: can't read build-info.txt»; фикс: merge-multiple: true. (2) API GitHub запрещает
+помечать prerelease как latest (422 «Latest release cannot be draft or prerelease»; gh
+откатил draft-релиз, остался осиротевший тег — удалён вручную до следующего прогона);
+фикс: --latest только для полного релиза (LATEST_ARGS). Следствие задокументировано:
+releases/latest/download/aven-latest.apk активируется первым ПОЛНЫМ релизом владельца —
+это merge-gate для CTA (PR не мержится до него).
 
 ### Усиление CI-верификации бинарника (для независимого аудита по логам/ассетам)
 

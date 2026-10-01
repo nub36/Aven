@@ -241,8 +241,14 @@ jobs:
           PUBLISH_MODE="${{ needs.build.outputs.publish_mode }}"
           PRERELEASE_ARGS=""
           PRE_NOTE=""
+          # latest-флаг допустим ТОЛЬКО для полного релиза: API GitHub запрещает пометить
+          # prerelease как latest (run 36846707195: 422 «Latest release cannot be draft or
+          # prerelease»). Следствие: releases/latest/download/aven-latest.apk начинает работать
+          # только с первого ПОЛНОГО релиза владельца — это осознанный merge-gate для CTA.
+          LATEST_ARGS="--latest"
           if [ "$PUBLISH_MODE" = "prerelease" ]; then
             PRERELEASE_ARGS="--prerelease"
+            LATEST_ARGS=""
             PRE_NOTE="⚠️ ПРЕ-РЕЛИЗ / TEST BUILD (bootstrap, marker-директива publish-prerelease): официальный стабильный релиз — через workflow_dispatch publish_release=true после настройки Secrets владельцем."
 
           fi
@@ -273,7 +279,8 @@ jobs:
             echo "::notice::Release $TAG существует — обновляю assets (--clobber) и метаданные"
             # shellcheck disable=SC2086
             gh release upload "$TAG" $ASSETS --repo "${GITHUB_REPOSITORY}" --clobber
-            gh release edit "$TAG" --repo "${GITHUB_REPOSITORY}" --title "Aven для Android ${VN}" --notes "$NOTES" --latest
+            # shellcheck disable=SC2086
+            gh release edit "$TAG" --repo "${GITHUB_REPOSITORY}" --title "Aven для Android ${VN}" --notes "$NOTES" $LATEST_ARGS
             if [ "$PUBLISH_MODE" = "release" ]; then
               RID="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq .id)"
               gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${RID}" -F prerelease=false >/dev/null
@@ -283,6 +290,6 @@ jobs:
             # shellcheck disable=SC2086
             gh release create "$TAG" $ASSETS \
               --repo "${GITHUB_REPOSITORY}" --target "${GITHUB_SHA}" \
-              --title "Aven для Android ${VN}" --notes "$NOTES" --latest $PRERELEASE_ARGS
+              --title "Aven для Android ${VN}" --notes "$NOTES" $PRERELEASE_ARGS $LATEST_ARGS
           fi
           gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" --json tagName,isPrerelease,assets --jq '{tag: .tagName, prerelease: .isPrerelease, assets: [.assets[].name]}'

@@ -198,6 +198,13 @@ const exists = (p) => fs.existsSync(path.join(ROOT, p));
   ok('F9 workflow: PK-magic + sha256sums в логе; compiled manifest (aapt xmltree) и листинг (unzip -l) — в артефакт/релиз',
     /od -An -tx1/.test(wf) && /504b0304/.test(wf) && /cat android\/out\/sha256sums\.txt/.test(wf) &&
     /aapt" dump xmltree/.test(wf) && /unzip -l/.test(wf) && /unzip-listing\.txt/.test(wf));
+  // API GitHub запрещает latest для prerelease (422 «Latest release cannot be draft or
+  // prerelease», run 36846707195): --latest допустим только полным релизом, иначе gh
+  // откатывает релиз и остаётся осиротевший тег.
+  ok('F10 workflow: --latest только для полного релиза (prerelease latest-флагом не помечается)',
+    /LATEST_ARGS="--latest"/.test(wf) && /LATEST_ARGS=""/.test(wf) &&
+    /Latest release cannot be draft or prerelease/.test(wf) &&
+    !/--latest \$PRERELEASE_ARGS/.test(wf) && !/\$PRERELEASE_ARGS --latest/.test(wf));
 }
 
 console.log('\nИТОГО: ' + pass + ' PASS, ' + fail + ' FAIL');

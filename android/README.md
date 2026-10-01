@@ -74,7 +74,10 @@ sha256sums, apksigner/aapt-логи, compiled-манифест, листинг �
 `.github/triggers/android-apk.txt` — только с ephemeral-подписью, с явной пометкой
 «ПРЕ-РЕЛИЗ / TEST BUILD» в примечаниях. После настройки Secrets владелец публикует полный
 релиз dispatch'ом (`publish_release=true`) поверх того же тега: ассеты обновятся, prerelease-флаг
-снимется автоматически. Скачивание с сайта работает уже с prerelease (он помечен latest).
+снимется автоматически. ⚠️ Prerelease НЕ может быть «latest» (ограничение GitHub API:
+«Latest release cannot be draft or prerelease»), поэтому стабильный URL сайта
+`releases/latest/download/aven-latest.apk` начинает отдавать APK только с первого ПОЛНОГО
+релиза — merge PR с CTA сайта согласован с этим (gate в чек-листе владельца).
 
 ## Чек-лист релиза новой версии
 
