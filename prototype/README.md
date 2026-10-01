@@ -807,3 +807,6 @@ Undo, ambiguity, ограничения точного времени и отс�
 Проверка Iteration 12: `command-engine-check.js` — **880/880**, `command-session-check.js` —
 **189/189**; полный regression — **17 suites, 2326/2326**, 0 failures. Все 43 JS-файла прошли
 `node --check`, `git diff --check` чист. Real-browser validation not performed.
+
+### Iteration 13
+Text commands can update the place of one existing event, for example «Измени место встречи с Сергеем на офис». Confirmation is required, Undo restores the old place, and recurring/bulk or other event-field edits remain unsupported.
