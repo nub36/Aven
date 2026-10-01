@@ -205,6 +205,17 @@ const exists = (p) => fs.existsSync(path.join(ROOT, p));
     /LATEST_ARGS="--latest"/.test(wf) && /LATEST_ARGS=""/.test(wf) &&
     /Latest release cannot be draft or prerelease/.test(wf) &&
     !/--latest \$PRERELEASE_ARGS/.test(wf) && !/\$PRERELEASE_ARGS --latest/.test(wf));
+  // Защита будущих обновлений (§23 handoff 2026-10-01): stable-релиз обязан совпадать по
+  // сертификату с зафиксированным отпечатком, иначе build падает — иначе случайный новый
+  // ключ незаметно сделает будущий APK несовместимым по подписи с уже установленными устройствами.
+  ok('F11 workflow: guard — stable-релиз (mode=secrets) сверяется с android/release-cert-sha256.txt, иначе build падает',
+    /android\/release-cert-sha256\.txt/.test(wf) &&
+    /AVEN_SIGNING_MODE:-\}" = "secrets"/.test(wf) &&
+    /stable-релиз подписан сертификатом/.test(wf));
+  ok('F12 android/release-cert-sha256.txt существует и не содержит секретов (только публичный отпечаток/заглушка PENDING)',
+    exists('android/release-cert-sha256.txt') &&
+    /PENDING/.test(read('android/release-cert-sha256.txt')) &&
+    !/BEGIN (RSA )?PRIVATE KEY|storepass|keypass|-----BEGIN/i.test(read('android/release-cert-sha256.txt')));
 }
 
 console.log('\nИТОГО: ' + pass + ' PASS, ' + fail + ' FAIL');

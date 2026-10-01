@@ -180,6 +180,24 @@ jobs:
           MAGIC="$(head -c 4 "android/out/aven-${VN}.apk" | od -An -tx1 | tr -d ' \n')"
           echo "APK magic bytes: ${MAGIC}"
           [ "$MAGIC" = "504b0304" ] || { echo "::error::APK не является ZIP-контейнером (PK magic отсутствует)"; exit 1; }
+          # Guard (§23 handoff 2026-10-01): stable-подпись (mode=secrets) обязана совпадать с
+          # зафиксированным публичным отпечатком сертификата (android/release-cert-sha256.txt) —
+          # защита будущих обновлений от случайной публикации несовместимым ключом. Пока файл
+          # не заполнен (PENDING/отсутствует) — проверка пропускается (разрешает ПЕРВЫЙ stable-релиз).
+          CERT_SHA="$(grep -m1 'certificate SHA-256' android/out/apksigner.txt | sed 's/.*: //' | tr -d ' :\r' | tr 'A-F' 'a-f')"
+          echo "signing certificate SHA-256: ${CERT_SHA:-unknown}"
+          if [ "${AVEN_SIGNING_MODE:-}" = "secrets" ]; then
+            EXPECTED="$(grep -vE '^[[:space:]]*#|^[[:space:]]*$' android/release-cert-sha256.txt 2>/dev/null | head -1 | tr -d ' \r' | tr 'A-F' 'a-f')"
+            if [ -n "$EXPECTED" ] && [ "$EXPECTED" != "pending" ]; then
+              if [ "$CERT_SHA" != "$EXPECTED" ]; then
+                echo "::error::Guard: stable-релиз подписан сертификатом (${CERT_SHA:-?}), отличным от зафиксированного в android/release-cert-sha256.txt (${EXPECTED}). Публикация остановлена — иначе обновление будет несовместимо по подписи с уже установленными устройствами. Если ключ сменён НАМЕРЕННО — обновите android/release-cert-sha256.txt отдельным осознанным PR."
+                exit 1
+              fi
+              echo "::notice::Guard: сертификат stable-ключа совпадает с зафиксированным отпечатком (${EXPECTED})"
+            else
+              echo "::notice::Guard: android/release-cert-sha256.txt ещё PENDING — сверка пропущена (ожидается для первого stable-релиза); см. инструкцию в этом файле"
+            fi
+          fi
           # Контент-аудит архива (полный листинг — в out/ и релиз-ассеты): без .git/keystore,
           # bundle Aven (assets/www) присутствует
           unzip -l "android/out/aven-${VN}.apk" > android/out/unzip-listing.txt
@@ -195,6 +213,7 @@ jobs:
             echo "version=${VN} code=${VC}"
             echo "git_sha=${GITHUB_SHA}"
             echo "signing_mode=${AVEN_SIGNING_MODE:-unknown}"
+            echo "cert_sha256=${CERT_SHA:-unknown}"
             echo "size_bytes=$(stat -c%s android/out/aven-${VN}.apk)"
           } > android/out/build-info.txt
           cat android/out/build-info.txt
