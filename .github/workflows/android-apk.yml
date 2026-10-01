@@ -223,6 +223,9 @@ jobs:
         with:
           pattern: android-apk-*
           path: out
+          # без merge-multiple файлы оказываются в out/android-apk-<run_id>/ и cd out ломается
+          # (run 36846406393: «sed: can't read build-info.txt»)
+          merge-multiple: true
 
       - name: "Git tag + GitHub Release (idempotent; prerelease — только из marker-директивы)"
         env:

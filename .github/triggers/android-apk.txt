@@ -8,3 +8,4 @@ run: 2 — фикс подписи: ephemeral release-key вместо Secrets-b
 run: 3 — фикс валидации workflow: кавычки в step-именах с ':' (runs 36839639562/36840289507 падали до создания jobs) + push-триггер переведён на текущую сессионную ветку (2026-10-01)
 run: 4 — фикс PKCS12-подписи: ephemeral один пароль store/key (run 36844417480 падал: keytool игнорирует -keypass для PKCS12 → AGP "final block not properly padded"); README-инструкция владельца синхронизирована (2026-10-01)
 publish-prerelease: aven-0.1.0 — bootstrap TEST pre-release с ephemeral-подписью (полный stable релиз — только dispatch после Secrets владельца). Директиву удалить из файла сразу после публикации. (2026-10-01)
+run: 5 — фикс release-джобы: download-artifact merge-multiple (run 36846406393: файлы в подкаталоге out/android-apk-<run_id>/, «sed: can't read build-info.txt») (2026-10-01)
