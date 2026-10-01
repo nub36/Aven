@@ -4057,3 +4057,71 @@ engine — `settings.voice.engine`, голос — `settings.voice.natural.voice
 **Тесты.** `tts-proto-check`: 42 → 88 PASS, 0 FAIL. Новое: P (empty/JSON/HTML/octet-bad/no-ct-garbage reject → РЕАЛЬНЫЙ fallback + invalid не кэшируется; octet-wav/x-wav/no-ct-wav accept → Natural играет + кэш), Q (play() rejection NotAllowedError/NotSupportedError → fallback с причиной, UI не застревает), V (кэш-ключ voice/rate/text; самовосстановление mapping; громкость → Audio/utterance), Z (Стоп во время системного fallback), K2 («озвучивание работает» после реального preview), S1/M1 обновлены под «сервер доступен». jsdom не доказывает слышимость речи — fallback invoked ≠ audibly played; real-browser в песочнице отсутствует (Chrome/Chromium/Playwright/Puppeteer нет), поэтому playback-success не заявляется.
 
 **Не трогали:** VPS/nginx/Caddy, STT, Xenia/Fish Audio, новые голоса, lip-sync, 3D; PR #8 и PR #15. Iteration 14 не начата. Owner test (Settings → Прослушать; Assistant → Озвучить; Стоп) остаётся обязательным gate'ом.
+
+## 2026-10-01 — Android stable signing + первый публичный релиз: сессия подтверждения состояния (PR #48 уже MERGED)
+
+**Задача сессии:** настроить постоянную подпись Android, выпустить ПОЛНЫЙ (не prerelease)
+GitHub Release, починить `releases/latest/download/aven-latest.apk`, довести PR #48 до
+merge/deploy. Handoff содержал устаревшую контрольную точку («PR #48: OPEN»).
+
+**Фактическое состояние на старте сессии (проверено `git fetch`/`gh`, не handoff):**
+- `main` = `b70d4b1` = merge commit **PR #48** (не `5724f82`/PR #47, как было в переданной
+  контрольной точке). PR #48 смержен владельцем лично (`mergedBy: nub36`) в 2026-10-01T10:28:30Z —
+  **до** начала этой сессии. Pages-деплой по этому коммиту уже прошёл успешно (run 36849360134).
+- Workflow `Android APK` активен, УЖЕ на `main`. Один релиз: тег `aven-android-v0.1.0`,
+  **prerelease=true**, ephemeral-подпись (сертификат SHA-256 `92514037a6c3…fcc8ddf`, см. примечания
+  релиза) — это именно тот TEST APK, что был описан в handoff (размер 1 741 633 байт).
+- `/releases/latest` (API и `.../download/aven-latest.apk`) — подтверждён **404** напрямую
+  (curl): ожидаемо, GitHub не считает prerelease «latest». Прямая ссылка на тег работает (302 на
+  подписанный S3 URL) — сам APK-asset не повреждён и не отсутствует.
+- **Критическая проверка разрешений агента (сделана заново в этой сессии, не только по старым
+  комментариям в коде):** `gh secret list` → 403; `gh secret set TEST_PROBE_SECRET` → 403 (не
+  удаётся даже получить public key репозитория); `gh workflow run "Android APK" --ref main` → 403
+  `actions:write`. Вывод: агент физически не может ни создать Secrets, ни задispatчить workflow —
+  это инфраструктурный предел GitHub-App токена, а не что-то решаемое кодом/конфигом в этой сессии.
+
+**Решение по scope сессии.** Поскольку создание постоянного signing-ключа ДОЛЖНО происходить вне
+ephemeral sandbox (чтобы не остаться единственной копией и не потребовать передачи приватного
+бинарника наружу), а запуск публикации всё равно требует ручного dispatch владельцем — агент НЕ
+генерировал keystore в песочнице (следуя прямому требованию задания: «если агент не может
+безопасно передать ключ — остановиться и дать владельцу точные команды»). Вместо этого сделано
+всё, что действительно в силах агента до появления секретов:
+- **Guard будущих обновлений** (`.github/workflows/android-apk.yml`, job `build`): stable-релиз
+  (`mode=secrets`) теперь обязан совпасть по SHA-256 сертификата с `android/release-cert-sha256.txt`
+  (новый файл, публичный отпечаток — не секрет; сейчас `PENDING`). Несовпадение в будущем
+  **проваливает build** — защита от случайной публикации обновления несовместимым ключом.
+  `build-info.txt` дополнен полем `cert_sha256=`.
+- **android/README.md:** Windows/PowerShell-инструкция (`keytool` + `gh secret set`/веб-UI) рядом
+  с существующей bash-версией; явное требование резервной копии keystore в ≥2 местах; описание
+  guard'а и чек-листа его заполнения после первого stable-релиза; уточнение, что `workflow_dispatch`
+  теперь доступен владельцу в веб-UI (workflow уже на `main`), но НЕ агенту; усилено требование
+  монотонного `VERSION_CODE`.
+- **Регрессия:** `android-apk-check.js` 63 → **65** проверок (F11 guard в workflow, F12 отсутствие
+  секретов в новом файле). YAML (`python3 -c import yaml`) и `bash -n` по каждому `run:`-блоку
+  workflow — синтаксически корректны. Полный прогон всех 18 suites прототипа (с временным
+  `NODE_PATH` на `jsdom@30`, как требуют сами тесты) — **2435/2435, 0 провалов**, подтверждает
+  переданную контрольную точку независимо. `node --check` по всем `.js` репозитория — чисто.
+  `git diff --check` — чисто.
+
+**Что НЕ сделано в этой сессии и почему (не решаемо агентом):**
+1. Постоянный signing-ключ НЕ создан (владелец создаёт сам — android/README.md, Unix и Windows
+   инструкции).
+2. GitHub Secrets (`AVEN_ANDROID_KEYSTORE_BASE64/_PASSWORD/_ALIAS`, `AVEN_ANDROID_KEY_PASSWORD`)
+   НЕ созданы (владелец задаёт сам — `gh` или веб-UI, инструкция в README).
+3. Stable-релиз НЕ выпущен, `/releases/latest/download/aven-latest.apk` остаётся 404 (владелец
+   запускает `workflow_dispatch` → `Actions → Android APK → Run workflow → publish_release=true`
+   на `main` после п. 1–2; workflow сам обновит существующий тег `aven-android-v0.1.0` на месте:
+   новые ассеты, снятие prerelease-флага, `--latest`).
+4. PR #48 merge/Pages-деплой/сайт-CTA — уже были выполнены ДО этой сессии (см. факты выше);
+   повторно не трогались. CTA сайта (`prototype/js/app-download.js`) уже указывает на правильный
+   постоянный URL `releases/latest/download/aven-latest.apk` и модальное окно уже условно скрывает
+   предупреждение про temporary-подпись при `signing: 'stable'` — владельцу останется только
+   переключить это поле на `'stable'` вместе с чек-листом релиза новой версии, когда ключ будет
+   готов (отдельный маленький PR, не требует переписывания CTA).
+5. Реальная установка на Android-устройство владельца, update-тест v0.1.0→v0.1.1 — ждут п. 1–3.
+
+**Этой сессией НЕ затрагивались:** TTS/Voice (PR #47, не расширялся), 3D, Stage 2, Google Play/iOS/
+STT/push/cloud sync/payments — согласно прямому ограничению задания.
+
+**STOP:** сессия остановлена на этой точке — дальнейшее движение требует ручных действий владельца
+вне agent sandbox (создание ключа, Secrets, dispatch). Точные команды — android/README.md.
