@@ -172,8 +172,11 @@ const exists = (p) => fs.existsSync(path.join(ROOT, p));
 /* ---------- F. Прочие guard checks ---------- */
 {
   const wf = read('.github/workflows/android-apk.yml');
-  ok('F1 workflow: не публикует релиз с marker-push (только workflow_dispatch+publish_release)',
-    /github\.event_name == 'workflow_dispatch' && inputs\.publish_release/.test(wf));
+  ok('F1 workflow: полный релиз — только workflow_dispatch+publish_release; marker-push — максимум ЯВНЫЙ prerelease (директива + push-event + ephemeral-only)',
+    /github\.event_name == 'workflow_dispatch' && inputs\.publish_release/.test(wf) &&
+    /github\.event_name == 'push' && needs\.build\.outputs\.publish_mode == 'prerelease'/.test(wf) &&
+    /grep -q '\^publish-prerelease:'/.test(wf) && /--prerelease/.test(wf) &&
+    /marker-prerelease не совместим со stable-подписью/.test(wf));
   ok('F2 workflow: APK верифицируется apksigner и aapt до любой публикации', /apksigner" verify|"--print-certs"|apksigner verify/.test(wf) && /aapt" dump badging|"aapt" dump|aapt dump badging/.test(wf));
   const f3a = /-storepass:env STORE_PASS/.test(wf);              // пароль не в argv keytool
   const f3b = /::add-mask::\$STORE_PASS/.test(wf) && /::add-mask::\$KEY_PASS/.test(wf); // замаскированы до использования
@@ -190,6 +193,11 @@ const exists = (p) => fs.existsSync(path.join(ROOT, p));
     /KEY_PASS="\$STORE_PASS"/.test(wf) && !/-keypass:env/.test(wf));
   ok('F8 android/README: инструкция стабильного ключа не разводит store/key пароли PKCS12',
     !/ПАРОЛЬ_КЛЮЧА/.test(read('android/README.md')) && /ОДИН_ПАРОЛЬ/.test(read('android/README.md')));
+  // CI обязан доказывать валидность настоящего бинарника (не только source-checks):
+  // PK magic, sha256 в логе, полный compiled-манифест (aapt xmltree) и листинг архива.
+  ok('F9 workflow: PK-magic + sha256sums в логе; compiled manifest (aapt xmltree) и листинг (unzip -l) — в артефакт/релиз',
+    /od -An -tx1/.test(wf) && /504b0304/.test(wf) && /cat android\/out\/sha256sums\.txt/.test(wf) &&
+    /aapt" dump xmltree/.test(wf) && /unzip -l/.test(wf) && /unzip-listing\.txt/.test(wf));
 }
 
 console.log('\nИТОГО: ' + pass + ' PASS, ' + fail + ' FAIL');

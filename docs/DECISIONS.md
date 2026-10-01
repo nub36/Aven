@@ -521,6 +521,14 @@
   - **Распространение**: только GitHub Releases, ручная установка APK; в git-хистории APK и
     keystore НЕ хранятся. В публикации — `aven-<version>.apk` и стабильный `aven-latest.apk`;
     сайт скачивает по `releases/latest/download/aven-latest.apk`.
+    **Уточнение 2026-10-01 (bootstrap-механика, зафиксировано):** полный релиз публикуется
+    только вручную (workflow_dispatch + `publish_release`); до попадания workflow на main
+    и до создания Secrets тестовый PRE-RELEASE публикуется разовой ЯВНОЙ директивой
+    `publish-prerelease:` в marker-файле `.github/triggers/android-apk.txt` (агентский токен
+    не имеет actions:write — dispatch из сессии агента невозможен, 403; директива удаляется
+    из файла сразу после публикации; guard: prerelease-режим совместим только с ephemeral-
+    подписью и не может перезаписать полный релиз). Такой pre-release помечен latest, чтобы
+    `releases/latest/download/aven-latest.apk` работал с момента появления CTA на сайте.
   - **Подпись**: целевая модель — release-key в GitHub Actions Secrets
     (`AVEN_ANDROID_KEYSTORE_*`), создаётся владельцем один раз (готовые команды —
     android/README.md; агент/CI значений не видят). **Уточнение 2026-10-01 (инфраструктурное
@@ -533,6 +541,11 @@
     требует переустановки приложения. Guard: сборка падает без keystore/паролей; пароли
     маскируются (`add-mask`, keytool `:env`-протокол), отпечаток сертификата публикуется в
     примечаниях релиза. Обычный пользовательский `debug.keystore` не используется.
+    **Техническое уточнение PKCS12 (инцидент run 36844417480):** Java-keystore формата PKCS12
+    шифрует ключ всегда паролем STORE — отдельный `-keypass` keytool молча игнорирует;
+    поэтому и CI, и инструкция владельца используют ОДИН пароль на store и key (оба секрета
+    `AVEN_ANDROID_KEYSTORE_PASSWORD`/`AVEN_ANDROID_KEY_PASSWORD` — одно значение), иначе AGP
+    падает «Get Key failed: Given final block not properly padded». Regression-чек F7/F8.
   - **Безопасность**: только `INTERNET` permission; cleartext выключен глобально +
     `network_security_config`; внешние http/https → системный браузер; произвольные схемы
     блокируются; certificate validation не отключается; WebView debugging в release off.

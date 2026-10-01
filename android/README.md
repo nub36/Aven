@@ -66,8 +66,15 @@ GitHub Actions (основной путь): Actions → **Android APK** → Run 
   и примечаниях релиза.
 
 Workflow всегда выкладывает artifact (`android-apk-<run_id>`: aven-<VN>.apk, aven-latest.apk,
-sha256sums, apksigner/aapt-логи); с `publish_release=true` дополнительно создаёт tag
-`aven-android-v<VN>` и GitHub Release.
+sha256sums, apksigner/aapt-логи, compiled-манифест, листинг архива); с `publish_release=true`
+дополнительно создаёт tag `aven-android-v<VN>` и GitHub Release.
+
+**Bootstrap prerelease (2026-10-01):** пока workflow не на main (dispatch недоступен) и Secrets
+не созданы, тестовый PRE-RELEASE публикуется разовой директивой `publish-prerelease:` в
+`.github/triggers/android-apk.txt` — только с ephemeral-подписью, с явной пометкой
+«ПРЕ-РЕЛИЗ / TEST BUILD» в примечаниях. После настройки Secrets владелец публикует полный
+релиз dispatch'ом (`publish_release=true`) поверх того же тега: ассеты обновятся, prerelease-флаг
+снимется автоматически. Скачивание с сайта работает уже с prerelease (он помечен latest).
 
 ## Чек-лист релиза новой версии
 
