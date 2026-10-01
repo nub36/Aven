@@ -810,3 +810,35 @@ Undo, ambiguity, ограничения точного времени и отс�
 
 ### Iteration 13
 Text commands can update the place of one existing event, for example «Измени место встречи с Сергеем на офис». Confirmation is required, Undo restores the old place, and recurring/bulk or other event-field edits remain unsupported.
+
+---
+
+## Aven для Android (Android distribution stage, 2026-10-01, ADR-114)
+
+Тот же самый прототип работает как Android-приложение: минимальная обёртка
+(`android/`, WebView-shell) подключает **та же самая** бизнес-логика без нативных копий
+разделов. Web-ассеты встроены в APK (вариант A — bundled): при сборке
+`android/sync-web-assets.sh` копирует runtime-ассеты из этого каталога в
+`android/app/src/main/assets/www/` (~2.4 МБ; research-ассеты — 3D, лаборатория голосов (MP3), master-references, tests — исключены), а `__ASSET_VERSION__` заменяется на
+`VERSION_NAME` из `android/version.txt` (та же роль, что SHA в Pages-workflow).
+
+**Что добавлено на сайт для этапа:**
+- `js/app-download.js` — конфиг скачивания (version/name/URL `releases/latest/download/aven-latest.apk`,
+  sizeHint, applicationId, min-версия Android);
+- кнопка «📱 Android» в топбаре после demo-badge (desktop) и пункт «Скачать приложение»
+  в drawer (.side-bottom, все устройства);
+- модальное окно скачивания (app.js `openAndroidDownloadModal`): файл, версия, размер,
+  6 шагов ручной установки APK (разрешение «из этого источника» — scoped для браузера/ФМ,
+  security Android глобально не отключается);
+- help-статья «Aven для Android» (`start-android`).
+
+На ≤860px topbar-CTA скрыта (CTA живёт в drawer — тесный топбар не переполняется);
+оба входа ведут в одно и то же модальное окно.
+
+**Тесты этапа:** `prototype/tests/android-apk-check.js` — 57 статических проверок
+wrapper/bundle/CTA/workflow (без jsdom и Android SDK); обычный порядок: локальный прогон
+обязателен перед PR, настоящая сборка APK — GitHub Actions
+(`.github/workflows/android-apk.yml`, workflow_dispatch; подпись — release-key из
+Actions Secrets, apksigner/aapt в CI-логе). Известные ограничения v1 (STT/system-TTS в
+WebView, lab/3D только в веб-версии, офлайн не обещается) документированы в ADR-114,
+android/README.md и справке.

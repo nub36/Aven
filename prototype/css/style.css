@@ -252,6 +252,10 @@ html[data-theme="dark"] .nav-item.active { color: var(--accent-strong); }
   backdrop-filter: saturate(1.15) blur(14px);
 }
 .topbar .title { font-weight: 700; font-size: 1.08rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Android download CTA (ADR-114): между заголовком и правыми контролами; заметная,
+   но спокойная — обычный .btn.small с иконкой. На mobile (≤860px) скрыта: там тесный
+   топбар — CTA живёт в drawer («Скачать приложение»). */
+.top-android-cta { white-space: nowrap; flex-shrink: 0; }
 .demo-badge {
   font-size: .7rem; font-weight: 700; letter-spacing: 1px;
   background: var(--warn-soft); color: var(--warn);
@@ -1092,6 +1096,8 @@ body.auth-mode .content { max-width: 480px; padding: 0 16px; margin: 6vh auto; }
   .topbar > * { flex-shrink: 0; }
   .topbar .title { flex-shrink: 1; font-size: 1rem; }
   .demo-badge { display: none; }
+  /* mobile: CTA не входит в тесный топбар — скачивание доступно из drawer (без переполнения) */
+  .top-android-cta { display: none; }
 
   /* Sidebar Drawer on Mobile */
   .sidebar {

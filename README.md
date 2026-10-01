@@ -37,6 +37,7 @@
 | Документ | Назначение |
 |---|---|
 | [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) | **Главный план проекта** — полная карта развития, этапы, черновик MVP, открытые вопросы |
+| [android/](android/) | Aven для Android (ADR-114): минимальный WebView-shell прототипа, сборка APK в GitHub Actions, установка с сайта (`📱 Android`) — подробности в [android/README.md](android/README.md) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Архитектура: принципы, компоненты, Action Core, место AI |
 | [docs/FEATURES.md](docs/FEATURES.md) | Возможности и модули системы |
 | [docs/COMMAND_ENGINE.md](docs/COMMAND_ENGINE.md) | Command Engine: intents, actions, разбор естественной речи без AI |

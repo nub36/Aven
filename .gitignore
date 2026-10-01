@@ -1,3 +1,14 @@
 __pycache__/
 *.pyc
 research/tts/out/
+
+# Android build outputs (Apk в git не храним — релизы через GitHub Releases)
+android/build/
+android/.gradle/
+android/local.properties
+android/app/build/
+android/gradle/wrapper/gradle-wrapper.jar
+# синхронизированный web-bundle — генерируется из prototype/ при сборке
+# (держать под git было бы дублем источника; см. android/sync-web-assets.sh)
+android/app/src/main/assets/www/
+android/out/

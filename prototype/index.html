@@ -29,6 +29,7 @@
         <button class="icon-btn mobile-menu-btn" id="mobile-menu-btn" data-action="menu-toggle" title="Открыть навигацию" aria-label="Открыть навигацию" aria-controls="sidebar" aria-expanded="false">☰</button>
         <div class="title" id="page-title">Aven</div>
         <span class="demo-badge">ДЕМО · ПРОТОТИП</span>
+        <button class="btn small top-android-cta" id="android-cta" data-action="android-download" title="Скачать приложение Aven для Android (APK)">📱 Android</button>
         <button class="icon-btn notif-bell" id="notif-btn" data-action="nav" data-id="notifications" title="Уведомления" aria-label="Уведомления">🔔<span class="notif-badge" id="notif-badge" hidden>0</span></button>
         <button class="icon-btn" id="theme-btn" data-action="theme-toggle" title="Тема: светлая / тёмная / как в системе">🌙</button>
         <button class="icon-btn" id="logout-btn" data-action="logout" title="Выйти из аккаунта (демо)">⎋</button>
@@ -47,6 +48,7 @@
   <!-- Порядок скриптов важен. Классические скрипты (без модулей) — прототип открывается и с file:// -->
   <!-- Cache-busting: см. комментарий у <link rel="stylesheet"> в <head>. -->
   <script src="js/data.js?v=__ASSET_VERSION__"></script>
+  <script src="js/app-download.js?v=__ASSET_VERSION__"></script>
   <script src="js/state.js?v=__ASSET_VERSION__"></script>
   <script src="js/ui.js?v=__ASSET_VERSION__"></script>
   <script src="js/character.js?v=__ASSET_VERSION__"></script>

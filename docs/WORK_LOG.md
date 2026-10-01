@@ -6,6 +6,94 @@
 
 ---
 
+## 2026-10-01 — Android distribution stage: APK-shell прототипа + CTA скачивания (ADR-114)
+
+### Независимая контрольная точка
+
+Проверены git/GitHub/docs до реализации: ветка `arena/01a0f644-aven` от `6f995bc`, `origin/main`
+= `5724f82a` (merged PR #47); следующий свободный номер — ADR-114. Все обязательные документы
+(DECISIONS, PROJECT_PLAN, FEATURES, SECURITY, ANDROID/Android-этап handoff-инструкция владельца)
+прочитаны до реализации. Локальной Android-сборки в среде агента нет (нет JDK/SDK, egress к
+dl.google.com/services.gradle.org закрыт): реальная сборка только в GitHub Actions.
+
+### Что сделано
+
+**Обертка (`android/`)**: минимальный WebView-shell прототипа (вариант A — бандл внутри APK;
+ADR-114: отклонение «предпочтительно Capacitor» из handoff задокументировано с обоснованием и
+путём миграции). `MainActivity.java` (~150 строк): WebViewAssetLoader с origin
+`https://localhost`, Back сначала по маршрутам Aven, внешние http/https → системный браузер,
+произвольные схемы блокируются, исключённые lab/3D-страницы → встроенное объяснение;
+WebSettings: domStorage on (localStorage между запусками), file/content access off,
+`setMediaPlaybackRequiresUserGesture(false)` (аудио после async-синтеза у собственного
+TTS-сервера), без debug. Manifest: только `INTERNET`, `usesCleartextTraffic="false"` +
+`network_security_config`, `allowBackup="false"`, app name «Aven». `version.txt` —
+единственный источник версии (0.1.0/1); `sync-web-assets.sh` — whitelist-синк prototype/ →
+`app/src/main/assets/www/` (~2.4 МБ из 24; исключены 3D, MP3-лаборатория, vendor/three, tests),
+`__ASSET_VERSION__` → VERSION_NAME (та же роль, что SHA у Pages). Иконки — существующая метка
+Aven (#5A5FD8/«A» favicon): 15 PNG (5 плотностей × launcher/round/foreground) + adaptive-icon XML,
+генератор `android/tools/gen-icons.mjs` (sharp, одноразово; бинарники закоммичены). Новых
+персонажных ассетов не создано.
+
+**CI (`.github/workflows/android-apk.yml`)**: workflow_dispatch (+ publish_release input) и
+marker-push по `.github/triggers/android-apk.txt` (отладочный запуск из рабочей ветки; релиз так
+не публикуется — guard). Gradle 8.9/setup-gradle, JDK 17, SDK 34, AGP 8.7.3. Подпись: bootstrap
+release-keystore в Actions Secrets при первом запуске (`AVEN_ANDROID_KEYSTORE_*`; keytool читает
+пароли по `:env`, add-mask до использования, прямого echo нет, keystorа в репо нет); далее
+стабильная подпись. Guard: сборка без keystore/паролей падает. Верификация до публикации:
+`file`, `apksigner verify --print-certs` (grep «Verifies»), `aapt dump badging` —
+applicationId/versionCode/versionName/INTERNET/запрет RECORD_AUDIO-CAMERA-LOCATION-CONTACTS;
+sha256sums + build-info. Artifact `android-apk-<run_id>`; release job (только dispatch +
+publish_release): tag `aven-android-v<VN>` + assets `aven-<VN>.apk`, `aven-latest.apk`,
+sha256/logs, notes с отпечатком сертификата; idempotent (--clobber).
+
+**Сайт (CTA)**: новый `prototype/js/app-download.js` (конфиг: version=0.1.0 синхронно с
+version.txt, стабильный URL `releases/latest/download/aven-latest.apk`, java/размер/min-версия
+Android, applicationId). Топбар: кнопка «📱 Android» между demo-badge и правыми контролами
+(`#android-cta`, `data-action=android-download`); на ≤860px скрыта — там тесный топбар — пункт
+«Скачать приложение» в side-bottom drawer (тот же action; параметр доставленного UX владельца —
+не ломать drawer/overflow). Модальное окно: что скачивается (файл/версия/размер/канал), версия
+Android (7.0+), 6 шагов установки с честным «источником», ссылка GitHub Releases, submit «⬇
+Скачать APK» + toast. Help-статья `start-android` «Aven для Android» (установка, обновление,
+ограничения STT/system-TTS/lab/3D). Реестр действий app.js + стили без изменения существующих
+правил переполнения.
+
+**Тесты**: новая suite `prototype/tests/android-apk-check.js` — 57 проверок (структура проекта,
+manifest/gradle/MainActivity контракты, bundle-completeness vs index.html refs, отсутствие
+research-ассетов/MP3/<6 МБ, CTA на сайте, синхронность версий, workflow-guard подписи/публикации,
+нет keystore/паролей в скопе). Plain node, без jsdom/SDK. Полный регресс 17 suite + новая —
+перед PR (WORK_LOG обновляется итогом). Node --check всех изменённых js.
+
+**Документы**: DECISIONS (ADR-114, Product Direction), PROJECT_PLAN Stage 6 / FUTURE-аннотации,
+FEATURES F22, CHANGELOG, README корневой (структура с android/), prototype/README
+(раздел «Android»), android/README (сборка/подпись/чек-лист выпуска).
+
+### Проверено
+
+- `node prototype/tests/android-apk-check.js` — **57/57 PASS** (синк bundle воспроизводим).
+- Прогон всех существующих тестов и итоговые числа — в конце коммита перед PR (см. правки ниже).
+- APK по факту сборки: file=ZIP/APK, apksigner Verifies, aapt badging — в CI-логе; URL
+  `releases/latest/download/aven-latest.apk` — 302→200 APK (проверка после первого релиза).
+
+### Известные ограничения/проблемы
+
+- Эмулятор-прогон в CI не создавался (осознанно не входит в этап): smoke-проверка на живом —
+  владелец по чек-листу PR (gate до «стадия закрыта»).
+- В Android WebView нет Web Speech API: STT/system-TTS недоступны в приложении — задокументировано
+  честно в справке, модальном окне и ADR-114; Natural TTS зависит от HTTPS-доступности сервера
+  (инцидент TTS НЕ перерасширялся этим stage).
+- Bootstrap подписи в Actions Secrets: при ошибке создания Secrets (403) workflow падает честно;
+  fallback — owner создаёт `AVEN_ANDROID_KEYSTORE_*` вручную (android/README).
+- APK в git не хранятся (Release-assets only); `assets/www/` — в .gitignore как производное от
+  prototype/ (идемпотентный sync).
+
+### Следующим
+
+- Хозяйская device-приёмка (chек-лист в PR: install/launch/drawer/tasks persist/Back/no-overflow/
+  CTA-ошибки). После — отдельные ADR: Capacitor-развилка при потребности в нативных API,
+  Play-канал, auto-update механизм (всё вне текущего scope).
+
+---
+
 ## 2026-09-30 — Stage 2, итерация 12: управление существующим напоминанием
 
 ### Независимая контрольная точка
