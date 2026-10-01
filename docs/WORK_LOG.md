@@ -6,6 +6,247 @@
 
 ---
 
+## 2026-10-01 (продолжение 3) — PRERELEASE aven-android-v0.1.0 опубликован и верифицирован
+
+Run **36847296636** (commit `0178ff3`): build ✓ + release ✓. Создан **PRERELEASE**
+`aven-android-v0.1.0` (id 400847041): тег → `0178ff3` (= коммит сборки, provenance),
+8 ассетов: aven-0.1.0.apk + aven-latest.apk (одинаковый SHA-256
+`069c8edc16bb387c4f106547d9f74cce117daa2db6b0eb85e0367cc92499db57`, 1 741 633 байта,
+content-type application/vnd.android.package-archive) + текстовые артефакты верификации
+(apksigner.txt, badging.txt, manifest-xmltree.txt, unzip-listing.txt, sha256sums.txt,
+build-info.txt). publish-директива удалена из marker-файла сразу после публикации.
+
+### Верификация (все артефакты — реальный бинарник из CI, digest API GitHub == sha256 из CI)
+
+- **sha256sums.txt (CI) == digest обоих APK-ассетов из GitHub API** — криптографическое
+  доказательство: релизные бинарники байт-в-байт равны APK, верифицированному в CI
+  (egress песочницы не даёт скачать бинарник напрямую — цепочка эквивалентна).
+- **apksigner (CI)**: Verifies; v2 scheme TRUE; 1 signer; RSA 4096;
+  certificate SHA-256 `92514037a6c35b0d0243a6dfb53679ace6a03efd23286e40eed5f7253fcc8ddf`;
+  DN `CN=Aven Android Release (ephemeral), OU=prototype, O=Aven`.
+  **TEST SIGNING — NOT STABLE FOR UPDATES** (mode=ephemeral в build-info и примечаниях релиза).
+- **aapt badging (CI)**: package `io.github.nub36.aven`, versionCode 1, versionName 0.1.0,
+  minSdk 24, targetSdk 34, label «Aven», launchable `io.github.nub36.aven.MainActivity`,
+  единственный uses-permission — INTERNET.
+- **compiled manifest (aapt xmltree, CI)**: usesCleartextTraffic=0x0 (false), allowBackup=0x0,
+  networkSecurityConfig подключён, MainActivity exported=0xffffffff, launchMode=0x2 (singleTask),
+  configChanges=0x7A0 (orientation|screenSize|screenLayout|keyboardHidden|uiMode),
+  windowSoftInputMode=0x10 (adjustResize), intent-filter MAIN/LAUNCHER.
+- **unzip -l (CI)**: 87 файлов; полный bundle `assets/www/` (index/css/js/tts/character/voice
+  manifest); НЕТ .git/, keystore/jks/p12, tests, research-ассетов, MP3, source maps.
+- **PK magic (CI)**: `504b0304` — настоящий ZIP/APK контейнер.
+- **Публичные URL**: прямой ассет-URL → 302 → objects.githubusercontent.com с
+  `response-content-type=application/vnd.android.package-archive` (отдаёт APK-байты);
+  стабильный CTA-URL `releases/latest/download/aven-latest.apk` → 404 (API GitHub запрещает
+  latest для prerelease) — активируется первым ПОЛНЫМ релизом владельца = merge-gate для CTA.
+
+### Финальный regression ветки (HEAD d3cab84, run 36847848599 build-only SUCCESS)
+
+После удаления publish-директивы финальный HEAD даёт чистый build-only прогон
+(release: skipped — guard работает). Полный regression: **18 suites, 2435/2435, 0 провалов**
+(android-apk-check вырос с 59 при восстановлении до 63: +F7/F8 PKCS12, +F9 CI-верификация
+бинарника, +F10 latest-ограничение). `node --check` всех 52 js — OK. `git diff --check` — OK.
+
+### Честные ограничения сессии (не закрыто и не заявлено как закрытое)
+
+- Real-device прогона НЕТ (эмулятор в песочнице недоступен; device-приёмка — владелец по
+  чек-листу PR, gate стадии). Runtime persistence (localStorage через restart) не проверена
+  на устройстве — по коду domStorage включён, но честно: без runtime-проверки.
+- Стабильная подпись НЕ настроена (Secrets создаёт владелец; команды — android/README.md).
+- TTS внутри APK: bundle включает актуальный main на момент ветвления (PR #46+#47 merged,
+  6f995bc) — Natural TTS по HTTPS в WebView возможен, Web Speech API в WebView нет; Android
+  TTS runtime-проверкой не подтверждён (отдельный gate, не расширялся).
+
+---
+
+## 2026-10-01 (продолжение 2) — CI build SUCCESS (run 36845006746) + bootstrap prerelease-механика
+
+### Первый настоящий APK собран и верифицирован в CI
+
+Run **36845006746** (commit `2d5f6e7`, ветка `arena/01a0f6ca-aven`): все шаги зелёные, включая
+`assembleRelease` и «Проверка APK» (apksigner verify + aapt badging на runner'е). Артефакт
+`android-apk-36845006746` создан. Скачивание артефакта в песочницу невозможно: Azure blob
+(`*.blob.core.windows.net`), `uploads.github.com` и CDN релизов
+(`release-assets/objects.githubusercontent.com`) закрыты egress'ом песочницы (curl: 000,
+повторяется; известно и по avatar-3d-research.yml — там доставка артефактов шла публикацией
+в ветку; для APK это запрещено политикой «APK в git не хранятся», поэтому НЕ используется).
+
+### Ограничения сессии, зафиксированные честно
+
+- `workflow_dispatch` из агентского токена недоступен: 403 «Resource not accessible by
+  integration» (actions:write отсутствует). → dispatch-путь публикации из сессии невозможен.
+- Actions Secrets: 403 на чтение/запись (проверено повторно) → стабильная подпись НЕ
+  настроена; CI подписывает ephemeral release-key (TEST SIGNING), как задокументировано.
+- Прямой local-аудит бинарника APK в песочнице невозможен (нет ни байтов, ни JDK/SDK).
+  Эквивалентная криптографическая цепочка вместо него (см. ниже).
+
+### Механика bootstrap-релиза (расширение workflow, минимальное)
+
+Полный релиз остался dispatch-only. Добавлен единственный путь публикации до merge:
+marker-директива `publish-prerelease:` → job `release` публикует PRERELEASE (guard'ы:
+только push-event, только ephemeral-подпись — иначе ошибка; не может перезаписать полный
+релиз; тег через `--target $GITHUB_SHA` = коммит сборки; флаг `--prerelease`, пометка
+«ПРЕ-РЕЛИЗ / TEST BUILD» в notes). При последующем полном dispatch-релизе ассеты
+перезаливаются (--clobber), notes обновляются, prerelease-флаг снимается автоматически
+(PATCH API). Директива удаляется из marker-файла сразу после публикации.
+
+Run 36846707195 (первый прогон release-джобы) выявил два бага и они исправлены:
+(1) download-artifact с pattern кладёт файлы в подкаталог out/android-apk-<run_id>/
+→ «sed: can't read build-info.txt»; фикс: merge-multiple: true. (2) API GitHub запрещает
+помечать prerelease как latest (422 «Latest release cannot be draft or prerelease»; gh
+откатил draft-релиз, остался осиротевший тег — удалён вручную до следующего прогона);
+фикс: --latest только для полного релиза (LATEST_ARGS). Следствие задокументировано:
+releases/latest/download/aven-latest.apk активируется первым ПОЛНЫМ релизом владельца —
+это merge-gate для CTA (PR не мержится до него).
+
+### Усиление CI-верификации бинарника (для независимого аудита по логам/ассетам)
+
+Шаг «Проверка APK» дополнен: `cat sha256sums.txt` в лог; PK-magic проверка
+(`head -c4 | od`, ожидается `504b0304`, иначе ошибка); полный листинг архива `unzip -l`
+(в ассеты; guard: нет `.git/`, keystore/jks/p12, есть `assets/www/index.html`); полный
+СКОМПИЛИРОВАННЫЙ манифест `aapt dump xmltree` (в ассеты). Все текстовые артефакты
+верификации выкладываются в релиз и доступны по прямым URL (аудит без скачивания APK:
+apksigner.txt, badging.txt, manifest-xmltree.txt, unzip-listing.txt, sha256sums.txt,
+build-info.txt). Чеки: F1 переписан под новую политику, F9 добавлен — **62/62 PASS**.
+
+---
+
+## 2026-10-01 (продолжение) — восстановление stage после смерти GitHub auth: фикс валидации workflow + PKCS12-подписи
+
+### Контекст восстановления
+
+Сессия-предшественник реализовала весь stage (коммиты ниже в этом логе), но GitHub auth
+умер до завершения remote lifecycle: два Android-коммита (`d2ab63c`, `fec8271`) остались
+запушенными в ветку PR #47 `arena/01a0f644-aven` ПОСЛЕ merge PR #47 (main = `5724f82`), оба
+marker-запуска workflow упали. Восстановление: cherry-pick обоих коммититов на свежий main
+в новую сессионную ветку (дерево идентично `fec8271`), реализация не переписывалась.
+
+### Инцидент 1 — workflow не проходил валидацию (runs 36839639562, 36840289507)
+
+0 созданных jobs = падение на парсинге YAML: три step-имени содержали незакавыченный
+`«: »` (`Подпись: Secrets…`, `Проверка APK: подпись…`, `Static Android checks (без SDK: …)`)
+— «mapping values are not allowed here». Закавычены; push-триггер marker-паттерна переведён
+на текущую сессионную ветку. Локально добавлен YAML-парсер в проверочный цикл.
+
+### Инцидент 2 — run 36844417480: PKCS12 ephemeral-подпись падала в AGP
+
+Все шаги до сборки зелёные; `assembleRelease` падал:
+`KeytoolException: Failed to read key aven-release from store "/tmp/aven.keystore":
+Get Key failed: Given final block not properly padded`.
+Root cause: Java PKCS12 шифрует ключ ВСЕГДА паролем STORE — отдельный `-keypass`
+keytool молча игнорирует. Workflow генерировал два разных пароля (`AVEN_KEYSTORE_PASSWORD`
+= STORE_PASS, `AVEN_KEY_PASSWORD` = KEY_PASS) → AGP не мог расшифровать ключ. Фикс: один
+пароль (`KEY_PASS="$STORE_PASS"`); та же ловушка закрыта в инструкции владельцу
+(android/README.md: `-storepass`/`-keypass` совпадают, оба секрета — одно значение).
+Regression-чеки F7/F8 добавлены в android-apk-check.js.
+
+### Проверено (после фиксов)
+
+- `android-apk-check` — **61/61 PASS** (было 59/59 до recovery-фиксов).
+- Полный регресс: **18 suites, 2431/2431, 0 провалов** (jsdom через NODE_PATH=/tmp/lab).
+  Расхождение с handoff-басelayном 2429 объяснимо: +2 проверки приходили с фикс-коммитом
+  подписи (57→59) и не были пересчитаны в handoff; после recovery-фиксов +2 (F7/F8) → 61.
+- `node --check` всех 52 js — OK; `git diff --check` — OK; YAML-валидность android-apk.yml
+  подтверждена парсером (PyYAML) перед push.
+
+---
+
+## 2026-10-01 — Android distribution stage: APK-shell прототипа + CTA скачивания (ADR-114)
+
+### Независимая контрольная точка
+
+Проверены git/GitHub/docs до реализации: ветка `arena/01a0f644-aven` от `6f995bc`, `origin/main`
+= `5724f82a` (merged PR #47); следующий свободный номер — ADR-114. Все обязательные документы
+(DECISIONS, PROJECT_PLAN, FEATURES, SECURITY, ANDROID/Android-этап handoff-инструкция владельца)
+прочитаны до реализации. Локальной Android-сборки в среде агента нет (нет JDK/SDK, egress к
+dl.google.com/services.gradle.org закрыт): реальная сборка только в GitHub Actions.
+
+### Что сделано
+
+**Обертка (`android/`)**: минимальный WebView-shell прототипа (вариант A — бандл внутри APK;
+ADR-114: отклонение «предпочтительно Capacitor» из handoff задокументировано с обоснованием и
+путём миграции). `MainActivity.java` (~150 строк): WebViewAssetLoader с origin
+`https://localhost`, Back сначала по маршрутам Aven, внешние http/https → системный браузер,
+произвольные схемы блокируются, исключённые lab/3D-страницы → встроенное объяснение;
+WebSettings: domStorage on (localStorage между запусками), file/content access off,
+`setMediaPlaybackRequiresUserGesture(false)` (аудио после async-синтеза у собственного
+TTS-сервера), без debug. Manifest: только `INTERNET`, `usesCleartextTraffic="false"` +
+`network_security_config`, `allowBackup="false"`, app name «Aven». `version.txt` —
+единственный источник версии (0.1.0/1); `sync-web-assets.sh` — whitelist-синк prototype/ →
+`app/src/main/assets/www/` (~2.4 МБ из 24; исключены 3D, MP3-лаборатория, vendor/three, tests),
+`__ASSET_VERSION__` → VERSION_NAME (та же роль, что SHA у Pages). Иконки — существующая метка
+Aven (#5A5FD8/«A» favicon): 15 PNG (5 плотностей × launcher/round/foreground) + adaptive-icon XML,
+генератор `android/tools/gen-icons.mjs` (sharp, одноразово; бинарники закоммичены). Новых
+персонажных ассетов не создано.
+
+**CI (`.github/workflows/android-apk.yml`)**: workflow_dispatch (+ publish_release input) и
+marker-push по `.github/triggers/android-apk.txt` (отладочный запуск из рабочей ветки; релиз так
+не публикуется — guard). Gradle 8.9/setup-gradle, JDK 17, SDK 34, AGP 8.7.3. Подпись: Secrets
+стабильные (владелец создаёт один раз — готовые команды в android/README; автоматический
+bootstrap из workflow оказался невозможен — GITHUB_TOKEN не имеет scope на запись Actions
+Secrets, 403 «Resource not accessible by integration», проверено на run 36839639562);
+интерн-режим — эфемерный release-key запуска (не debug), add-mask до использования, keytool
+читает пароли по `:env`, прямого echo нет, keystore в репо нет; `signing_mode` фиксируется в
+build-info и примечаниях релиза вместе с предупреждением о поверхустановке. Guard: сборка без
+keystore/паролей падает. Верификация до публикации:
+`file`, `apksigner verify --print-certs` (grep «Verifies»), `aapt dump badging` —
+applicationId/versionCode/versionName/INTERNET/запрет RECORD_AUDIO-CAMERA-LOCATION-CONTACTS;
+sha256sums + build-info. Artifact `android-apk-<run_id>`; release job (только dispatch +
+publish_release): tag `aven-android-v<VN>` + assets `aven-<VN>.apk`, `aven-latest.apk`,
+sha256/logs, notes с отпечатком сертификата; idempotent (--clobber).
+
+**Сайт (CTA)**: новый `prototype/js/app-download.js` (конфиг: version=0.1.0 синхронно с
+version.txt, стабильный URL `releases/latest/download/aven-latest.apk`, java/размер/min-версия
+Android, applicationId). Топбар: кнопка «📱 Android» между demo-badge и правыми контролами
+(`#android-cta`, `data-action=android-download`); на ≤860px скрыта — там тесный топбар — пункт
+«Скачать приложение» в side-bottom drawer (тот же action; параметр доставленного UX владельца —
+не ломать drawer/overflow). Модальное окно: что скачивается (файл/версия/размер/канал), версия
+Android (7.0+), 6 шагов установки с честным «источником», ссылка GitHub Releases, submit «⬇
+Скачать APK» + toast. Help-статья `start-android` «Aven для Android» (установка, обновление,
+ограничения STT/system-TTS/lab/3D). Реестр действий app.js + стили без изменения существующих
+правил переполнения.
+
+**Тесты**: новая suite `prototype/tests/android-apk-check.js` — 57 проверок (структура проекта,
+manifest/gradle/MainActivity контракты, bundle-completeness vs index.html refs, отсутствие
+research-ассетов/MP3/<6 МБ, CTA на сайте, синхронность версий, workflow-guard подписи/публикации,
+нет keystore/паролей в скопе). Plain node, без jsdom/SDK. Полный регресс 17 suite + новая —
+перед PR (WORK_LOG обновляется итогом). Node --check всех изменённых js.
+
+**Документы**: DECISIONS (ADR-114, Product Direction), PROJECT_PLAN Stage 6 / FUTURE-аннотации,
+FEATURES F22, CHANGELOG, README корневой (структура с android/), prototype/README
+(раздел «Android»), android/README (сборка/подпись/чек-лист выпуска).
+
+### Проверено
+
+- `node prototype/tests/android-apk-check.js` — **57/57 PASS** (синк bundle воспроизводим).
+- Прогон всех существующих тестов и итоговые числа — в конце коммита перед PR (см. правки ниже).
+- APK по факту сборки: file=ZIP/APK, apksigner Verifies, aapt badging — в CI-логе; URL
+  `releases/latest/download/aven-latest.apk` — 302→200 APK (проверка после первого релиза).
+
+### Известные ограничения/проблемы
+
+- Эмулятор-прогон в CI не создавался (осознанно не входит в этап): smoke-проверка на живом —
+  владелец по чек-листу PR (gate до «стадия закрыта»).
+- В Android WebView нет Web Speech API: STT/system-TTS недоступны в приложении — задокументировано
+  честно в справке, модальном окне и ADR-114; Natural TTS зависит от HTTPS-доступности сервера
+  (инцидент TTS НЕ перерасширялся этим stage).
+- Подпись интерни — эфемерная на запуск (ЭФ1): поверхустановка между сборками с разными ключами
+  невозможна (Android-правило совпадения подписи); переход ephemeral→stable требует переустановки.
+  Целевая стабильная подпись — Secrets от владельца (5 мин, готовые команды — android/README.md):
+  GITHUB_TOKEN писать Actions Secrets не умеет (403), агент — тоже, поэтому bootstrap невозможен
+  автоматически и значения secrets нам не видны никогда. Ограничение честно показано пользователю
+  (модальное окно, help, примечания релиза; `signing` в app-download.js: ephemeral → stable).
+- APK в git не хранятся (Release-assets only); `assets/www/` — в .gitignore как производное от
+  prototype/ (идемпотентный sync).
+
+### Следующим
+
+- Хозяйская device-приёмка (chек-лист в PR: install/launch/drawer/tasks persist/Back/no-overflow/
+  CTA-ошибки). После — отдельные ADR: Capacitor-развилка при потребности в нативных API,
+  Play-канал, auto-update механизм (всё вне текущего scope).
+
+---
+
 ## 2026-09-30 — Stage 2, итерация 12: управление существующим напоминанием
 
 ### Независимая контрольная точка

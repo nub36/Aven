@@ -1,0 +1,13 @@
+# Marker-файл для тестового запуска Android-APK workflow из рабочей ветки
+# (паттерн .github/triggers/* как у tts-исследований). Каждый осмысленный
+# текстовый коммит сюда перезапускает сборку. ПОЛНЫЙ релиз так НЕ публикуется;
+# единственное исключение — разовая директива publish-prerelease: ниже
+# (PRERELEASE/TEST, ephemeral-подпись; удаляется сразу после публикации).
+run: 1 — первая сборка обёртки после создания android/ (2026-10-01)
+run: 2 — фикс подписи: ephemeral release-key вместо Secrets-bootstrap (secrets: write недоступен) (2026-10-01)
+run: 3 — фикс валидации workflow: кавычки в step-именах с ':' (runs 36839639562/36840289507 падали до создания jobs) + push-триггер переведён на текущую сессионную ветку (2026-10-01)
+run: 4 — фикс PKCS12-подписи: ephemeral один пароль store/key (run 36844417480 падал: keytool игнорирует -keypass для PKCS12 → AGP "final block not properly padded"); README-инструкция владельца синхронизирована (2026-10-01)
+run: 5 — фикс release-джобы: download-artifact merge-multiple (run 36846406393: файлы в подкаталоге out/android-apk-<run_id>/, «sed: can't read build-info.txt») (2026-10-01)
+run: 6 — фикс release-джобы #2: --latest только для полного релиза (run 36846707195: API GitHub 422 «Latest release cannot be draft or prerelease»; merge-gate для CTA задокументирован) (2026-10-01)
+run: 7 — фикс комментария workflow для чека F10 (фраза ошибки API перенесена на одну строку; F10 зелёный локально) (2026-10-01)
+# publish-prerelease-директива исполнена (run 36847296636 → prerelease aven-android-v0.1.0, 2026-10-01) и удалена из файла: повторные marker-запуски ничего не публикуют.

@@ -1,0 +1,69 @@
+// Aven для Android — модуль приложения (shell прототипа, ADR-114).
+// Версия читается из android/version.txt — единственный источник версии.
+import java.util.Properties
+
+plugins {
+    id 'com.android.application'
+}
+
+def versionProps = new Properties()
+versionProps.load(new FileInputStream(rootProject.file('version.txt')))
+def vName = versionProps.getProperty('VERSION_NAME')
+def vCode = versionProps.getProperty('VERSION_CODE') as int
+
+// Подписание: только из переменных окружения (keystore/пароли НИКОГДА не в git и не в логах).
+// CI: .github/workflows/android-apk.yml готовит файл из GitHub Actions Secret и маскирует пароли.
+def keystoreFile = System.getenv('AVEN_KEYSTORE_FILE')
+def keystorePass = System.getenv('AVEN_KEYSTORE_PASSWORD')
+def keystoreAlias = System.getenv('AVEN_KEYSTORE_ALIAS')
+def keyPass = System.getenv('AVEN_KEY_PASSWORD')
+def signingAvailable = keystoreFile && keystorePass && keystoreAlias && keyPass && new File(keystoreFile).exists()
+
+android {
+    namespace 'io.github.nub36.aven'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'io.github.nub36.aven'
+        minSdk 24
+        targetSdk 34
+        versionCode vCode
+        versionName vName
+    }
+
+    if (signingAvailable) {
+        signingConfigs {
+            release {
+                storeFile file(keystoreFile)
+                storePassword keystorePass
+                keyAlias keystoreAlias
+                keyPassword keyPass
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            if (signingAvailable) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // Линт не должен ломать сборку прототипной обёртки; строгость отчётов не отключаем.
+    lint {
+        abortOnError false
+    }
+}
+
+dependencies {
+    // WebViewAssetLoader (https://localhost origin для локальных ассетов; единственная зависимость).
+    implementation 'androidx.webkit:webkit:1.10.0'
+}

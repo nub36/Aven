@@ -1,0 +1,295 @@
+# Aven для Android — сборка и публикация APK (Android distribution stage, ADR-114).
+#
+# Запуск:
+#   • вручную: Actions → Android APK → Run workflow (publish_release=false — только artifact;
+#     publish_release=true — дополнительно git tag + GitHub Release с aven-<VN>.apk и
+#     стабильным aven-latest.apk);
+#   • в рабочей ветке: коммитом в marker-файл .github/triggers/android-apk.txt
+#     (паттерн tts-workflows — workflow_dispatch недоступен, пока workflow не на main);
+#     marker-запуски НИКОГДА не публикуют ПОЛНЫЙ релиз. Единственное исключение —
+#     ЯВНАЯ директива `publish-prerelease:` в marker-файле: публикует PRERELEASE/TEST
+#     (обязательно ephemeral-подпись; guard: stable-ключ + директива = ошибка).
+#     Нужна для bootstrap-релиза до попадания workflow на main (2026-10-01: dispatch
+#     из агентского токена недоступен — 403 actions:write). Директива удаляется из
+#     marker-файла сразу после публикации.
+#
+# Подпись (§7 handoff: release-подпись, без debug.keystore, secrets не в git/логах):
+#   1) ПРЕДПОЧТИТЕЛЬНО — стабильный ключ из GitHub Actions Secrets (AVEN_ANDROID_KEYSTORE_*):
+#      секреты создаются владельцем один раз (5 мин, готовые команды — android/README.md);
+#      поверхустановка следующих версий работает.
+#   2) ИНТЕРИМ, если секретов НЕТ — эфемерный release-key конкретного запуска (не debug-ключ;
+#      создаётся в памяти runner'а, никуда не сохраняется). ВАЖНО: меняется между сборками →
+#      поверхустановка APK, подписанного другим ключом, НЕВОЗМОЖНА (Android требует совпадения
+#      подписи): переход ephemeral→stable потребует удалить APK и поставить заново
+#      (локальные данные сотрутся). Режим фиксируется в build-info.txt и примечаниях релиза —
+#      честно и заметно. (GITHUB_TOKEN не умеет писать Actions Secrets — поэтому bootstrap
+#      из воркфлоу невозможен; проверено 2026-10-01: 403 Resource not accessible by integration.)
+#
+# Что НЕ делается: Google Play upload, iOS, auto-update сервер, debug-signing для публикации.
+name: Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Опубликовать GitHub Release (tag + aven-<VN>.apk + aven-latest.apk)'
+        type: boolean
+        default: false
+  push:
+    branches: [arena/01a0f6ca-aven]
+    paths: ['.github/triggers/android-apk.txt']
+
+permissions:
+  contents: read
+  # (Actions Secrets GITHUB_TOKEN не пишет — см. комментарий о подписи выше; лишних scopes нет)
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GRADLE_VERSION: '8.9'
+  JAVA_VERSION: '17'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      publish_mode: ${{ steps.publish-mode.outputs.mode }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: "Publish-mode: dispatch → release|none; marker-push — только явная директива publish-prerelease"
+        id: publish-mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.publish_release }}" = "true" ]; then echo "mode=release" >> "$GITHUB_OUTPUT";
+            else echo "mode=none" >> "$GITHUB_OUTPUT"; fi
+          elif grep -q '^publish-prerelease:' .github/triggers/android-apk.txt 2>/dev/null; then
+            echo "mode=prerelease" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Web bundle → android/app/src/main/assets/www (sync из prototype/)
+        run: bash android/sync-web-assets.sh
+
+      - name: "Static Android checks (без SDK: структура, bundle, CTA)"
+        run: node prototype/tests/android-apk-check.js --ci-only
+
+      - name: JDK 17 (Temurin) для AGP
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Gradle ${{ env.GRADLE_VERSION }}
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+
+      - name: Android SDK лицензии
+        run: yes | sdkmanager --licenses >/dev/null || true
+
+      - name: Базовый wrapper (jar генерируется, бинарь не коммитится)
+        run: gradle wrapper --gradle-version "$GRADLE_VERSION" --distribution-type bin
+        working-directory: android
+
+      - name: "Подпись: Secrets (stable) → иначе ephemeral release-key"
+        run: |
+          set -euo pipefail
+          KS_B64='${{ secrets.AVEN_ANDROID_KEYSTORE_BASE64 }}'
+          if [ -n "$KS_B64" ]; then
+            echo "::notice::Подпись: стабильный release-key из Actions Secrets (mode=secrets)"
+            echo -n "$KS_B64" | base64 -d > /tmp/aven.keystore
+            {
+              echo "AVEN_KEYSTORE_FILE=/tmp/aven.keystore"
+              echo "AVEN_KEYSTORE_PASSWORD=${{ secrets.AVEN_ANDROID_KEYSTORE_PASSWORD }}"
+              echo "AVEN_KEYSTORE_ALIAS=${{ secrets.AVEN_ANDROID_KEYSTORE_ALIAS }}"
+              echo "AVEN_KEY_PASSWORD=${{ secrets.AVEN_ANDROID_KEY_PASSWORD }}"
+              echo "AVEN_SIGNING_MODE=secrets"
+            } >> "$GITHUB_ENV"
+          else
+            echo "::notice::Actions Secrets не заданы — эфемерный release-key этого запуска (mode=ephemeral); поверхустановка между сборками НЕ сработает (см. android/README.md)"
+            STORE_PASS="$(openssl rand -hex 24)"
+            # PKCS12 в Java: ключ внутри хранилища всегда шифруется паролем STORE (keytool молча
+            # игнорирует отдельный -keypass). Поэтому ОДИН пароль на store и key — иначе AGP падает
+            # «Get Key failed: Given final block not properly padded» (run 36844417480, 2026-10-01).
+            KEY_PASS="$STORE_PASS"
+            echo "::add-mask::$STORE_PASS"
+            echo "::add-mask::$KEY_PASS"
+            export STORE_PASS KEY_PASS
+            keytool -genkeypair -v -keystore /tmp/aven.keystore \
+              -alias aven-release -keyalg RSA -keysize 4096 -sigalg SHA256withRSA \
+              -validity 10950 -storetype PKCS12 \
+              -dname "CN=Aven Android Release (ephemeral), OU=prototype, O=Aven" \
+              -storepass:env STORE_PASS >/dev/null 2>&1
+            {
+              echo "AVEN_KEYSTORE_FILE=/tmp/aven.keystore"
+              echo "AVEN_KEYSTORE_PASSWORD=$STORE_PASS"
+              echo "AVEN_KEYSTORE_ALIAS=aven-release"
+              echo "AVEN_KEY_PASSWORD=$KEY_PASS"
+              echo "AVEN_SIGNING_MODE=ephemeral"
+            } >> "$GITHUB_ENV"
+            unset STORE_PASS KEY_PASS
+          fi
+
+      - name: Сборка release APK
+        run: |
+          set -euo pipefail
+          # Маски не выводим; guard: без keystore/паролей — честный отказ, а не unsigned релиз
+          test -n "${AVEN_KEYSTORE_FILE:-}" && test -f "$AVEN_KEYSTORE_FILE"
+          test -n "${AVEN_KEYSTORE_PASSWORD:-}" && test -n "${AVEN_KEY_PASSWORD:-}" && test -n "${AVEN_KEYSTORE_ALIAS:-}"
+          ./gradlew assembleRelease --no-daemon --stacktrace
+        working-directory: android
+
+      - name: "Проверка APK: подпись + метаданные пакета"
+        id: verify
+        run: |
+          set -euo pipefail
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          VN="$(grep '^VERSION_NAME=' android/version.txt | cut -d= -f2)"
+          VC="$(grep '^VERSION_CODE=' android/version.txt | cut -d= -f2)"
+          test -f "$APK" || { echo "::error::APK не собран: $APK"; exit 1; }
+          mkdir -p android/out
+          cp "$APK" "android/out/aven-${VN}.apk"
+          cp "$APK" "android/out/aven-latest.apk"
+          # file: настоящий ZIP/APK, а не переименованный каталог
+          file "android/out/aven-${VN}.apk"
+          # apksigner verify (v1+v2 схемы) — иначе публикация не состоится
+          "$BT/apksigner" verify --verbose --print-certs "android/out/aven-${VN}.apk" | tee android/out/apksigner.txt
+          "$BT/apksigner" verify --verbose "android/out/aven-${VN}.apk" | grep -q "Verifies" || { echo "::error::подпись не верифицирована"; exit 1; }
+          # aapt dump badging: applicationId/version/permissions
+          "$BT/aapt" dump badging "android/out/aven-${VN}.apk" | tee android/out/badging.txt
+          grep -q "package: name='io.github.nub36.aven'" android/out/badging.txt || { echo "::error::applicationId не совпадает"; exit 1; }
+          grep -q "versionCode='${VC}'" android/out/badging.txt || { echo "::error::versionCode не совпадает"; exit 1; }
+          grep -q "versionName='${VN}'" android/out/badging.txt || { echo "::error::versionName не совпадает"; exit 1; }
+          PERMS=$(grep -c "^uses-permission" android/out/badging.txt || true)
+          echo "uses-permission entries: $PERMS"
+          grep -q "android.permission.INTERNET" android/out/badging.txt || { echo "::error::INTERNET отсутствует"; exit 1; }
+          if grep -qE "permission\.(RECORD_AUDIO|CAMERA|ACCESS_FINE_LOCATION|ACCESS_COARSE_LOCATION|READ_CONTACTS)" android/out/badging.txt; then
+            echo "::error::лишние permissions в APK"; exit 1
+          fi
+          MUST_NOT=$(grep -c "usesCleartextTraffic" android/out/badging.txt || true)
+          echo "usesCleartextTraffic entries: $MUST_NOT (false — единственно допустимое значение)"
+          cd android/out && sha256sum "aven-${VN}.apk" "aven-latest.apk" > sha256sums.txt && cd ../..
+          cat android/out/sha256sums.txt
+          # PK magic: настоящий ZIP/APK-контейнер (PK\x03\x04), не HTML и не пустышка
+          MAGIC="$(head -c 4 "android/out/aven-${VN}.apk" | od -An -tx1 | tr -d ' \n')"
+          echo "APK magic bytes: ${MAGIC}"
+          [ "$MAGIC" = "504b0304" ] || { echo "::error::APK не является ZIP-контейнером (PK magic отсутствует)"; exit 1; }
+          # Контент-аудит архива (полный листинг — в out/ и релиз-ассеты): без .git/keystore,
+          # bundle Aven (assets/www) присутствует
+          unzip -l "android/out/aven-${VN}.apk" > android/out/unzip-listing.txt
+          tail -3 android/out/unzip-listing.txt
+          if grep -qE "\.git/|\.keystore$|\.jks$|\.p12$" android/out/unzip-listing.txt; then
+            echo "::error::запрещённые файлы в APK (.git/keystore/jks/p12)"; exit 1
+          fi
+          grep -q "assets/www/index.html" android/out/unzip-listing.txt || { echo "::error::web-bundle не найден в APK"; exit 1; }
+          # Полный СКОМПИЛИРОВАННЫЙ манифест (не только исходный AndroidManifest.xml) — в out/ и ассеты
+          "$BT/aapt" dump xmltree "android/out/aven-${VN}.apk" AndroidManifest.xml > android/out/manifest-xmltree.txt
+          head -8 android/out/manifest-xmltree.txt
+          {
+            echo "version=${VN} code=${VC}"
+            echo "git_sha=${GITHUB_SHA}"
+            echo "signing_mode=${AVEN_SIGNING_MODE:-unknown}"
+            echo "size_bytes=$(stat -c%s android/out/aven-${VN}.apk)"
+          } > android/out/build-info.txt
+          cat android/out/build-info.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk-${{ github.run_id }}
+          path: android/out/
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    needs: build
+    # ПОЛНЫЙ (stable) релиз — только вручную: workflow_dispatch + publish_release.
+    # PRERELEASE/TEST — допустим с marker-push, НО только при явной директиве
+    # `publish-prerelease:` в .github/triggers/android-apk.txt И только с ephemeral-подписью
+    # (bootstrap до попадания workflow на main: workflow_dispatch из агентского токена
+    # недоступен — 403 actions:write, 2026-10-01). Директива удаляется из marker-файла
+    # сразу после публикации — постоянные marker-запуски релизов не публикуют.
+    if: (github.event_name == 'workflow_dispatch' && inputs.publish_release) || (github.event_name == 'push' && needs.build.outputs.publish_mode == 'prerelease')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: android-apk-*
+          path: out
+          # без merge-multiple файлы оказываются в out/android-apk-<run_id>/ и cd out ломается
+          # (run 36846406393: «sed: can't read build-info.txt»)
+          merge-multiple: true
+
+      - name: "Git tag + GitHub Release (idempotent; prerelease — только из marker-директивы)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd out
+          VN="$(sed -n 's/^version=\([^ ]*\).*/\1/p' build-info.txt)"
+          TAG="aven-android-v${VN}"
+          test -n "$VN" && test -f "aven-${VN}.apk" && test -f "aven-latest.apk"
+          CERT_SHA="$(grep -m1 'certificate SHA-256' apksigner.txt | sed 's/.*: //' || true)"
+          MODE="$(sed -n 's/^signing_mode=//p' build-info.txt)"
+          PUBLISH_MODE="${{ needs.build.outputs.publish_mode }}"
+          PRERELEASE_ARGS=""
+          PRE_NOTE=""
+          # latest-флаг допустим ТОЛЬКО для полного релиза: API GitHub запрещает помечать
+          # prerelease как latest (run 36846707195: 422, «Latest release cannot be draft or prerelease»).
+          # Следствие: releases/latest/download/aven-latest.apk начинает работать
+          # только с первого ПОЛНОГО релиза владельца — это осознанный merge-gate для CTA.
+          LATEST_ARGS="--latest"
+          if [ "$PUBLISH_MODE" = "prerelease" ]; then
+            PRERELEASE_ARGS="--prerelease"
+            LATEST_ARGS=""
+            PRE_NOTE="⚠️ ПРЕ-РЕЛИЗ / TEST BUILD (bootstrap, marker-директива publish-prerelease): официальный стабильный релиз — через workflow_dispatch publish_release=true после настройки Secrets владельцем."
+
+          fi
+          if [ "$PUBLISH_MODE" = "prerelease" ] && [ "$MODE" = "secrets" ]; then
+            echo "::error::marker-prerelease не совместим со stable-подписью: стабильный ключ публикуется только полным релизом (dispatch)"
+            exit 1
+          fi
+          if [ "$MODE" = "secrets" ]; then
+            SIGN_NOTE="стабильный release-key из Actions Secrets (certificate SHA-256: ${CERT_SHA:-см. apksigner.txt}) — следующие версии ставятся поверх"
+          else
+            SIGN_NOTE="ЭФЕМЕРНЫЙ release-key запуска (TEST SIGNING — NOT STABLE FOR UPDATES; certificate SHA-256: ${CERT_SHA:-см. apksigner.txt}). ВНИМАНИЕ: следующий релиз, подписанный другим ключом, не установится поверх — потребуется удалить приложение и поставить заново (локальные данные сотрутся). Стабильная подпись включается созданием Secrets (5 мин — android/README.md)."
+          fi
+          NOTES="${PRE_NOTE}
+          Aven для Android ${VN} (prototype shell, ADR-114)
+
+          - applicationId: io.github.nub36.aven · versionCode $(sed -n 's/^code=//p' build-info.txt)
+          - minSdk 24 · targetSdk 34 · только INTERNET permission · cleartext OFF
+          - подпись (mode=${MODE:-unknown}): ${SIGN_NOTE}
+          - установка: ручная, из APK; разрешение «из этого источника» — один раз для браузера/ФМ
+          - данные — локально на устройстве, без облачной синхронизации"
+          ASSETS="aven-${VN}.apk aven-latest.apk sha256sums.txt apksigner.txt badging.txt build-info.txt manifest-xmltree.txt unzip-listing.txt"
+          if gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            IS_PRE="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq .prerelease)"
+            if [ "$PUBLISH_MODE" = "prerelease" ] && [ "$IS_PRE" != "true" ]; then
+              echo "::error::Release $TAG уже существует как ПОЛНЫЙ релиз — prerelease-директива не может его перезаписать"
+              exit 1
+            fi
+            echo "::notice::Release $TAG существует — обновляю assets (--clobber) и метаданные"
+            # shellcheck disable=SC2086
+            gh release upload "$TAG" $ASSETS --repo "${GITHUB_REPOSITORY}" --clobber
+            # shellcheck disable=SC2086
+            gh release edit "$TAG" --repo "${GITHUB_REPOSITORY}" --title "Aven для Android ${VN}" --notes "$NOTES" $LATEST_ARGS
+            if [ "$PUBLISH_MODE" = "release" ]; then
+              RID="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq .id)"
+              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${RID}" -F prerelease=false >/dev/null
+            fi
+          else
+            # --target: тег указывает на ТОТ ЖЕ коммит, из которого собран APK (provenance)
+            # shellcheck disable=SC2086
+            gh release create "$TAG" $ASSETS \
+              --repo "${GITHUB_REPOSITORY}" --target "${GITHUB_SHA}" \
+              --title "Aven для Android ${VN}" --notes "$NOTES" $PRERELEASE_ARGS $LATEST_ARGS
+          fi
+          gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" --json tagName,isPrerelease,assets --jq '{tag: .tagName, prerelease: .isPrerelease, assets: [.assets[].name]}'

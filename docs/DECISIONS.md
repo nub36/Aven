@@ -65,6 +65,7 @@
 | [ADR-111](#adr-111) | Proposed | Контракт API и валидация: REST + OpenAPI, общие Zod-схемы клиента и сервера |
 | [ADR-112](#adr-112) | Proposed | Тестирование и качество: Vitest + Testing Library + Playwright + интеграционные на реальном PostgreSQL |
 | [ADR-113](#adr-113) | Proposed | Репозиторий и деплой: монорепо pnpm workspaces, Docker Compose на VPS, GitHub Actions, бэкап с проверенным восстановлением |
+| [ADR-114](#adr-114) | Product Direction | Android distribution v1 (владелец, 2026-10-01): минимальный WebView-shell прототипа, ассеты внутри APK, ручная установка через GitHub Releases |
 
 ---
 
@@ -487,6 +488,93 @@
 - **Последствия:** Регион хостинга и провайдер — решение владельца (данные личные); инфраструктура как код;
   обновления и патчи безопасности — регулярная обязанность (раздел 10 [STACK_RESEARCH.md](STACK_RESEARCH.md));
   health endpoint и логи — ADMIN §15–16, без логирования секретов (SECURITY §7).
+
+### ADR-114
+
+- **ID:** ADR-114
+- **Дата продуктового решения владельца:** 2026-10-01 (stage-handoff «Android APK + скачивание с сайта»)
+- **Статус:** Product Direction (направление утверждено владельцем напрямую);
+  состав первой реализации — Proposed до device-приёмки владельцем (install/launch/Back/persistence).
+- **Связь с историей:** принцип 2026-09-25 «не продвигать платформенные приложения, пока не принято
+  решение по мобильным», сохранявшийся к моменту рестарта v1 (FUTURE.md §1, FEATURES.md F22),
+  на 2026-10-01 владелец **заменил прямым решением**: Android-направление открывается сейчас,
+  первый релиз — упаковка **уже работающего** прототипа, без ожидания полного backend.
+  Принцип продолжает действовать для iOS и нативных переписей. История не переписывается.
+- **Решение (v1):**
+  - Берём максимально минимальную поддерживаемую обёртку: **собственный shell на Android WebView**
+    (`android/`, Java 17, единственная зависимость `androidx.webkit` для WebViewAssetLoader).
+    Нативных копий разделов (androidTasks/androidCalendar/…) НЕ создаётся — бизнес-логика,
+    стили и контент общие с `prototype/`.
+  - **Вариант A — бандл внутри APK**: `prototype/` → `android/app/src/main/assets/www/`
+    скриптом `android/sync-web-assets.sh` (whitelist: runtime-ассеты; research-ассеты —
+    3D/MP3-лаборатория/master-references — исключены, ~2.5 МБ вместо ~24). Origin контента —
+    `https://localhost` (WebViewAssetLoader): нет `file://`-ограничений, localStorage стабилен,
+    сервер Natural TTS уже допускает origin `https://localhost` по CORS.
+  - **Handoff предлагал «предпочтительно Capacitor» — отклонено для v1** (прозрачная развилка):
+    в репозитории нет package.json/node-экосистемы (принцип нулевых зависимостей прототипа);
+    плагины Capacitor, нужные владельцем сейчас (Back-семантика, внешние ссылки, domStorage,
+    запрет лишних permission), дают ноль дополнительной функциональности поверх ~150 строк
+    `MainActivity`; цена — node/npm/gradle-поверхность плагинов и их жизненный цикл.
+    Миграционный путь на Capacitor остаётся дешёвым: уникального у shell только `MainActivity`,
+    бандл (`assets/www`) и сборка ортогональны фреймворку. Если v1 потребует нативных API
+    (push, background, deep-link-хват), развилка переоценивается отдельным ADR.
+  - **Распространение**: только GitHub Releases, ручная установка APK; в git-хистории APK и
+    keystore НЕ хранятся. В публикации — `aven-<version>.apk` и стабильный `aven-latest.apk`;
+    сайт скачивает по `releases/latest/download/aven-latest.apk`.
+    **Уточнение 2026-10-01 (bootstrap-механика, зафиксировано):** полный релиз публикуется
+    только вручную (workflow_dispatch + `publish_release`); до попадания workflow на main
+    и до создания Secrets тестовый PRE-RELEASE публикуется разовой ЯВНОЙ директивой
+    `publish-prerelease:` в marker-файле `.github/triggers/android-apk.txt` (агентский токен
+    не имеет actions:write — dispatch из сессии агента невозможен, 403; директива удаляется
+    из файла сразу после публикации; guard: prerelease-режим совместим только с ephemeral-
+    подписью и не может перезаписать полный релиз). Prerelease НЕ помечается latest — API GitHub
+    это запрещает («Latest release cannot be draft or prerelease», 422, run 36846707195),
+    поэтому `releases/latest/download/aven-latest.apk` начинает отдавать APK только с первого
+    ПОЛНОГО релиза; merge PR с CTA сайта — после этого шага (gate в чек-листе владельца).
+  - **Подпись**: целевая модель — release-key в GitHub Actions Secrets
+    (`AVEN_ANDROID_KEYSTORE_*`), создаётся владельцем один раз (готовые команды —
+    android/README.md; агент/CI значений не видят). **Уточнение 2026-10-01 (инфраструктурное
+    ограничение, зафиксировано):** автоматический bootstrap секретов из workflow невозможен —
+    `GITHUB_TOKEN` не поддерживает запись Actions Secrets (403 «Resource not accessible by
+    integration» проверено на рабочем токене). До создания секретов владельцем CI подписывает
+    эфемерным release-key запуска (не debug-ключ; живёт в памяти runner'а; `signing_mode` в
+    build-info и примечаниях релиза). Следствие временного режима, честно зафиксированное:
+    поверхустановка между сборками с разными ключами невозможна — переход ephemeral→stable
+    требует переустановки приложения. Guard: сборка падает без keystore/паролей; пароли
+    маскируются (`add-mask`, keytool `:env`-протокол), отпечаток сертификата публикуется в
+    примечаниях релиза. Обычный пользовательский `debug.keystore` не используется.
+    **Техническое уточнение PKCS12 (инцидент run 36844417480):** Java-keystore формата PKCS12
+    шифрует ключ всегда паролем STORE — отдельный `-keypass` keytool молча игнорирует;
+    поэтому и CI, и инструкция владельца используют ОДИН пароль на store и key (оба секрета
+    `AVEN_ANDROID_KEYSTORE_PASSWORD`/`AVEN_ANDROID_KEY_PASSWORD` — одно значение), иначе AGP
+    падает «Get Key failed: Given final block not properly padded». Regression-чек F7/F8.
+  - **Безопасность**: только `INTERNET` permission; cleartext выключен глобально +
+    `network_security_config`; внешние http/https → системный браузер; произвольные схемы
+    блокируются; certificate validation не отключается; WebView debugging в release off.
+  - **Поведение Android**: Back — сначала по истории маршрутов Aven, затем выход;
+    поворот/пересоздание без потери маршрута; страницы лаборатории/3D не входят — честная
+    заглушка вместо белого экрана.
+  - **Обновления v1**: ручные (новый APK поверх); автоматического апдейтера, Google Play,
+    push/background-сервисов, платежей, STT-фикса и новых персонажей/3D — **нет** (scope зафиксирован).
+- **Известные ограничения v1 (фиксируются честно, не скрываются):**
+  STT и system-TTS недоступны в WebView (нет Web Speech API) — статусы в приложении и справке;
+  Natural TTS работает при HTTPS-доступности своего сервера; совместимость TTS с средами —
+  предмет отдельного открытого инцидента, этим этапом НЕ перерасширяется;
+  лаборатория голосов и 3D-страницы — только в веб-версии; офлайн-поведение системно не
+  проектировалось (аналог веб-версии: приложение не обещает офлайн-режим).
+- **Сборка/верификация**: CI (GitHub Actions, ubuntu runner) — Gradle 8.9 + AGP 8.7.3 + JDK 17 +
+  Android SDK 34; `apksigner verify --print-certs` и `aapt dump badging` сверяют
+  applicationId/versionCode/versionName/permissions до публикации; статические контракты
+  (без SDK) — `prototype/tests/android-apk-check.js` в общем прогоне.
+- **Критерии приёмки (stage не считается закрытым без владельца):** владелец ставит
+  `aven-latest.apk` на реальное устройство и проходит чек-лист в PR: установка, запуск с домашнего
+  экрана, вкладки/задачи/drawer/настройки/модалки, персистентность после закрытия, Back-семантика,
+  отсутствие горизонтального скролла на профилях 320–430px, поведение ссылки «скачать APK» с сайта,
+  честные статусы STT/TTS.
+- **Последствия:** CTA «📱 Android»/«Скачать приложение» появляется на сайте (топбар desktop,
+  drawer mobile/desktop, модальное окно с версией/размером/инструкцией; help-статья «Aven для Android»);
+  при смене версии синхронно редактируются `android/version.txt` и `prototype/js/app-download.js`
+  (чек-лист — android/README.md); следующие APK-релизы публикуются тем же workflow.
 
 ---
 
