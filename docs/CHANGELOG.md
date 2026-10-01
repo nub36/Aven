@@ -943,3 +943,24 @@ Action теперь отменяет расход и восстановлива�
 
 ### TTS hotfix investigation — synthesis response validation
 - Natural TTS now rejects empty, JSON/HTML, and unrecognised non-audio HTTP 200 bodies before caching or playback, preserving the documented system-voice fallback.
+
+### TTS incident — PR #46 review follow-up: voice-mapping self-heal, honest status, regression tests
+- **Review follow-up к hotfix валидации ответов Natural TTS** (без изменения механики валидации):
+  - `providers.js`: самовосстановление маппинга голоса по СВЕЖЕМУ health — если сохранённый голос
+    устарел/отсутствует на живом сервере (например, новая вкладка до открытия Настроек, новый
+    сервер с другим набором голосов), провайдер берёт `default_voice` сервера, иначе первый голос,
+    вместо немедленного fallback. Ключ кэша строится по разрешённому голосу; быстрый путь кэша
+    до health сохранён. Механика reject-валидации PR #46 не менялась.
+  - Настройки → Голос: честный статус. Health доказывает только доступность — статус теперь
+    «сервер доступен · …» вместо «подключён · …»; «озвучивание работает · …» показывается
+    только после того, как «Прослушать» реально дошёл до воспроизведения Natural (onplaying)
+    для текущего адреса сервера; смена URL/движка сбрасывает подтверждение.
+  - Тесты `tts-proto-check`: 42 → **88** проверок — валидация ответов (empty/JSON/HTML/
+    octet-stream без сигнатуры/без Content-Type; принятие WAV по сигнатуре при octet-stream,
+    audio/x-wav, без Content-Type; реальный вызов SystemTTSProvider при отказе; invalid ответ
+    не кэшируется), play()-rejection (NotAllowedError/NotSupportedError не глотаются),
+    кэш-ключ voice/rate/text, самовосстановление маппинга голоса, громкость настроек →
+    Audio/utterance, Стоп во время системного fallback.
+  - Корневая причина production-инцидента по-прежнему НЕ доказана: реальный endpoint владельца
+    (его URL хранится только в localStorage браузера владельца) из этой сессии недоступен;
+    требуется owner acceptance test.

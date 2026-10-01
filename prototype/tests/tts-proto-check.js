@@ -75,8 +75,10 @@ async function load(hash, mode, opts) {
   w.URL.createObjectURL = function (blob) { return 'blob:mock-' + (++blobSeq) + ':' + blob.size; };
   w.URL.revokeObjectURL = function () {};
 
-  // управляемый Audio: onplaying через 5 мс, onended через audioMs мс (null — не заканчивается)
+  // управляемый Audio: onplaying через 5 мс, onended через audioMs мс (null — не заканчивается).
+  // opts.playReject ('NotAllowedError'/'NotSupportedError') — play() отклоняется с DOMException-подобной ошибкой.
   w.__audioMs = opts.audioMs != null ? opts.audioMs : 300;
+  w.__playReject = opts.playReject || null;
   w.__audios = [];
   const Audios = w.__audios;
   w.Audio = class {
@@ -84,6 +86,11 @@ async function load(hash, mode, opts) {
     set src(v) { this._src = v; }
     get src() { return this._src; }
     play() {
+      if (w.__playReject) {
+        const e = new Error(w.__playReject + ": play() failed because the user didn't interact with the document first");
+        e.name = w.__playReject;
+        return Promise.reject(e);
+      }
       this._playing = true;
       setTimeout(() => { if (this._playing) this.onplaying && this.onplaying(); }, 5);
       if (w.__audioMs != null) setTimeout(() => { if (this._playing) { this._playing = false; this.onended && this.onended(); } }, w.__audioMs);
@@ -141,8 +148,19 @@ async function load(hash, mode, opts) {
           fopts.signal.addEventListener('abort', () => { const e = new Error('aborted'); e.name = 'AbortError'; reject(e); });
         });
       }
-      const bytes = Uint8Array.from(w.atob(WAV64), (c) => c.charCodeAt(0));
-      return Promise.resolve({ ok: true, status: 200, json: async () => ({}), text: async () => '', blob: async () => new w.Blob([bytes], { type: 'audio/wav' }) });
+      // PR #46: ответы синтеза по режимам — валидация до cache/play
+      const wavArr = Uint8Array.from(w.atob(WAV64), (c) => c.charCodeAt(0));
+      const strBytes = (s) => Uint8Array.from(s, (c) => c.charCodeAt(0));
+      const synthRes = (bytes, type) => Promise.resolve({ ok: true, status: 200, json: async () => ({}), text: async () => '', blob: async () => new w.Blob([bytes], { type: type }) });
+      if (mode === 'empty') return Promise.resolve({ ok: true, status: 200, json: async () => ({}), text: async () => '', blob: async () => new w.Blob([], { type: 'audio/wav' }) });
+      if (mode === 'json200') return synthRes(strBytes(JSON.stringify({ error: 'upstream proxy: backend not configured' })), 'application/json');
+      if (mode === 'html200') return synthRes(strBytes('<!DOCTYPE html><html><head><title>Welcome</title></head><body>placeholder page</body></html>'), 'text/html; charset=utf-8');
+      if (mode === 'octet-bad') return synthRes(strBytes('NOT_AN_AUDIO_STREAM_0123456789ABCDEF'), 'application/octet-stream');
+      if (mode === 'no-ct-garbage') return synthRes(strBytes('GARBAGE_WITHOUT_CONTENT_TYPE_012'), '');
+      if (mode === 'octet-wav') return synthRes(wavArr, 'application/octet-stream');
+      if (mode === 'x-wav') return synthRes(wavArr, 'audio/x-wav');
+      if (mode === 'no-ct-wav') return synthRes(wavArr, '');
+      return synthRes(wavArr, 'audio/wav');
     }
     return Promise.resolve({ ok: false, status: 404, json: async () => ({}), text: async () => 'nf', blob: async () => new w.Blob([]) });
   };
@@ -182,10 +200,11 @@ async function load(hash, mode, opts) {
     p.setNatural();
     p.click(p.q('[data-action="set-cat"][data-id="voice"]'));
     await sleep(250);
-    await p.waitFor(() => { const el = p.q('#tts-server-status'); return el && el.textContent.indexOf('подключён') >= 0; }, 8000, 'server status ok');
-    ok('S1 health: статус «подключён» с сервером/движком/голосами', (() => {
+    await p.waitFor(() => { const el = p.q('#tts-server-status'); return el && el.textContent.indexOf('сервер доступен') >= 0; }, 8000, 'server status ok');
+    ok('S1 health: честный статус «сервер доступен» (НЕ «озвучивание работает») с сервером/движком/голосами', (() => {
       const t = p.q('#tts-server-status').textContent;
-      return t.indexOf('подключён') >= 0 && t.indexOf('aven-tts-research 0.3.0') >= 0 && t.indexOf('qwen3') >= 0 && t.indexOf('голосов: 1') >= 0;
+      return t.indexOf('сервер доступен') >= 0 && t.indexOf('озвучивание работает') < 0 &&
+        t.indexOf('aven-tts-research 0.3.0') >= 0 && t.indexOf('qwen3') >= 0 && t.indexOf('голосов: 1') >= 0;
     })(), p.q('#tts-server-status').textContent);
     ok('S2 latency показан (… мс)', (p.q('#tts-server-status').textContent.match(/·\s*\d+\s*мс/) || null) !== null);
     ok('S3 поле таймаута Natural существует со значением по умолчанию 10', (() => {
@@ -368,10 +387,10 @@ async function load(hash, mode, opts) {
     delete p.st().settings.voice.natural.voice; // голос не сохранён — должен взяться default_voice сервера
     p.w.AvenState.save();
     p.click(p.q('[data-action="set-cat"][data-id="voice"]'));
-    await p.waitFor(() => { const el = p.q('#tts-server-status'); return el && el.textContent.indexOf('подключён') >= 0; }, 8000, 'minimal health ok');
-    ok('M1 minimal health: «подключён», версия 0.4.0, голосов: 1, БЕЗ «движков нет»', (() => {
+    await p.waitFor(() => { const el = p.q('#tts-server-status'); return el && el.textContent.indexOf('сервер доступен') >= 0; }, 8000, 'minimal health ok');
+    ok('M1 minimal health: «сервер доступен», версия 0.4.0, голосов: 1, БЕЗ «движков нет»', (() => {
       const t = p.q('#tts-server-status').textContent;
-      return t.indexOf('подключён') >= 0 && t.indexOf('0.4.0') >= 0 && t.indexOf('голосов: 1') >= 0 && t.indexOf('движков нет') < 0;
+      return t.indexOf('сервер доступен') >= 0 && t.indexOf('0.4.0') >= 0 && t.indexOf('голосов: 1') >= 0 && t.indexOf('движков нет') < 0;
     })(), p.q('#tts-server-status').textContent);
     await p.waitFor(() => { const el = p.q('[data-action="set-natural-voice"]'); return el && el.options.length === 1 && el.options[0].value === 'silero_cis_mit/ru_aigul'; }, 6000, 'voice select from default_voice');
     ok('M2 голос предвыбран из default_voice сервера: silero_cis_mit/ru_aigul («Aigul · Silero CIS»)', (() => {
@@ -395,14 +414,143 @@ async function load(hash, mode, opts) {
     const p = await load('#/settings', 'minimal');
     p.setNatural();
     p.click(p.q('[data-action="set-cat"][data-id="voice"]'));
-    await p.waitFor(() => { const el = p.q('#tts-server-status'); return el && el.textContent.indexOf('подключён') >= 0; }, 8000, 'K health');
+    await p.waitFor(() => { const el = p.q('#tts-server-status'); return el && el.textContent.indexOf('сервер доступен') >= 0; }, 8000, 'K health');
     p.click(p.q('[data-action="voice-test"]'));
     await p.waitFor(() => p.w.__synthLog.length === 1, 6000, 'synth K1');
     const want = p.norm('Авен проверяет натуральный голос. Сейчас 18 часов 43 минуты, пробег автомобиля 104520 километров.');
     ok('K1 «Прослушать» (Natural): фраза владельца ушла на сервер нормализованной — имя, время, километры словами',
       p.w.__synthLog[0].text === want && p.w.__synthLog[0].text.indexOf('восемнадцать часов сорок три минуты') >= 0 && p.w.__synthLog[0].text.indexOf('сто четыре тысячи пятьсот двадцать километров') >= 0,
       p.w.__synthLog[0].text);
+    await p.waitFor(() => { const el = p.q('#tts-server-status'); return el && el.textContent.indexOf('озвучивание работает') >= 0; }, 5000, 'K2 status');
+    ok('K2 после реального воспроизведения Natural статус честно «озвучивание работает»',
+      p.q('#tts-server-status').textContent.indexOf('озвучивание работает · aven-tts-research 0.4.0') >= 0,
+      p.q('#tts-server-status').textContent);
     await p.waitFor(() => p.presence() === 'idle', 5000, 'idle K');
+    p.dom.window.close();
+  }
+
+  /* ============ P. PR #46 hotfix: валидация ответов синтеза до cache/play ============
+     HTTP 200 ≠ успех синтеза: пустой/JSON/HTML/не-audio octet-stream отклоняются,
+     валидный WAV принимается по сигнатуре RIFF/WAVE даже с переписанным прокси Content-Type.
+     Fallback проверяется РЕАЛЬНЫМ вызовом SystemTTSProvider.speak (__uttered), не spy. */
+  async function expectRejected(mode, needle) {
+    const p = await load('#/home', mode);
+    p.setNatural();
+    p.w.AvenTTS.speak('Готово.');
+    await p.waitFor(() => p.w.__uttered.length === 1, 6000, 'system fallback ' + mode);
+    ok('P[' + mode + '] невалидный ответ отклонён → реальный fallback: System TTS говорит текст фразы',
+      p.w.__uttered[0] && p.w.__uttered[0].text === 'Готово.', p.w.__uttered[0] && p.w.__uttered[0].text);
+    ok('P[' + mode + '] тост содержит причину (' + needle + ')',
+      p.toastText().indexOf(needle) >= 0 && p.toastText().indexOf('используется системный голос') >= 0, p.toastText());
+    ok('P[' + mode + '] stats честные: fallback → системный голос', p.w.AvenTTS.stats.lastSource === 'fallback → системный голос', p.w.AvenTTS.stats.lastSource);
+    ok('P[' + mode + '] невалидный ответ НЕ закэширован', p.w.AvenTTS.cache.size === 0, 'cache.size=' + p.w.AvenTTS.cache.size);
+    await p.waitFor(() => p.presence() === 'idle', 5000, 'idle ' + mode);
+    p.dom.window.close();
+  }
+  async function expectAccepted(mode) {
+    const p = await load('#/home', mode);
+    p.setNatural();
+    p.w.AvenTTS.speak('Готово.');
+    await p.waitFor(() => p.presence() === 'speaking', 6000, 'speaking ' + mode);
+    ok('P[' + mode + '] валидный WAV принят → играет Natural (НЕ fallback)',
+      p.presence() === 'speaking' && p.toastText().indexOf('системный голос') < 0, p.toastText());
+    await p.waitFor(() => p.presence() === 'idle', 6000, 'idle ' + mode);
+    // lastSource менеджер выставляет ПОСЛЕ разрешения speak (окончание звука) — проверяем в idle
+    ok('P[' + mode + '] источник честный: self-hosted сервер', p.w.AvenTTS.stats.lastSource === 'self-hosted сервер', p.w.AvenTTS.stats.lastSource);
+    ok('P[' + mode + '] валидный ответ закэширован', p.w.AvenTTS.cache.size === 1, 'cache.size=' + p.w.AvenTTS.cache.size);
+    p.dom.window.close();
+  }
+  await expectRejected('empty', 'пустой аудиофайл');         // пустое тело HTTP 200
+  await expectRejected('json200', 'не аудио');               // 200 + JSON (ошибка прокси)
+  await expectRejected('html200', 'не аудио');               // 200 + HTML (заглушка сайта)
+  await expectRejected('octet-bad', 'неаудиофайл');          // octet-stream БЕЗ сигнатуры
+  await expectRejected('no-ct-garbage', 'формат аудио не распознан'); // нет Content-Type, нет сигнатуры
+  await expectAccepted('octet-wav');                         // WAV, прокси переписал type в octet-stream
+  await expectAccepted('x-wav');                             // легитимный audio/x-wav (не отвергать!)
+  await expectAccepted('no-ct-wav');                         // WAV без Content-Type — по сигнатуре
+
+  /* ============ Q. play() rejection: NotAllowed/NotSupported/медиа-ошибка не глотаются ============ */
+  for (const playErr of ['NotAllowedError', 'NotSupportedError']) {
+    const p = await load('#/home', 'ok', { playReject: playErr });
+    p.setNatural();
+    p.w.AvenTTS.speak('Готово.');
+    await p.waitFor(() => p.w.__uttered.length === 1, 6000, 'fallback ' + playErr);
+    ok('Q[' + playErr + '] play()-rejection НЕ проглочена: fallback с реальной причиной в stats',
+      p.w.AvenTTS.stats.lastSource === 'fallback → системный голос' && p.w.AvenTTS.stats.lastFallback.indexOf(playErr) >= 0,
+      p.w.AvenTTS.stats.lastFallback);
+    ok('Q[' + playErr + '] тост fallback показан', p.toastText().indexOf('используется системный голос') >= 0, p.toastText());
+    await p.waitFor(() => p.presence() === 'idle', 6000, 'idle ' + playErr);
+    ok('Q[' + playErr + '] UI не «застрял в играет»: presence idle, isSpeaking=false',
+      p.presence() === 'idle' && !p.w.AvenTTS.isSpeaking(), p.presence());
+    p.dom.window.close();
+  }
+
+  /* ============ V. Кэш-ключ (voice/rate/text), самовосстановление маппинга голоса, громкость ============ */
+  {
+    const p = await load('#/home', 'ok');
+    p.setNatural();
+    p.w.AvenTTS.speak('Готово.');
+    await p.waitFor(() => p.presence() === 'idle', 6000, 'idle V1a');
+    p.w.AvenTTS.speak('Готово.');
+    await p.waitFor(() => p.presence() === 'idle', 6000, 'idle V1b');
+    ok('V1 повтор той же фразы играется из кэша — повторного синтеза нет, источник «кэш сессии»',
+      p.w.__synthLog.length === 1 && p.w.AvenTTS.stats.lastSource === 'кэш сессии',
+      p.w.AvenTTS.stats.lastSource + ' · synth=' + p.w.__synthLog.length);
+    p.st().settings.voice.natural.rate = 1.3; p.w.AvenState.save();
+    p.w.AvenTTS.speak('Готово.');
+    await p.waitFor(() => p.w.__synthLog.length === 2, 6000, 'synth V2');
+    ok('V2 rate входит в ключ кэша: смена rate → повторный синтез с rate=1.3',
+      p.w.__synthLog.length === 2 && p.w.__synthLog[1].rate === 1.3, JSON.stringify(p.w.__synthLog[1] || {}));
+    await p.waitFor(() => p.presence() === 'idle', 6000, 'idle V2');
+    ok('V2-2 voice/rate/text-key: кэш держит обе валидные записи', p.w.AvenTTS.cache.size === 2, 'cache.size=' + p.w.AvenTTS.cache.size);
+    p.dom.window.close();
+  }
+  {
+    // Устаревший сохранённый голос на НОВОЙ вкладке: serverState ещё пуст (Настройки не открывались) —
+    // менеджер разрешить голос не мог; провайдер самовосстанавливает маппинг по СВЕЖЕМУ health.
+    const p = await load('#/home', 'minimal');
+    p.setNatural(); // сохранён qwen3/vd17-design — на этом сервере только silero_cis_mit/ru_aigul
+    p.w.AvenTTS.speak('Готово.');
+    await p.waitFor(() => p.w.__synthLog.length === 1, 6000, 'synth V3');
+    ok('V3 устаревший голос самовосстановлен по свежему health: POST голосом default_voice (ru_aigul)',
+      p.w.__synthLog[0] && p.w.__synthLog[0].voice === 'silero_cis_mit/ru_aigul', p.w.__synthLog[0] && p.w.__synthLog[0].voice);
+    await p.waitFor(() => p.presence() === 'idle', 6000, 'idle V3');
+    ok('V3-2 маппинг-баг не отправил Natural в fallback: источник self-hosted, системного тоста нет',
+      p.w.AvenTTS.stats.lastSource === 'self-hosted сервер' && p.toastText().indexOf('системный голос') < 0,
+      p.w.AvenTTS.stats.lastSource + ' / ' + p.toastText());
+    p.dom.window.close();
+  }
+  {
+    const p = await load('#/home', 'ok');
+    p.setNatural();
+    p.st().settings.voice.volume = 0.3; p.w.AvenState.save();
+    p.w.AvenTTS.speak('Готово.');
+    await p.waitFor(() => p.presence() === 'speaking', 6000, 'speaking V5');
+    const a = p.w.__audios[p.w.__audios.length - 1];
+    ok('V5 громкость настроек 0.3 дошла до Audio.volume (Natural путь)', Math.abs(a.volume - 0.3) < 1e-9, 'volume=' + a.volume);
+    await p.waitFor(() => p.presence() === 'idle', 6000, 'idle V5');
+    p.st().settings.voice.engine = 'system'; p.w.AvenState.save();
+    p.w.AvenTTS.speak('Слушаю.');
+    await p.waitFor(() => p.w.__uttered.length === 1, 6000, 'utter V5-2');
+    ok('V5-2 та же громкость 0.3 дошла до системного голоса (utterance.volume)', p.w.__uttered[0] && p.w.__uttered[0].volume === 0.3, 'volume=' + (p.w.__uttered[0] && p.w.__uttered[0].volume));
+    await p.waitFor(() => p.presence() === 'idle', 6000, 'idle V5-2');
+    p.dom.window.close();
+  }
+
+  /* ============ Z. Стоп во время системного fallback: cancel, idle, без error-тоста ============ */
+  {
+    const p = await load('#/home', 'network', { speechMs: 4000 });
+    p.setNatural();
+    p.w.AvenTTS.speak('Готово.');
+    await p.waitFor(() => p.presence() === 'speaking' && p.w.__uttered.length === 1, 6000, 'speaking Z');
+    ok('Z системный fallback реально заговорил (длинная фраза ещё звучит)', p.presence() === 'speaking', p.presence());
+    p.w.AvenTTS.stop();
+    await sleep(250);
+    ok('Z-1 Стоп независим от провайдера: speechSynthesis cancel + presence idle, не дожидаясь конца',
+      p.presence() === 'idle' && p.w.__curUtt && p.w.__curUtt._dead === true, p.presence());
+    await sleep(300);
+    ok('Z-2 Стоп — НЕ ошибка: error-тост «Озвучивание ответа — прототип» не добавился',
+      p.toastText().indexOf('Озвучивание ответа — прототип') < 0, p.toastText());
     p.dom.window.close();
   }
 
