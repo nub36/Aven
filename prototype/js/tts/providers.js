@@ -231,9 +231,23 @@
       if (!r.ok) return r.text().then(function (t) { throw new Error('сервер TTS: HTTP ' + r.status + (t ? ' — ' + t.slice(0, 200) : '')); });
       return r.blob();
     }).then(function (b) {
-      var url = URL.createObjectURL(b);
-      if (o.cacheable) Cache.put(o.cacheKey, url);
-      return playUrl(url, o).finally(function () { if (!o.cacheable) URL.revokeObjectURL(url); });
+      /* HTTP 200 is not synthesis success: a proxy/error handler may return empty,
+       * JSON, or HTML with status 200. Reject it before creating an Audio source so
+       * Settings and Assistant take the documented system-voice fallback. WAV is
+       * accepted by signature as well as Content-Type because some VPS proxies
+       * rewrite audio/wav to application/octet-stream. */
+      if (!b || !b.size) throw new Error('сервер вернул пустой аудиофайл');
+      var type = String(b.type || '').toLowerCase();
+      if (type.indexOf('json') >= 0 || type.indexOf('text/html') >= 0) throw new Error('сервер вернул не аудио (Content-Type: ' + type + ')');
+      return b.slice(0, 12).arrayBuffer().then(function (head) {
+        var bytes = new Uint8Array(head);
+        var riff = bytes.length >= 12 && String.fromCharCode.apply(null, bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode.apply(null, bytes.slice(8, 12)) === 'WAVE';
+        if (type && type.indexOf('audio/') !== 0 && !riff) throw new Error('сервер вернул неаудиофайл (Content-Type: ' + type + ')');
+        if (!riff && type.indexOf('audio/') !== 0) throw new Error('формат аудио не распознан');
+        var url = URL.createObjectURL(b);
+        if (o.cacheable) Cache.put(o.cacheKey, url);
+        return playUrl(url, o).finally(function () { if (!o.cacheable) URL.revokeObjectURL(url); });
+      });
     }).catch(function (e) {
       if (timedOut) {
         var te = new Error('Natural Voice не ответил вовремя (' + tsec + ' с)');
