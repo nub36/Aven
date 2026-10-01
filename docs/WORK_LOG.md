@@ -6,6 +6,75 @@
 
 ---
 
+## 2026-09-30 — Stage 2, итерация 12: управление существующим напоминанием
+
+### Независимая контрольная точка
+
+До правок повторно проверены git/GitHub/docs: чистая `arena/01a0f37e-aven` от
+`df9c69fb4d6ee1ef5ef5805054a3ffef5d286bb7` (`origin/main`), PR #42 merged тем же merge commit,
+последний Pages workflow `36754287967` и deployment `6766297586` успешны. `jsdom@30` установлен только
+во временный `/tmp/aven-jsdom`; baseline всех 17 suites — **2285/2285**, 0 провалов. Репозиторные
+dependencies не добавлялись. Все обязательные документы прочитаны целиком до реализации.
+
+Статусы PROJECT_PLAN не повышались: Stage 1 остаётся PARTIAL; из 11 верхнеуровневых project blocks
+5 DONE, 2 PARTIAL, 4 DEFERRED, то есть 6 не DONE. Stage 2 тоже не завершён. После этого блока в
+утверждённом списке PROJECT_PLAN остаются 9 сгруппированных capability gaps: (1) пользовательские
+команды, (2) персональный словарь, (3) команды настроек, (4) доходы, (5) изменение уже записанных
+финансовых операций, (6) остальные поля событий, (7) перенос повторяющихся событий, (8) bulk
+mutations, (9) текстовые операции над архивными записями. Наблюдаемые ограничения других доменов,
+mark-read и snooze до точного времени не превращаются этой записью в утверждённый Stage 2 scope.
+Storage/files и свободный разговор также не выдаются за обязательные возможности детерминированного
+Command Engine.
+
+### Реализация и решения
+
+- Добавлены intents `reminder.reschedule/snooze/hide/restore` в существующий parser. Reschedule повторно
+  использует общий date/time parser; date-only сохраняет время, time-only — дату, date+time меняет оба.
+  Missing/impossible values отклоняются.
+- Reminder остаётся сохранённой сущностью, notification — вычисляемой карточкой. Reschedule вызывает
+  только `AvenActions.reminders.update`; snooze/hide/restore — существующие facade actions над
+  `AvenNotify`. Добавлен чистый read-only accessor reaction для resolution; он не создаёт state при чтении.
+  Прямых `AvenState`/localStorage/History writes и второго store нет.
+- Реальная snooze semantics date-only: «до завтра», «на 3 дня», «на неделю». «До 18:00» отклоняется,
+  а не симулируется. Hide ставит dismissed и никогда не удаляет reminder; restore включён, потому что
+  существующие API и UI прямо его поддерживают. Скрытый reminder остаётся в поиске.
+- Confirmation policy по §6: EXACT безопасные обратимые reschedule/snooze/hide/restore — **NO**;
+  INFERRED mutation для каждой из четырёх операций — **YES**; AMBIGUOUS сначала требует выбора без
+  мутации, а выбранный candidate затем отдельного confirmation. No-op не пишет History. Delete/rename policies итераций 9–10 не менялись.
+- Candidate metadata содержит human date/time/state. Session переносит snapshot title/date/time/note/link
+  и dismissed/snooze date; stale guard отклоняет delete/rename/reschedule/hide/restore/snooze и иное
+  материальное изменение между показом и execution. Bulk guard позиционный: bulk запрещён, слово
+  «каждого» внутри title допустимо.
+- Stable notification key сохраняется после reschedule, поэтому rebuild выдаёт ровно одну актуальную
+  карточку. History/Undo создают только Common Actions и восстанавливают schedule/reaction.
+- Независимый review добавил `note/link` в stale snapshot, честный ответ restore при сохранённом snooze
+  и поведенческие проверки no-op History плюс ambiguity всех четырёх операций. Обнаруженный на смене
+  месяца общий regression Calendar/Day исправлен без новой модели: календарь теперь берёт месяц из
+  `AvenActions.dates.todayISO()`, а не из системного `new Date()`.
+- Assistant использует прежние controls, focus/keyboard/Escape/ARIA и shell. В вариантах напоминания
+  добавлено состояние. CSS, drawer/backdrop/inert/pointer-events, notification layout и три compact chips
+  не менялись.
+- Help и Commands tutorial объясняют reschedule/snooze/hide/restore, hide versus delete, Undo,
+  ambiguity/stale/bulk, date-only snooze и то, что закрытый браузер не гарантирует background delivery.
+
+Изменены: `prototype/js/actions.js`, `notify.js`, `command.js`, `command-session.js`, `pages2.js`,
+`help.js`, `tutorial.js`; `prototype/tests/command-engine-check.js`, `command-session-check.js`; docs
+`CHANGELOG`, `WORK_LOG`, `MVP_SCOPE`, `COMMAND_ENGINE`, `PROJECT_PLAN`, `prototype/README`.
+Data model/architecture contracts не менялись. Stage 3, Natural Voice/TTS, Aigul/Xenia/Fish Audio,
+VPS/nginx и Female Aven 3D/Blender/Meshy/rig/morph/lip-sync не тронуты.
+
+### Проверка и следующий блок
+
+Targeted suites прошли: Command Engine **880/880**, Command Session **187/187**, Notifications
+**49/49**, Help/Tutorial **33/33**, Actions **18/18**. Финальный полный regression: **17 suites,
+2324/2324**, 0 провалов. Все 43 JS-файла в `prototype/js` и `prototype/tests` прошли `node --check`;
+`git diff --check` чист. **Real-browser validation not performed**: Chromium/Chrome не найден;
+jsdom не проверяет layout/touch/Android. Следующая точная итерация после merge — **Stage 2 / Iteration 13:
+изменение остальных полей существующего события текстом, начиная с места**. Она в этой сессии не начата;
+Finance и Stage 3 также не начинались.
+
+---
+
 ## 2026-09-30 — Stage 2, итерация 11: замена и дополнение текста существующей заметки
 
 ### Контрольная точка и выбор блока

@@ -461,7 +461,9 @@
   /* ================= КАЛЕНДАРЬ ================= */
   let calOffset = 0, calView = 'month', calSelected = todayISO();
   function monthBounds(offset) {
-    const now = new Date();
+    /* Те же общие часы, что у Day/actions/Command Engine: системная дата иначе
+       открывала другой месяц, когда demo/shared today был на границе месяца. */
+    const now = parseISO(todayISO());
     const view = new Date(now.getFullYear(), now.getMonth() + offset, 1, 12, 0, 0, 0);
     return { y: view.getFullYear(), m: view.getMonth(), view };
   }

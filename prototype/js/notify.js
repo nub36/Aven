@@ -35,7 +35,12 @@ window.AvenNotify = (function () {
 
   /* ---------------- состояние пунктов (прочитано/отложено/скрыто) ---------------- */
   function nstate() { const st = s(); if (!st.notifState || typeof st.notifState !== 'object') st.notifState = {}; return st.notifState; }
-  function stateOf(key) { return nstate()[key] || null; }
+  /* Read path stays pure: building/resolving notification candidates must not create
+     an empty persisted reaction object. Mutation initializes it only in setUserState. */
+  function stateOf(key) {
+    const st = s();
+    return st.notifState && typeof st.notifState === 'object' ? (st.notifState[key] || null) : null;
+  }
   function save() { if (S && S.save) S.save(); }
   function log(entry) { return (A && A.logAction) ? A.logAction(entry) : null; }
 
@@ -370,6 +375,7 @@ window.AvenNotify = (function () {
 
   return {
     build, unreadCount, activeCount, attentionCount, attentionItems,
+    reaction: (key) => clone(stateOf(key)),
     markRead, markAllRead, snooze, unsnooze, dismiss, restore,
     reminders: { createReminder, updateReminder, deleteReminder, getReminders, getReminder, snapshot: reminderSnapshot },
     sources: () => cfg().sources
