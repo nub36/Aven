@@ -989,16 +989,17 @@ jsdom за него не выдаётся.
 - «Отложи … до завтра/на 3 дня/на неделю» вызывает существующий date-only snooze. «До 18:00» честно
   отклоняется: модель не хранит точное время snooze.
 - «Скрой …» меняет только notification reaction, не удаляет reminder. «Верни …» поддержано реальным
-  `restore`; скрытая запись остаётся доступна read-only поиску.
+  `restore`: оно снимает hidden, но сохраняет действующий snooze; скрытая запись остаётся доступна
+  read-only поиску.
 - EXACT безопасные обратимые операции выполняются сразу; INFERRED mutation требует confirmation;
-  AMBIGUOUS показывает human metadata и не мутирует. Stale guard сверяет entity schedule/title и
-  notification reaction. Bulk не поддержан, false positive внутри title защищён.
+  AMBIGUOUS показывает human metadata и не мутирует. Stale guard сверяет entity title/schedule/note/link
+  и notification reaction. Bulk не поддержан, false positive внутри title защищён.
 - Обычные History/Undo и cross-module rebuild используются без command-only state. Три Assistant chips,
   shell/mobile/a11y contracts сохранены. Закрытый браузер не гарантирует доставку; push/email/system
   notifications не заявлены.
 
 Вне scope: mark-read текстом, snooze до времени, bulk, Events/Finance next blocks, Stage 3/Voice/TTS и 3D.
 
-Проверка Iteration 12: Command Engine **877/877**, Command Session **179/179**, полный набор
-**17 suites, 2313/2313**, 0 failures; 43 JS-файла прошли `node --check`, `git diff --check` чист.
+Проверка Iteration 12: Command Engine **880/880**, Command Session **187/187**, полный набор
+**17 suites, 2324/2324**, 0 failures; 43 JS-файла прошли `node --check`, `git diff --check` чист.
 Real-browser validation not performed.

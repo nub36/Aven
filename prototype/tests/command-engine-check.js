@@ -945,6 +945,10 @@ function partA() {
     ok('A200c перенос только времени сохраняет дату', timeOnly.ok &&
       C14.reminders.get(movedEntity.id).entity.dateISO === '2026-09-29' &&
       C14.reminders.get(movedEntity.id).entity.time === '18:30');
+    const histBeforeSameMove = env14.state.history.length;
+    const sameMove = K14.run('Перенеси напоминание Оплатить интернет на 18:30', { source: 'test' });
+    ok('A200c.1 повтор идентичного переноса — no-op без History', sameMove.ok &&
+      sameMove.result.data.unchanged === true && env14.state.history.length === histBeforeSameMove);
     const inferred = K14.run('Перенеси напоминание интернет на пятницу', { source: 'test' });
     ok('A200d INFERRED перенос ждёт подтверждения без мутации', !inferred.ok &&
       inferred.result.status === 'confirmation_required' && C14.reminders.get(movedEntity.id).entity.dateISO === '2026-09-29');
@@ -953,6 +957,10 @@ function partA() {
     ok('A200e EXACT snooze меняет только notifState manual:id и пишет общую History', snoozed.ok &&
       env14.state.notifState['manual:' + movedEntity.id].snoozeUntilISO === '2026-09-29' &&
       C14.reminders.get(movedEntity.id).entity.dateISO === '2026-09-29');
+    const histBeforeSameSnooze = env14.state.history.length;
+    const sameSnooze = K14.run('Отложи напоминание Оплатить интернет до завтра', { source: 'test' });
+    ok('A200e.1 повтор идентичного snooze — no-op без History', sameSnooze.ok &&
+      sameSnooze.result.data.unchanged === true && env14.state.history.length === histBeforeSameSnooze);
     const byTime = K14.run('Отложи напоминание Оплатить интернет до 18:00', { source: 'test' });
     ok('A200f точное время snooze честно отклоняется существующим date-only контрактом', !byTime.ok &&
       byTime.intent.error.code === 'REMINDER_SNOOZE_TIME_UNSUPPORTED');
@@ -960,6 +968,10 @@ function partA() {
     ok('A200g hide скрывает notification и не удаляет reminder', hidden.ok &&
       env14.state.notifState['manual:' + movedEntity.id].dismissed === true &&
       C14.reminders.get(movedEntity.id).ok && C14.reminders.list({ q: 'Оплатить интернет' }).items.length === 1);
+    const histBeforeSameHide = env14.state.history.length;
+    const sameHide = K14.run('Скрой напоминание Оплатить интернет', { source: 'test' });
+    ok('A200g.1 повтор hide — no-op без History', sameHide.ok &&
+      sameHide.result.data.unchanged === true && env14.state.history.length === histBeforeSameHide);
     const hiddenSearch = K14.run('Найди напоминание про интернет', { source: 'test' });
     ok('A200h поиск по-прежнему находит hidden reminder', hiddenSearch.ok && hiddenSearch.result.data.items.length === 1);
     const hiddenSnooze = K14.run('Отложи напоминание Оплатить интернет до 02.10', { source: 'test' });
@@ -967,8 +979,10 @@ function partA() {
     const restored = K14.run('Верни напоминание Оплатить интернет', { source: 'test' });
     ok('A200j restore возвращает существующее скрытое notification', restored.ok &&
       env14.state.notifState['manual:' + movedEntity.id].dismissed === false);
+    const histBeforeNoRestore = env14.state.history.length;
     const noRestore = K14.run('Верни напоминание Оплатить интернет', { source: 'test' });
-    ok('A200k повторный restore — no-op без History', noRestore.ok && noRestore.result.data.unchanged === true);
+    ok('A200k повторный restore — no-op без History', noRestore.ok &&
+      noRestore.result.data.unchanged === true && env14.state.history.length === histBeforeNoRestore);
 
     ok('A200l массовые reminder mutations отклоняются позиционно',
       ['Перенеси все напоминания на завтра', 'Отложи каждое напоминание до завтра', 'Скрой все напоминания', 'Верни все напоминания']

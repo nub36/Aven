@@ -790,12 +790,13 @@ Help получил статью «Изменение текста заметк�
 оплатить интернет на завтра в 10» обновляет date/time сущности через `AvenActions.reminders.update`;
 «Отложи … до завтра», «Скрой …», «Верни …» вызывают существующие `snooze/dismiss/restore` фасада над
 `AvenNotify`. Reminder и notification не смешиваются: hide не удаляет запись, snooze не переносит её,
-поиск видит скрытую запись, а stable `manual:<id>` rebuild не оставляет старой карточки после reschedule.
+restore снимает hidden, но сохраняет действующий snooze, поиск видит скрытую запись, а stable
+`manual:<id>` rebuild не оставляет старой карточки после reschedule.
 
 Общий parser дат/времени поддерживает date-only/time-only/date+time; snooze намеренно date-only — «до
 18:00» получает честный отказ. EXACT обратимые действия выполняются сразу, INFERRED mutation требует
 confirmation, AMBIGUOUS показывает дату/время/состояние без внутренних ID. Candidate choice не мутирует;
-stale guard сверяет title/date/time и notification reaction. Bulk отклоняется позиционно, название «Про
+stale guard сверяет title/date/time/note/link и notification reaction. Bulk отклоняется позиционно, название «Про
 каждого клиента» не даёт false positive. History/Undo — только существующие Common Actions; прямых
 записей state/localStorage и отдельного command store нет.
 
@@ -803,6 +804,6 @@ Help и существующий Commands tutorial объясняют reschedule
 Undo, ambiguity, ограничения точного времени и отсутствие гарантированной доставки при закрытом
 браузере. Assistant сохраняет ровно три compact chips и существующий responsive/a11y shell.
 
-Проверка Iteration 12: `command-engine-check.js` — **877/877**, `command-session-check.js` —
-**179/179**; полный regression — **17 suites, 2313/2313**, 0 failures. Все 43 JS-файла прошли
+Проверка Iteration 12: `command-engine-check.js` — **880/880**, `command-session-check.js` —
+**187/187**; полный regression — **17 suites, 2324/2324**, 0 failures. Все 43 JS-файла прошли
 `node --check`, `git diff --check` чист. Real-browser validation not performed.

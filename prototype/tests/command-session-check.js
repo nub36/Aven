@@ -849,6 +849,77 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
     ok('S192 schedule change before Confirm is stale and not overwritten',
       stale.status === 'stale' && e.C.reminders.get(r.id).entity.dateISO === '2026-10-03' && e.state.history.length === before);
   }
+  {
+    const e = sandbox();
+    const r = e.C.reminders.create({ title: 'Оплатить домашний интернет', dateISO: '2026-10-01', note: 'Старая заметка', link: '#/old' }, { source: 'fixture' }).entity;
+    clearHistory(e);
+    const ask = e.session.submit('Скрой напоминание интернет');
+    e.C.reminders.update(r.id, { note: 'Новая заметка' }, { source: 'ui' });
+    const before = e.state.history.length;
+    const stale = e.session.confirm();
+    ok('S193 изменение note после выбора делает reminder flow stale',
+      ask.status === 'confirmation_required' && stale.status === 'stale' &&
+      !(e.state.notifState || {})['manual:' + r.id] && e.state.history.length === before);
+  }
+  {
+    const e = sandbox();
+    const r = e.C.reminders.create({ title: 'Оплатить домашний интернет', dateISO: '2026-10-01' }, { source: 'fixture' }).entity;
+    clearHistory(e);
+    const ask = e.session.submit('Отложи напоминание интернет до завтра');
+    e.C.reminders.dismiss('manual:' + r.id);
+    const before = e.state.history.length;
+    const stale = e.session.confirm();
+    ok('S194 reaction change before inferred snooze makes flow stale',
+      ask.status === 'confirmation_required' && stale.status === 'stale' &&
+      !(e.state.notifState['manual:' + r.id] || {}).snoozeUntilISO && e.state.history.length === before);
+  }
+  {
+    const e = sandbox();
+    const r = e.C.reminders.create({ title: 'Оплатить домашний интернет', dateISO: '2026-10-01' }, { source: 'fixture' }).entity;
+    e.C.reminders.dismiss('manual:' + r.id);
+    clearHistory(e);
+    const ask = e.session.submit('Верни напоминание интернет');
+    e.C.reminders.snooze('manual:' + r.id, 2);
+    const before = e.state.history.length;
+    const stale = e.session.confirm();
+    ok('S195 reaction change before inferred restore makes flow stale',
+      ask.status === 'confirmation_required' && stale.status === 'stale' &&
+      e.state.notifState['manual:' + r.id].dismissed === true && e.state.history.length === before);
+  }
+  {
+    const e = sandbox();
+    const r = e.C.reminders.create({ title: 'Оплатить интернет', dateISO: '2026-10-01' }, { source: 'fixture' }).entity;
+    e.C.reminders.snooze('manual:' + r.id, 2);
+    e.C.reminders.dismiss('manual:' + r.id);
+    clearHistory(e);
+    const restored = e.session.submit('Верни напоминание Оплатить интернет');
+    ok('S196 restore снимает hidden, сохраняет snooze и честно сообщает об этом',
+      restored.ok && /остаётся отложено/.test(restored.response) &&
+      e.state.notifState['manual:' + r.id].dismissed === false &&
+      e.state.notifState['manual:' + r.id].snoozeUntilISO === '2026-09-30' && e.state.history.length === 1);
+  }
+  [
+    { name: 'reschedule', command: 'Перенеси напоминание Дубль на завтра' },
+    { name: 'snooze', command: 'Отложи напоминание Дубль до завтра' },
+    { name: 'hide', command: 'Скрой напоминание Дубль' },
+    { name: 'restore', command: 'Верни напоминание Дубль', hidden: true }
+  ].forEach((spec, i) => {
+    const e = sandbox();
+    const a = e.C.reminders.create({ title: 'Дубль', dateISO: '2026-10-01' }, { source: 'fixture' }).entity;
+    const b = e.C.reminders.create({ title: 'Дубль', dateISO: '2026-10-02' }, { source: 'fixture' }).entity;
+    if (spec.hidden) {
+      e.C.reminders.dismiss('manual:' + a.id);
+      e.C.reminders.dismiss('manual:' + b.id);
+    }
+    clearHistory(e);
+    const amb = e.session.submit(spec.command);
+    const picked = e.session.choose(0);
+    ok('S19' + (7 + i) + ' ambiguous ' + spec.name + ' selection requires separate confirmation with zero mutation',
+      amb.status === 'clarification_required' && picked.status === 'confirmation_required' &&
+      e.state.history.length === 0 && e.session.pending() && e.session.pending().type === 'confirmation' &&
+      e.C.reminders.get(a.id).entity.dateISO === '2026-10-01' && e.C.reminders.get(b.id).entity.dateISO === '2026-10-02' &&
+      (spec.hidden || Object.keys(e.state.notifState || {}).length === 0));
+  });
 
   ['первую', 'вторая', 'вторую', 'отмена', 'нет', 'подтвердить'].forEach((word, i) => {
     const e = sandbox(); const a = task(e, 'Тест один'), b = task(e, 'Тест два'); clearHistory(e);

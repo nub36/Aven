@@ -1416,6 +1416,7 @@ window.AvenCommand = (function () {
     const snoozed = !!(snoozeUntilISO && Core().dates.diffDays(snoozeUntilISO, Core().dates.todayISO()) > 0);
     return {
       id: x.id, kind: 'reminder', key, title: x.title || '', dateISO: x.dateISO || '', time: x.time || '',
+      note: String(x.note || ''), link: String(x.link || ''),
       dismissed: !!reaction.dismissed, snoozeUntilISO,
       state: reaction.dismissed ? 'hidden' : (snoozed ? 'snoozed' : 'active')
     };
@@ -1843,6 +1844,8 @@ window.AvenCommand = (function () {
           if (exp && (String(cand.title || '') !== String(exp.title || '') ||
               String(cand.dateISO || '') !== String(exp.dateISO || '') ||
               String(cand.time || '') !== String(exp.time || '') ||
+              String(cand.note || '') !== String(exp.note || '') ||
+              String(cand.link || '') !== String(exp.link || '') ||
               cand.dismissed !== !!exp.dismissed ||
               String(cand.snoozeUntilISO || '') !== String(exp.snoozeUntilISO || ''))) return stale();
           found = { ok: true, resolution: context.selected ? 'EXACT' : 'INFERRED', entity: cand };
@@ -1902,6 +1905,7 @@ window.AvenCommand = (function () {
         else res = C.reminders.restore(target.key);
         if (!res.ok) return actionFailed(actionName, res, intentObj);
         const fresh = C.reminders.get(target.id);
+        const freshReaction = C.reminders.reaction(target.key) || {};
         return result(true, 'done', actionName, {
           resolution: found.resolution, intent: intentObj,
           entity: fresh.ok ? fresh.entity : target,
@@ -1909,7 +1913,8 @@ window.AvenCommand = (function () {
           data: {
             title: target.title, fromDateISO: target.dateISO, fromTime: target.time,
             dateISO: preview.dateISO || target.dateISO, time: preview.time || target.time,
-            untilISO: preview.untilISO || '', hidden: actionName === 'reminder.hide'
+            untilISO: preview.untilISO || '', hidden: actionName === 'reminder.hide',
+            snoozeUntilISO: String(freshReaction.snoozeUntilISO || '')
           }
         });
       }
@@ -2841,6 +2846,10 @@ window.AvenCommand = (function () {
           return 'Уведомление напоминания ' + quote(res.data.title) + ' скрыто. Само напоминание не удалено; вернуть можно командой «Верни напоминание …» или через «Историю».';
         case 'reminder.restore':
           if (res.data.unchanged) return 'Уведомление напоминания ' + quote(res.data.title) + ' уже показано. Ничего не изменено.';
+          if (res.data.snoozeUntilISO && C.dates.diffDays(res.data.snoozeUntilISO, C.dates.todayISO()) > 0) {
+            return 'Уведомление напоминания ' + quote(res.data.title) + ' больше не скрыто, но остаётся отложено до ' +
+              C.dates.humanDate(res.data.snoozeUntilISO) + '. Отменить возврат можно в «Истории».';
+          }
           return 'Уведомление напоминания ' + quote(res.data.title) + ' возвращено в список. Отменить можно в «Истории».';
         case 'shopping.purchase.create': return purchaseCreateText(res.data);
         case 'shopping.purchase.search': return purchaseSearchText(res.data);

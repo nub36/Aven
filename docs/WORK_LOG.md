@@ -17,13 +17,14 @@
 dependencies не добавлялись. Все обязательные документы прочитаны целиком до реализации.
 
 Статусы PROJECT_PLAN не повышались: Stage 1 остаётся PARTIAL; из 11 верхнеуровневых project blocks
-5 DONE, 2 PARTIAL, 4 DEFERRED, то есть 6 не DONE. Stage 2 тоже не завершён. После этого блока остаются
-13 сгруппированных документированных capability gaps: (1) пользовательские команды, (2) персональный
-словарь, (3) команды настроек, (4) доходы, (5) update/delete финансовых операций, (6) update/delete
-Auto-записей, (7) создание счетов/категорий, (8) сокращения сумм/валюты, (9) archive text operations,
-(10) bulk mutations, (11) reminder mark-read и snooze до точного времени, (12) update/repair/status
-покупок, (13) остальные поля и повторения событий. Storage/files и свободный разговор не выдаются за
-обязательные возможности этого детерминированного блока.
+5 DONE, 2 PARTIAL, 4 DEFERRED, то есть 6 не DONE. Stage 2 тоже не завершён. После этого блока в
+утверждённом списке PROJECT_PLAN остаются 9 сгруппированных capability gaps: (1) пользовательские
+команды, (2) персональный словарь, (3) команды настроек, (4) доходы, (5) изменение уже записанных
+финансовых операций, (6) остальные поля событий, (7) перенос повторяющихся событий, (8) bulk
+mutations, (9) текстовые операции над архивными записями. Наблюдаемые ограничения других доменов,
+mark-read и snooze до точного времени не превращаются этой записью в утверждённый Stage 2 scope.
+Storage/files и свободный разговор также не выдаются за обязательные возможности детерминированного
+Command Engine.
 
 ### Реализация и решения
 
@@ -40,12 +41,16 @@ Auto-записей, (7) создание счетов/категорий, (8) �
 - Confirmation policy по §6: EXACT безопасные обратимые reschedule/snooze/hide/restore — **NO**;
   INFERRED mutation для каждой из четырёх операций — **YES**; AMBIGUOUS сначала требует выбора без
   мутации, а выбранный candidate затем отдельного confirmation. No-op не пишет History. Delete/rename policies итераций 9–10 не менялись.
-- Candidate metadata содержит human date/time/state. Session переносит snapshot title/date/time и
-  dismissed/snooze date; stale guard отклоняет delete/rename/reschedule/hide/restore/snooze и иное
+- Candidate metadata содержит human date/time/state. Session переносит snapshot title/date/time/note/link
+  и dismissed/snooze date; stale guard отклоняет delete/rename/reschedule/hide/restore/snooze и иное
   материальное изменение между показом и execution. Bulk guard позиционный: bulk запрещён, слово
   «каждого» внутри title допустимо.
 - Stable notification key сохраняется после reschedule, поэтому rebuild выдаёт ровно одну актуальную
   карточку. History/Undo создают только Common Actions и восстанавливают schedule/reaction.
+- Независимый review добавил `note/link` в stale snapshot, честный ответ restore при сохранённом snooze
+  и поведенческие проверки no-op History плюс ambiguity всех четырёх операций. Обнаруженный на смене
+  месяца общий regression Calendar/Day исправлен без новой модели: календарь теперь берёт месяц из
+  `AvenActions.dates.todayISO()`, а не из системного `new Date()`.
 - Assistant использует прежние controls, focus/keyboard/Escape/ARIA и shell. В вариантах напоминания
   добавлено состояние. CSS, drawer/backdrop/inert/pointer-events, notification layout и три compact chips
   не менялись.
@@ -60,9 +65,9 @@ VPS/nginx и Female Aven 3D/Blender/Meshy/rig/morph/lip-sync не тронуты
 
 ### Проверка и следующий блок
 
-Targeted suites прошли: Command Engine **877/877**, Command Session **179/179**, Notifications
+Targeted suites прошли: Command Engine **880/880**, Command Session **187/187**, Notifications
 **49/49**, Help/Tutorial **33/33**, Actions **18/18**. Финальный полный regression: **17 suites,
-2313/2313**, 0 провалов. Все 43 JS-файла в `prototype/js` и `prototype/tests` прошли `node --check`;
+2324/2324**, 0 провалов. Все 43 JS-файла в `prototype/js` и `prototype/tests` прошли `node --check`;
 `git diff --check` чист. **Real-browser validation not performed**: Chromium/Chrome не найден;
 jsdom не проверяет layout/touch/Android. Следующая точная итерация после merge — **Stage 2 / Iteration 13:
 изменение остальных полей существующего события текстом, начиная с места**. Она в этой сессии не начата;

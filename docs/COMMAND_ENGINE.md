@@ -1134,7 +1134,9 @@ Snooze не переносит reminder. Существующий `AvenNotify.sn
 поэтому поддержаны «до завтра», «на 3 дня», «на неделю», но **не** «до 18:00»: точная временная семантика
 не изобреталась. Hide ставит dismissed у уведомления и никогда не удаляет reminder; read-only поиск
 по-прежнему видит скрытые/отложенные reminder. Restore включён, потому что существующий контракт прямо
-содержит `AvenNotify.restore` и UI-кнопку «Вернуть». Snooze скрытой карточки отклоняется до её restore.
+содержит `AvenNotify.restore` и UI-кнопку «Вернуть»: он снимает только hidden/dismissed и не сбрасывает
+существующий snooze, поэтому скрытая и одновременно отложенная карточка после restore остаётся отложенной,
+о чём ответ сообщает прямо. Snooze скрытой карточки отклоняется до её restore.
 
 ### 21.2. Resolution, confirmation, stale и bulk
 
@@ -1148,7 +1150,7 @@ Snooze не переносит reminder. Существующий `AvenNotify.sn
   candidate само по себе никогда не выполняет действие;
 - no-op (то же расписание/тот же snooze/already hidden/already visible) не пишет History.
 
-Перед продолжением flow цель перечитывается. Сверяются title/date/time и notification reaction
+Перед продолжением flow цель перечитывается. Сверяются title/date/time/note/link и notification reaction
 (dismissed/snooze date); удаление, rename, reschedule, hide/restore/snooze или другая материальная смена
 между показом кандидата/подтверждения и execute даёт `STALE_TARGET`. Bulk guard привязан к квантификатору
 перед словом «напоминание»: массовые команды отклоняются, но название «Про каждого клиента» допустимо.
@@ -1164,7 +1166,7 @@ responsive shell; число compact chips остаётся ровно три. H
 Не добавлены: массовые операции, snooze до точного времени, mark-read текстом, push/email/service
 worker/Android system notifications. Закрытый браузер не гарантирует доставку.
 
-Проверка итерации 12: `command-engine-check.js` — **877/877**, `command-session-check.js` —
-**179/179**; полный regression — **17 suites, 2313/2313**, 0 failures. Все 43 JS-файла прошли
+Проверка итерации 12: `command-engine-check.js` — **880/880**, `command-session-check.js` —
+**187/187**; полный regression — **17 suites, 2324/2324**, 0 failures. Все 43 JS-файла прошли
 `node --check`, `git diff --check` чист. Real-browser validation not performed; jsdom не является
 проверкой layout/touch/Android.

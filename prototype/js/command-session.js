@@ -108,6 +108,7 @@ window.AvenCommandSession = (function () {
             time: result.target.time || '', endTime: result.target.endTime || '',
             allDay: result.target.allDay === true,
             body: String(result.target.body || ''), folder: String(result.target.folder || ''),
+            note: String(result.target.note || ''), link: String(result.target.link || ''),
             dismissed: result.target.dismissed === true,
             snoozeUntilISO: String(result.target.snoozeUntilISO || '')
           } : null,
