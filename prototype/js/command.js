@@ -1085,6 +1085,19 @@ window.AvenCommand = (function () {
      с Сергеем» без морфологического анализатора.
 
      Разбор остаётся чистым: событие здесь не ищется и не меняется. */
+  function parseEventPlaceUpdate(n, raw, context) {
+    const rx = /^(?:измени|изменить|поменяй|поменять|перенеси|перенести)\s+(?:место|локацию)\s+(?:события|встречи|созвона|визита)?\s*(.*?)\s+на\s+(.+)$/i;
+    if (!rx.test(n) || !EVENT_WORD.test(n)) return null;
+    const m = rx.exec(raw) || rx.exec(n);
+    let query = tidy(m[1] || '');
+    query = query.replace(/^(?:события|встречи|созвона|визита)\s+/i, '').trim();
+    const place = tidy(m[2] || '');
+    if (!query) return fail('EVENT_QUERY_REQUIRED', 'event.place.update');
+    if (!place) return fail('EVENT_PLACE_REQUIRED', 'event.place.update');
+    if (place.length > 160) return fail('EVENT_PLACE_INVALID', 'event.place.update');
+    return intent('event.place.update', 'mutation', { query, place }, 'event.place.update', { requiresConfirmation: true });
+  }
+
   function parseEventReschedule(n, raw, context) {
     const rx = new RegExp('^(?:' + MOVE_VERB + '|измени|изменить|поменяй|поменять)\\s+(.+?)\\s+на\\s+(.+)$', 'i');
     if (!rx.test(n)) return null;
@@ -1264,7 +1277,7 @@ window.AvenCommand = (function () {
        либо непонятая формулировка переноса, либо изменение других полей события —
        и то и другое честно объясняется, без мутации и без записи в «Историю». */
     if (EVENT_WORD.test(n)) {
-      if (hasWord(n, 'место|описание|участник[а-яе]*|повтор[а-яе]*|напоминание')) {
+      if (hasWord(n, 'описание|участник[а-яе]*|повтор[а-яе]*|напоминание')) {
         return fail('UNSUPPORTED_EVENT_FIELD', 'guard.event.field');
       }
       if (new RegExp('^(?:' + MOVE_VERB + '|измени|изменить|поменяй|поменять)').test(n)) {
@@ -1284,7 +1297,7 @@ window.AvenCommand = (function () {
     parseTaskCreate, parseNoteCreate, parseNoteSearch, parseReminderCreate, parseReminderSearch,
     parseFuelCreate, parseServiceCreate, parseExpenseCreate, parseExpenseList,
     parsePurchaseCreate, parsePurchaseWarranty, parsePurchaseSearch, parseIncomeUnsupported,
-    parseEventReschedule, parseEventCreate, parseTaskComplete, parseTaskReschedule,
+    parseEventPlaceUpdate, parseEventReschedule, parseEventCreate, parseTaskComplete, parseTaskReschedule,
     parseCapabilities, parseFinanceQuery, parseAutoQuery, parseOverdueQuery,
     parseSuggestionsQuery, parseDayQuery, parseUnsupported
   ];
@@ -1357,7 +1370,7 @@ window.AvenCommand = (function () {
     return {
       id: e.id, kind: 'event', title: e.title || '',
       dateISO: e.date || '', time: C.events.start(e) || '', endTime: C.events.end(e) || '',
-      allDay: !!e.allDay, repeat: e.repeat || 'none'
+      allDay: !!e.allDay, repeat: e.repeat || 'none', place: e.place || ''
     };
   }
   /* Ровно те же дискретные правила, что у задач (resolveTask): полное название —
@@ -2153,6 +2166,26 @@ window.AvenCommand = (function () {
           resolution: found.resolution, intent: intentObj, entity: res.entity, historyId: res.entry && res.entry.id,
           data: actionName === 'task.complete' ? { title: res.entity.title } : { title: res.entity.title, dateISO: p.dateISO }
         });
+      }
+      case 'event.place.update': {
+        let found;
+        if (context.targetId) {
+          const fresh = C.events.getEvent(context.targetId);
+          const cand = fresh.ok ? eventCandidate(fresh.entity) : null;
+          const exp = context.expected;
+          if (!cand || (exp && (cand.title !== exp.title || cand.dateISO !== exp.dateISO || cand.time !== exp.time || cand.place !== exp.place)))
+            return result(false, 'stale', 'event.place.update', { code: 'STALE_TARGET', intent: intentObj, message: 'Событие уже изменилось. Ничего не изменилось — повторите команду.' });
+          found = { ok: true, resolution: context.selected ? 'EXACT' : 'INFERRED', entity: cand };
+        } else found = resolveEvent(p.query, context);
+        if (!found.ok && found.status === 'ambiguous') return result(false, 'ambiguous', 'event.place.update', { code: 'AMBIGUOUS_EVENT', resolution: 'AMBIGUOUS', intent: intentObj, candidates: found.candidates });
+        if (!found.ok) return result(false, 'not_found', 'event.place.update', { code: 'EVENT_NOT_FOUND', intent: intentObj });
+        const target = found.entity;
+        if (target.repeat && target.repeat !== 'none') return result(false, 'invalid', 'event.place.update', { code: 'UNSUPPORTED_EVENT_REPEAT', intent: intentObj, message: 'Повторяющееся событие пока можно изменить только в «Календаре».' });
+        if (target.place === p.place) return result(true, 'info', 'event.place.update', { intent: intentObj, data: { noop: true, title: target.title, place: target.place } });
+        if (!context.confirmed) return result(false, 'confirmation_required', 'event.place.update', { code: 'CONFIRMATION_REQUIRED', resolution: found.resolution, intent: intentObj, target, preview: { place: p.place }, summary: 'Изменить место события «' + target.title + '» с «' + (target.place || 'не указано') + '» на «' + p.place + '»? Пока ничего не изменено.' });
+        const res = C.events.updateEvent(target.id, { place: p.place }, opts);
+        if (!res.ok) return actionFailed('event.place.update', res, intentObj);
+        return result(true, 'done', 'event.place.update', { resolution: found.resolution, intent: intentObj, entity: res.entity, historyId: res.entry && res.entry.id, data: { title: res.entity.title, place: res.entity.place || '' } });
       }
       /* Перенос существующего события. Политика владельца: подтверждение ВСЕГДА,
          даже при EXACT-совпадении и простой смене времени. До Confirm событие,

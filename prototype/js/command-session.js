@@ -106,7 +106,7 @@ window.AvenCommandSession = (function () {
           expected: result.target ? {
             title: result.target.title || '', dateISO: result.target.dateISO || '',
             time: result.target.time || '', endTime: result.target.endTime || '',
-            allDay: result.target.allDay === true,
+            allDay: result.target.allDay === true, place: String(result.target.place || ''),
             body: String(result.target.body || ''), folder: String(result.target.folder || ''),
             note: String(result.target.note || ''), link: String(result.target.link || ''),
             dismissed: result.target.dismissed === true,
