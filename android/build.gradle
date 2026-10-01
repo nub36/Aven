@@ -1,0 +1,4 @@
+// Aven для Android — корневой build.gradle (только версия плагина; логика в app/).
+plugins {
+    id 'com.android.application' version '8.7.3' apply false
+}

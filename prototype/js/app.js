@@ -71,6 +71,9 @@
       });
     });
     html += `</div><div class="side-bottom">`;
+    // CTA скачивания Android-приложения: не маршрут — открывает модальное окно (ADR-114)
+    html += `<button class="nav-item nav-android" data-action="android-download" data-id="android-download" data-tour="nav-android" title="Установить Aven на Android (APK)">
+               <span class="ico">📱</span>Скачать приложение</button>`;
     NAV.find((g) => g.bottom).items.forEach((it) => {
       html += `<button class="nav-item ${current === it.id ? 'active' : ''}" data-action="nav" data-id="${it.id}" data-tour="nav-${it.id}">
                  <span class="ico">${it.icon}</span>${it.label}</button>`;
@@ -205,10 +208,35 @@
     }
   }
 
+  /* -------- CTA скачивания Android-приложения (ADR-114) --------
+     Кнопка топбара (desktop) и пункт drawer открывают одно модальное окно: что скачивается
+     (APK, версия, размер, канал), ручная установка вне Google Play, честная мини-инструкция
+     по «неизвестному источнику». Конфиг — prototype/js/app-download.js. */
+  function openAndroidDownloadModal() {
+    const d = window.AvenAppDownload || {};
+    const esc = A.esc;
+    A.openModal({
+      title: 'Aven для Android',
+      body:
+        `<div class="field"><label>Что это</label><div class="tts-norm">Тот же Aven, упакованный как приложение для Android · ${esc(d.channel || 'GitHub Releases')}</div></div>` +
+        `<div class="field"><label>Скачивается</label><div class="tts-norm">${esc(d.apkFile || 'aven.apk')} · версия ${esc(d.version || '?')} · ${esc(d.sizeHint || '')} · ${esc(d.minAndroid || '')}</div></div>` +
+        `<div class="field"><label>Как установить</label><div class="s" style="line-height:1.55">1. Нажмите «Скачать APK».<br>2. Откройте скачанный файл.<br>3. Android может спросить разрешение на установку из этого источника — оно относится к вашему браузеру или файловому менеджеру, подтвердите один раз.<br>4. Нажмите «Установить» — появится иконка Aven.<br>5. После установки разрешение на установку из источника можно снова выключить (глобально безопасность Android отключать не нужно).<br>6. Данные приложения хранятся на устройстве; обновления — повторным скачиванием с этой кнопки.</div></div>` +
+        `<div class="tts-priv"><span class="pill">без Google Play</span><span>Ручная установка APK · подпись релизным ключом проекта · страница релизов: <a href="${esc(d.releasePage || '#')}" target="_blank" rel="noopener">GitHub Releases ↗</a></span></div>`,
+      cancelText: 'Закрыть',
+      submitText: '⬇ Скачать APK',
+      onSubmit: () => {
+        if (d.apkUrl) window.open(d.apkUrl, '_blank', 'noopener');
+        A.closeModal();
+        A.toast('Скачивание ' + (d.apkFile || 'APK') + ' открыто — после загрузки откройте файл для установки');
+      }
+    });
+  }
+
   A.register({
     'nav': (el) => { setMobileMenu(false); location.hash = '#/' + el.dataset.id; },
     'menu-toggle': () => setMobileMenu(!document.body.classList.contains('nav-open')),
     'menu-close': () => setMobileMenu(false),
+    'android-download': () => { setMobileMenu(false); openAndroidDownloadModal(); },
     'theme-toggle': () => {
       // переключение задаёт явную тему ( light ⇄ dark ), уходя от «как в системе»;
       // запись идёт тем же путём, что и в Настройках — с историей и Undo

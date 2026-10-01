@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Aven для Android: только HTTPS наружу. Cleartext запрещён глобально;
+     certificate validation НЕ отключается ни для каких доменов.
+     Локальный контент обёртки (https://localhost) обслуживается WebViewAssetLoader'ом
+     из assets и в сеть не уходит. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

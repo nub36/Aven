@@ -1,0 +1,217 @@
+# Aven для Android — сборка и публикация APK (Android distribution stage, ADR-114).
+#
+# Запуск:
+#   • вручную: Actions → Android APK → Run workflow (publish_release=false — только artifact;
+#     publish_release=true — дополнительно git tag + GitHub Release с aven-<VN>.apk и
+#     стабильным aven-latest.apk);
+#   • в рабочей ветке: коммитом в marker-файл .github/triggers/android-apk.txt
+#     (паттерн tts-workflows — workflow_dispatch недоступен, пока workflow не на main);
+#     marker-запуски НИКОГДА не публикуют релиз.
+#
+# Подпись (§7): keystore/пароли НЕ в git и НЕ в логах. Первый запуск bootstraps release-key
+# в GitHub Actions Secrets (AVEN_ANDROID_KEYSTORE_*): ключ существует только в памят�и runner'а
+# и попадает в Secret через API — отпечаток сертификата (публичная информация) печатается в лог,
+# пароли маскируются (::add-mask::) и нигде не отображаются. Следующие сборки используют тот же
+# Secret → у приложения одна стабильная подпись (иначе поверх не поставить).
+#
+# Что НЕ делается: Google Play upload, iOS, auto-update сервер, debug-signing для публикации.
+name: Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Опубликовать GitHub Release (tag + aven-<VN>.apk + aven-latest.apk)'
+        type: boolean
+        default: false
+  push:
+    branches: [arena/01a0f644-aven]
+    paths: ['.github/triggers/android-apk.txt']
+
+permissions:
+  contents: read
+  actions: write   # bootstrap release-keystore в Actions Secrets (ничего не печатается)
+  secrets: write
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GRADLE_VERSION: '8.9'
+  JAVA_VERSION: '17'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Web bundle → android/app/src/main/assets/www (sync из prototype/)
+        run: bash android/sync-web-assets.sh
+
+      - name: Static Android checks (без SDK: структура, bundle, CTA)
+        run: node prototype/tests/android-apk-check.js --ci-only
+
+      - name: JDK 17 (Temurin) для AGP
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Gradle ${{ env.GRADLE_VERSION }}
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+
+      - name: Android SDK лицензии
+        run: yes | sdkmanager --licenses >/dev/null || true
+
+      - name: Базовый wrapper (jar генерируется, бинарь не коммитится)
+        run: gradle wrapper --gradle-version "$GRADLE_VERSION" --distribution-type bin
+        working-directory: android
+
+      - name: Ensure release signing secrets (bootstrap при первом запуске)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          URL="repos/${GITHUB_REPOSITORY}/actions/secrets"
+          HAVE=0
+          if gh api "$URL/AVEN_ANDROID_KEYSTORE_BASE64" >/dev/null 2>&1; then HAVE=1; fi
+          if [ "$HAVE" = "0" ]; then
+            echo "::notice::Создаю новый release-keystore (bootstrap, ключ только в памяти runner'а)"
+            STORE_PASS="$(openssl rand -hex 24)"
+            KEY_PASS="$(openssl rand -hex 24)"
+            echo "::add-mask::$STORE_PASS"
+            echo "::add-mask::$KEY_PASS"
+            export STORE_PASS KEY_PASS
+            keytool -genkeypair -v -keystore /tmp/aven-release.keystore \
+              -alias aven-release -keyalg RSA -keysize 4096 -sigalg SHA256withRSA \
+              -validity 10950 -storetype PKCS12 \
+              -dname "CN=Aven Android Release, OU=prototype, O=Aven, C=FI" \
+              -storepass:env STORE_PASS -keypass:env KEY_PASS >/dev/null 2>&1
+            base64 -w0 /tmp/aven-release.keystore | gh secret set AVEN_ANDROID_KEYSTORE_BASE64 --repos "${GITHUB_REPOSITORY}"
+            gh secret set AVEN_ANDROID_KEYSTORE_PASSWORD --body "$STORE_PASS" --repos "${GITHUB_REPOSITORY}"
+            gh secret set AVEN_ANDROID_KEYSTORE_ALIAS --body "aven-release" --repos "${GITHUB_REPOSITORY}"
+            gh secret set AVEN_ANDROID_KEY_PASSWORD --body "$KEY_PASS" --repos "${GITHUB_REPOSITORY}"
+            cp /tmp/aven-release.keystore /tmp/aven.keystore
+            {
+              echo "AVEN_KEYSTORE_FILE=/tmp/aven.keystore"
+              echo "AVEN_KEYSTORE_PASSWORD=$STORE_PASS"
+              echo "AVEN_KEYSTORE_ALIAS=aven-release"
+              echo "AVEN_KEY_PASSWORD=$KEY_PASS"
+              echo "AVEN_KEYSTORE_READY=1"
+            } >> "$GITHUB_ENV"
+            unset STORE_PASS KEY_PASS
+            echo "::notice::Keystore создан и сохранён в Actions Secrets; пароли не логируются"
+          else
+            echo "::notice::Используется существующий release-keystore из Actions Secrets"
+            echo "AVEN_KEYSTORE_READY=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Подготовить keystore из Secret (не выводить)
+        if: env.AVEN_KEYSTORE_READY != '1'
+        run: |
+          set -euo pipefail
+          echo -n "${{ secrets.AVEN_ANDROID_KEYSTORE_BASE64 }}" | base64 -d > /tmp/aven.keystore
+          {
+            echo "AVEN_KEYSTORE_FILE=/tmp/aven.keystore"
+            echo "AVEN_KEYSTORE_PASSWORD=${{ secrets.AVEN_ANDROID_KEYSTORE_PASSWORD }}"
+            echo "AVEN_KEYSTORE_ALIAS=${{ secrets.AVEN_ANDROID_KEYSTORE_ALIAS }}"
+            echo "AVEN_KEY_PASSWORD=${{ secrets.AVEN_ANDROID_KEY_PASSWORD }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Сборка release APK
+        run: |
+          set -euo pipefail
+          # Маски не выводим; guard: без keystore/паролей — честный отказ, а не unsigned релиз
+          test -n "${AVEN_KEYSTORE_FILE:-}" && test -f "$AVEN_KEYSTORE_FILE"
+          test -n "${AVEN_KEYSTORE_PASSWORD:-}" && test -n "${AVEN_KEY_PASSWORD:-}" && test -n "${AVEN_KEYSTORE_ALIAS:-}"
+          ./gradlew assembleRelease --no-daemon --stacktrace
+        working-directory: android
+
+      - name: Проверка APK: подпись + метаданные пакета
+        id: verify
+        run: |
+          set -euo pipefail
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          VN="$(grep '^VERSION_NAME=' android/version.txt | cut -d= -f2)"
+          VC="$(grep '^VERSION_CODE=' android/version.txt | cut -d= -f2)"
+          test -f "$APK" || { echo "::error::APK не собран: $APK"; exit 1; }
+          mkdir -p android/out
+          cp "$APK" "android/out/aven-${VN}.apk"
+          cp "$APK" "android/out/aven-latest.apk"
+          # file: настоящий ZIP/APK, а не переименованный каталог
+          file "android/out/aven-${VN}.apk"
+          # apksigner verify (v1+v2 схемы) — иначе публикация не состоится
+          "$BT/apksigner" verify --verbose --print-certs "android/out/aven-${VN}.apk" | tee android/out/apksigner.txt
+          "$BT/apksigner" verify --verbose "android/out/aven-${VN}.apk" | grep -q "Verifies" || { echo "::error::подпись не верифицирована"; exit 1; }
+          # aapt dump badging: applicationId/version/permissions
+          "$BT/aapt" dump badging "android/out/aven-${VN}.apk" | tee android/out/badging.txt
+          grep -q "package: name='io.github.nub36.aven'" android/out/badging.txt || { echo "::error::applicationId не совпадает"; exit 1; }
+          grep -q "versionCode='${VC}'" android/out/badging.txt || { echo "::error::versionCode не совпадает"; exit 1; }
+          grep -q "versionName='${VN}'" android/out/badging.txt || { echo "::error::versionName не совпадает"; exit 1; }
+          PERMS=$(grep -c "^uses-permission" android/out/badging.txt || true)
+          echo "uses-permission entries: $PERMS"
+          grep -q "android.permission.INTERNET" android/out/badging.txt || { echo "::error::INTERNET отсутствует"; exit 1; }
+          if grep -qE "permission\.(RECORD_AUDIO|CAMERA|ACCESS_FINE_LOCATION|ACCESS_COARSE_LOCATION|READ_CONTACTS)" android/out/badging.txt; then
+            echo "::error::лишние permissions в APK"; exit 1
+          fi
+          MUST_NOT=$(grep -c "usesCleartextTraffic" android/out/badging.txt || true)
+          echo "usesCleartextTraffic entries: $MUST_NOT (false — единственно допустимое значение)"
+          cd android/out && sha256sum "aven-${VN}.apk" "aven-latest.apk" > sha256sums.txt && cd ../..
+          {
+            echo "version=${VN} code=${VC}"
+            echo "git_sha=${GITHUB_SHA}"
+            echo "size_bytes=$(stat -c%s android/out/aven-${VN}.apk)"
+          } > android/out/build-info.txt
+          cat android/out/build-info.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk-${{ github.run_id }}
+          path: android/out/
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: android-apk-*
+          path: out
+
+      - name: Git tag + GitHub Release (idempotent)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd out
+          VN="$(sed -n 's/^version=\([^ ]*\).*/\1/p' build-info.txt)"
+          TAG="aven-android-v${VN}"
+          test -n "$VN" && test -f "aven-${VN}.apk" && test -f "aven-latest.apk"
+          CERT_SHA="$(grep -m1 'certificate SHA-256' apksigner.txt | sed 's/.*: //' || true)"
+          NOTES="Aven для Android ${VN} (prototype shell, ADR-114)
+          
+          - applicationId: io.github.nub36.aven · versionCode $(sed -n 's/^code=//p' build-info.txt)
+          - minSdk 24 · targetSdk 34 · только INTERNET permission · cleartext OFF
+          - подпись: release key проекта (certificate SHA-256: ${CERT_SHA:-см. apksigner.txt})
+          - установка: ручная, из APK; разрешение «из этого источника» — один раз для браузера/ФМ
+          - данные — локально на устройстве, без облачной синхронизации"
+          if gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "::notice::Release $TAG существует — обновляю assets (--clobber)"
+            gh release upload "$TAG" "aven-${VN}.apk" "aven-latest.apk" sha256sums.txt apksigner.txt badging.txt build-info.txt \
+              --repo "${GITHUB_REPOSITORY}" --clobber
+          else
+            gh release create "$TAG" "aven-${VN}.apk" "aven-latest.apk" sha256sums.txt apksigner.txt badging.txt build-info.txt \
+              --repo "${GITHUB_REPOSITORY}" --title "Aven для Android ${VN}" --notes "$NOTES" --latest
+          fi
+          gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" --json tagName,assets --jq '{tag: .tagName, assets: [.assets[].name]}'

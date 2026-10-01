@@ -1,0 +1,7 @@
+# Aven для Android — единственный источник версии приложения.
+# Читают: android/app/build.gradle (versionCode/versionName),
+# android/sync-web-assets.sh (cache-bust), GitHub Actions (.github/workflows/android-apk.yml),
+# сборка-чек prototype/tests/android-apk-check.js.
+# При релизе: версию здесь и в prototype/js/app-download.js менять синхронно (android/README.md).
+VERSION_NAME=0.1.0
+VERSION_CODE=1
