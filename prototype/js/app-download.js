@@ -12,7 +12,7 @@ window.AvenAppDownload = {
   apkFile: 'aven-0.1.0.apk',   // именованный asset релиза (фиксированная версия)
   apkUrl: 'https://github.com/nub36/Aven/releases/latest/download/aven-latest.apk',
   releasePage: 'https://github.com/nub36/Aven/releases/latest',
-  sizeHint: '≈8 МБ',           // уточняется по факту сборки (WORK_LOG)
+  sizeHint: '≈1.7 МБ',          // факт сборки run 36847296636: 1 741 633 байта (uncompressed 3.2 МБ)
   applicationId: 'io.github.nub36.aven',
   minAndroid: 'Android 7.0+',  // minSdk 24
   channel: 'GitHub Releases',  // ручная установка APK, вне Google Play (осознанно, ADR-114)

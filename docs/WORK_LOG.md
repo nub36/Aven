@@ -6,6 +6,52 @@
 
 ---
 
+## 2026-10-01 (продолжение 3) — PRERELEASE aven-android-v0.1.0 опубликован и верифицирован
+
+Run **36847296636** (commit `0178ff3`): build ✓ + release ✓. Создан **PRERELEASE**
+`aven-android-v0.1.0` (id 400847041): тег → `0178ff3` (= коммит сборки, provenance),
+8 ассетов: aven-0.1.0.apk + aven-latest.apk (одинаковый SHA-256
+`069c8edc16bb387c4f106547d9f74cce117daa2db6b0eb85e0367cc92499db57`, 1 741 633 байта,
+content-type application/vnd.android.package-archive) + текстовые артефакты верификации
+(apksigner.txt, badging.txt, manifest-xmltree.txt, unzip-listing.txt, sha256sums.txt,
+build-info.txt). publish-директива удалена из marker-файла сразу после публикации.
+
+### Верификация (все артефакты — реальный бинарник из CI, digest API GitHub == sha256 из CI)
+
+- **sha256sums.txt (CI) == digest обоих APK-ассетов из GitHub API** — криптографическое
+  доказательство: релизные бинарники байт-в-байт равны APK, верифицированному в CI
+  (egress песочницы не даёт скачать бинарник напрямую — цепочка эквивалентна).
+- **apksigner (CI)**: Verifies; v2 scheme TRUE; 1 signer; RSA 4096;
+  certificate SHA-256 `92514037a6c35b0d0243a6dfb53679ace6a03efd23286e40eed5f7253fcc8ddf`;
+  DN `CN=Aven Android Release (ephemeral), OU=prototype, O=Aven`.
+  **TEST SIGNING — NOT STABLE FOR UPDATES** (mode=ephemeral в build-info и примечаниях релиза).
+- **aapt badging (CI)**: package `io.github.nub36.aven`, versionCode 1, versionName 0.1.0,
+  minSdk 24, targetSdk 34, label «Aven», launchable `io.github.nub36.aven.MainActivity`,
+  единственный uses-permission — INTERNET.
+- **compiled manifest (aapt xmltree, CI)**: usesCleartextTraffic=0x0 (false), allowBackup=0x0,
+  networkSecurityConfig подключён, MainActivity exported=0xffffffff, launchMode=0x2 (singleTask),
+  configChanges=0x7A0 (orientation|screenSize|screenLayout|keyboardHidden|uiMode),
+  windowSoftInputMode=0x10 (adjustResize), intent-filter MAIN/LAUNCHER.
+- **unzip -l (CI)**: 87 файлов; полный bundle `assets/www/` (index/css/js/tts/character/voice
+  manifest); НЕТ .git/, keystore/jks/p12, tests, research-ассетов, MP3, source maps.
+- **PK magic (CI)**: `504b0304` — настоящий ZIP/APK контейнер.
+- **Публичные URL**: прямой ассет-URL → 302 → objects.githubusercontent.com с
+  `response-content-type=application/vnd.android.package-archive` (отдаёт APK-байты);
+  стабильный CTA-URL `releases/latest/download/aven-latest.apk` → 404 (API GitHub запрещает
+  latest для prerelease) — активируется первым ПОЛНЫМ релизом владельца = merge-gate для CTA.
+
+### Честные ограничения сессии (не закрыто и не заявлено как закрытое)
+
+- Real-device прогона НЕТ (эмулятор в песочнице недоступен; device-приёмка — владелец по
+  чек-листу PR, gate стадии). Runtime persistence (localStorage через restart) не проверена
+  на устройстве — по коду domStorage включён, но честно: без runtime-проверки.
+- Стабильная подпись НЕ настроена (Secrets создаёт владелец; команды — android/README.md).
+- TTS внутри APK: bundle включает актуальный main на момент ветвления (PR #46+#47 merged,
+  6f995bc) — Natural TTS по HTTPS в WebView возможен, Web Speech API в WebView нет; Android
+  TTS runtime-проверкой не подтверждён (отдельный gate, не расширялся).
+
+---
+
 ## 2026-10-01 (продолжение 2) — CI build SUCCESS (run 36845006746) + bootstrap prerelease-механика
 
 ### Первый настоящий APK собран и верифицирован в CI
