@@ -241,9 +241,9 @@ jobs:
           PUBLISH_MODE="${{ needs.build.outputs.publish_mode }}"
           PRERELEASE_ARGS=""
           PRE_NOTE=""
-          # latest-флаг допустим ТОЛЬКО для полного релиза: API GitHub запрещает пометить
-          # prerelease как latest (run 36846707195: 422 «Latest release cannot be draft or
-          # prerelease»). Следствие: releases/latest/download/aven-latest.apk начинает работать
+          # latest-флаг допустим ТОЛЬКО для полного релиза: API GitHub запрещает помечать
+          # prerelease как latest (run 36846707195: 422, «Latest release cannot be draft or prerelease»).
+          # Следствие: releases/latest/download/aven-latest.apk начинает работать
           # только с первого ПОЛНОГО релиза владельца — это осознанный merge-gate для CTA.
           LATEST_ARGS="--latest"
           if [ "$PUBLISH_MODE" = "prerelease" ]; then

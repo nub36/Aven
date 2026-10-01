@@ -10,3 +10,4 @@ run: 4 — фикс PKCS12-подписи: ephemeral один пароль store
 publish-prerelease: aven-0.1.0 — bootstrap TEST pre-release с ephemeral-подписью (полный stable релиз — только dispatch после Secrets владельца). Директиву удалить из файла сразу после публикации. (2026-10-01)
 run: 5 — фикс release-джобы: download-artifact merge-multiple (run 36846406393: файлы в подкаталоге out/android-apk-<run_id>/, «sed: can't read build-info.txt») (2026-10-01)
 run: 6 — фикс release-джобы #2: --latest только для полного релиза (run 36846707195: API GitHub 422 «Latest release cannot be draft or prerelease»; merge-gate для CTA задокументирован) (2026-10-01)
+run: 7 — фикс комментария workflow для чека F10 (фраза ошибки API перенесена на одну строку; F10 зелёный локально) (2026-10-01)
