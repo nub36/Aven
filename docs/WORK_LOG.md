@@ -65,9 +65,9 @@ VPS/nginx и Female Aven 3D/Blender/Meshy/rig/morph/lip-sync не тронуты
 
 ### Проверка и следующий блок
 
-Targeted suites прошли: Command Engine **880/880**, Command Session **187/187**, Notifications
+Targeted suites прошли: Command Engine **880/880**, Command Session **189/189**, Notifications
 **49/49**, Help/Tutorial **33/33**, Actions **18/18**. Финальный полный regression: **17 suites,
-2324/2324**, 0 провалов. Все 43 JS-файла в `prototype/js` и `prototype/tests` прошли `node --check`;
+2326/2326**, 0 провалов. Все 43 JS-файла в `prototype/js` и `prototype/tests` прошли `node --check`;
 `git diff --check` чист. **Real-browser validation not performed**: Chromium/Chrome не найден;
 jsdom не проверяет layout/touch/Android. Следующая точная итерация после merge — **Stage 2 / Iteration 13:
 изменение остальных полей существующего события текстом, начиная с места**. Она в этой сессии не начата;

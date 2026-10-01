@@ -78,6 +78,8 @@ window.AvenCommand = (function () {
            она показывается как отличающая деталь выбранной заметки. */
         body: String(ctx.expected.body || ''),
         folder: String(ctx.expected.folder || ''),
+        note: String(ctx.expected.note || ''),
+        link: String(ctx.expected.link || ''),
         dismissed: ctx.expected.dismissed === true,
         snoozeUntilISO: String(ctx.expected.snoozeUntilISO || '')
       } : null,

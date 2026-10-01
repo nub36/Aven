@@ -35,8 +35,8 @@
 - **Help/Tutorial/UI:** объяснены четыре команды, подтверждение, Undo, ambiguity, ограничения и отсутствие
   гарантированной фоновой доставки. Ровно три Assistant chips и существующие responsive/a11y contracts
   сохранены.
-- **Проверка:** `command-engine-check.js` — **880/880**, `command-session-check.js` — **187/187**;
-  полный прогон — **17 suites, 2324/2324**, 0 провалов; 43 JS-файла прошли `node --check`,
+- **Проверка:** `command-engine-check.js` — **880/880**, `command-session-check.js` — **189/189**;
+  полный прогон — **17 suites, 2326/2326**, 0 провалов; 43 JS-файла прошли `node --check`,
   `git diff --check` чист. Real-browser validation not performed; jsdom не является проверкой браузера
   или Android.
 

@@ -805,5 +805,5 @@ Undo, ambiguity, ограничения точного времени и отс�
 браузере. Assistant сохраняет ровно три compact chips и существующий responsive/a11y shell.
 
 Проверка Iteration 12: `command-engine-check.js` — **880/880**, `command-session-check.js` —
-**187/187**; полный regression — **17 suites, 2324/2324**, 0 failures. Все 43 JS-файла прошли
+**189/189**; полный regression — **17 suites, 2326/2326**, 0 failures. Все 43 JS-файла прошли
 `node --check`, `git diff --check` чист. Real-browser validation not performed.
