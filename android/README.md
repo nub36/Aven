@@ -37,11 +37,32 @@ cd android && gradle wrapper --gradle-version 8.9 --distribution-type bin
 Подпись задаётся ТОЛЬКО переменными окружения: `AVEN_KEYSTORE_FILE`,
 `AVEN_KEYSTORE_PASSWORD`, `AVEN_KEYSTORE_ALIAS`, `AVEN_KEY_PASSWORD`.
 
-GitHub Actions (основной путь): Actions → **Android APK** → Run workflow. Первый запуск
-bootstrap'ит release-key в Actions Secrets (`AVEN_ANDROID_KEYSTORE_*`), далее подпись
-стабильна (поверхустановка работает). Workflow всегда выкладывает artifact
-(`android-apk-<run_id>`: aven-<VN>.apk, aven-latest.apk, sha256sums, apksigner/aapt-логи);
-с `publish_release=true` дополнительно создаёт tag `aven-android-v<VN>` и GitHub Release.
+GitHub Actions (основной путь): Actions → **Android APK** → Run workflow. Режимы подписи:
+
+- **Стабильная (целевая)** — ключ в Actions Secrets (`AVEN_ANDROID_KEYSTORE_*`).
+  Создаёт владелец один раз (свои руки + свой gh-токен; агенту/CI значения не видны):
+  ```bash
+  keytool -genkeypair -keystore /tmp/aven-release.keystore -alias aven-release \
+    -keyalg RSA -keysize 4096 -sigalg SHA256withRSA -validity 10950 -storetype PKCS12 \
+    -dname "CN=Aven Android Release, O=Aven" -storepass ПАРОЛЬ_ХРАНИЛИЩА -keypass ПАРОЛЬ_КЛЮЧА
+  base64 -w0 /tmp/aven-release.keystore | gh secret set AVEN_ANDROID_KEYSTORE_BASE64 --repos nub36/Aven
+  gh secret set AVEN_ANDROID_KEYSTORE_PASSWORD --body "ПАРОЛЬ_ХРАНИЛИЩА" --repos nub36/Aven
+  gh secret set AVEN_ANDROID_KEYSTORE_ALIAS --body "aven-release" --repos nub36/Aven
+  gh secret set AVEN_ANDROID_KEY_PASSWORD --body "ПАРОЛЬ_КЛЮЧА" --repos nub36/Aven
+  # keystore дополнительно держать в безопасном месте вне репозитория (менеджер паролей/сейф)
+  ```
+  (Автоматический bootstrap из workflow НЕВОЗМОЖЕН: GITHUB_TOKEN/GitHub-App токен агента не
+  имеет scope на запись Actions Secrets — проверено 2026-10-01, 403 «Resource not accessible
+  by integration».)
+- **Эфемерная (интерни)**, если секретов нет: release-key этого запуска (не debug-ключ),
+  живёт только в памяти runner'а. ⚠️ Поверхустановка APK, подписанного ДРУГИМ ключом,
+  невозможна (Android): переход ephemeral→stable требует удалить приложение и поставить
+  заново — локальные данные сотрутся. Режим фиксируется в build-info.txt (`signing_mode`)
+  и примечаниях релиза.
+
+Workflow всегда выкладывает artifact (`android-apk-<run_id>`: aven-<VN>.apk, aven-latest.apk,
+sha256sums, apksigner/aapt-логи); с `publish_release=true` дополнительно создаёт tag
+`aven-android-v<VN>` и GitHub Release.
 
 ## Чек-лист релиза новой версии
 

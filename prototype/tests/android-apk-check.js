@@ -181,6 +181,9 @@ const exists = (p) => fs.existsSync(path.join(ROOT, p));
   const f3d = /unset STORE_PASS KEY_PASS/.test(wf);               // стираемся из окружения шага
   ok('F3 workflow: пароли маскируются (add-mask), keytool читает из env, прямого echo нет', f3a && f3b && f3c && f3d, [f3a, f3b, f3c, f3d].join(','));
   ok('F4 workflow: сборка падает без keystore/паролей (никаких unsigned релизов)', /test -n "\$\{AVEN_KEYSTORE_PASSWORD:-\}"/.test(wf));
+  ok('F5 workflow: нет невалидных permission-scopes / попыток записи Secrets (GITHUB_TOKEN не умеет)',
+    !/^\s+secrets\s*:/m.test(wf) && !/gh secret set/.test(wf), 'запись Secrets только владельцем — android/README.md');
+  ok('F6 workflow: режим подписи фиксируется в build-info (ephemeral|secrets)', /signing_mode=/.test(wf) && /AVEN_SIGNING_MODE/.test(wf));
 }
 
 console.log('\nИТОГО: ' + pass + ' PASS, ' + fail + ' FAIL');

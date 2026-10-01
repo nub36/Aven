@@ -521,11 +521,18 @@
   - **Распространение**: только GitHub Releases, ручная установка APK; в git-хистории APK и
     keystore НЕ хранятся. В публикации — `aven-<version>.apk` и стабильный `aven-latest.apk`;
     сайт скачивает по `releases/latest/download/aven-latest.apk`.
-  - **Подпись**: release-key генерируется и хранится в GitHub Actions Secrets
-    (`AVEN_ANDROID_KEYSTORE_*`, bootstrap в `.github/workflows/android-apk.yml`); пароли
-    маскируются, в лог не попадают, отпечаток сертификата публикуется в примечаниях релиза.
-    Локальный запуск требует `AVEN_*` env-переменных; unsigned-release guard в CI ломает сборку
-    без них. Обычный пользовательский `debug.keystore` для публикации не используется.
+  - **Подпись**: целевая модель — release-key в GitHub Actions Secrets
+    (`AVEN_ANDROID_KEYSTORE_*`), создаётся владельцем один раз (готовые команды —
+    android/README.md; агент/CI значений не видят). **Уточнение 2026-10-01 (инфраструктурное
+    ограничение, зафиксировано):** автоматический bootstrap секретов из workflow невозможен —
+    `GITHUB_TOKEN` не поддерживает запись Actions Secrets (403 «Resource not accessible by
+    integration» проверено на рабочем токене). До создания секретов владельцем CI подписывает
+    эфемерным release-key запуска (не debug-ключ; живёт в памяти runner'а; `signing_mode` в
+    build-info и примечаниях релиза). Следствие временного режима, честно зафиксированное:
+    поверхустановка между сборками с разными ключами невозможна — переход ephemeral→stable
+    требует переустановки приложения. Guard: сборка падает без keystore/паролей; пароли
+    маскируются (`add-mask`, keytool `:env`-протокол), отпечаток сертификата публикуется в
+    примечаниях релиза. Обычный пользовательский `debug.keystore` не используется.
   - **Безопасность**: только `INTERNET` permission; cleartext выключен глобально +
     `network_security_config`; внешние http/https → системный браузер; произвольные схемы
     блокируются; certificate validation не отключается; WebView debugging в release off.
