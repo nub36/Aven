@@ -3796,3 +3796,7 @@ engine — `settings.voice.engine`, голос — `settings.voice.natural.voice
 ## 2026-10-01 — Stage 2 / Iteration 13
 
 В scope вошло только изменение `place` существующего события. Парсер различает «Измени место встречи ... на ...» и перенос даты/времени. EXACT/INFERRED требуют подтверждение; ambiguous уточняется. До подтверждения нет мутации и History; target перечитывается, повторяющиеся события и bulk отклоняются. Описание, участники и recurrence отложены.
+
+## 2026-10-01 — TTS no-sound incident investigation
+
+После merge Iteration 13 проверен существующий TTS pipeline. Статус «подключён» означает только успешный `GET /api/tts/health` (и `/api/tts/voices` для minimal health); он не доказывает synthesis, декодирование или `audio.play()`. Frontend отправляет `POST /api/tts/synthesize` и получает Blob, но до hotfix не проверял, что HTTP 200 действительно содержит аудио: пустой/JSON/HTML response доходил до Audio и попадал в fallback только после неудачного playback; потенциально ошибочные bytes могли также попасть в cache. Добавлена минимальная frontend-защита: empty/non-audio responses rejected before cache/play, valid WAV accepted by RIFF/WAVE signature even if proxy rewrites Content-Type. Real production endpoint URL/response and real browser audio were not available in this session, поэтому exact server-side root cause is not claimed. VPS/nginx не менялись; owner acceptance remains required.

@@ -940,3 +940,6 @@ Action теперь отменяет расход и восстановлива�
 
 ### Stage 2 / Iteration 13 — редактирование места события
 - Добавлено изменение места одного существующего события текстом с resolver, подтверждением, stale/no-op защитой и Undo через Common Action.
+
+### TTS hotfix investigation — synthesis response validation
+- Natural TTS now rejects empty, JSON/HTML, and unrecognised non-audio HTTP 200 bodies before caching or playback, preserving the documented system-voice fallback.
