@@ -221,6 +221,8 @@
         `<div class="field"><label>Что это</label><div class="tts-norm">Тот же Aven, упакованный как приложение для Android · ${esc(d.channel || 'GitHub Releases')}</div></div>` +
         `<div class="field"><label>Скачивается</label><div class="tts-norm">${esc(d.apkFile || 'aven.apk')} · версия ${esc(d.version || '?')} · ${esc(d.sizeHint || '')} · ${esc(d.minAndroid || '')}</div></div>` +
         `<div class="field"><label>Как установить</label><div class="s" style="line-height:1.55">1. Нажмите «Скачать APK».<br>2. Откройте скачанный файл.<br>3. Android может спросить разрешение на установку из этого источника — оно относится к вашему браузеру или файловому менеджеру, подтвердите один раз.<br>4. Нажмите «Установить» — появится иконка Aven.<br>5. После установки разрешение на установку из источника можно снова выключить (глобально безопасность Android отключать не нужно).<br>6. Данные приложения хранятся на устройстве; обновления — повторным скачиванием с этой кнопки.</div></div>` +
+        (d.signing === 'stable' ? '' :
+          `<div class="field"><label>Если обновление потребует удаления</label><div class="s" style="line-height:1.55">Подпись текущих релизов временная (до создания стабильного ключа владельцем): Android может попросить удалить приложение перед установкой новой версии — локальные записи в этом случае сбрасываются. Это честное известное ограничение первых сборок (ADR-114).</div></div>`) +
         `<div class="tts-priv"><span class="pill">без Google Play</span><span>Ручная установка APK · подпись релизным ключом проекта · страница релизов: <a href="${esc(d.releasePage || '#')}" target="_blank" rel="noopener">GitHub Releases ↗</a></span></div>`,
       cancelText: 'Закрыть',
       submitText: '⬇ Скачать APK',

@@ -36,10 +36,14 @@ Aven (#5A5FD8/«A» favicon): 15 PNG (5 плотностей × launcher/round/f
 
 **CI (`.github/workflows/android-apk.yml`)**: workflow_dispatch (+ publish_release input) и
 marker-push по `.github/triggers/android-apk.txt` (отладочный запуск из рабочей ветки; релиз так
-не публикуется — guard). Gradle 8.9/setup-gradle, JDK 17, SDK 34, AGP 8.7.3. Подпись: bootstrap
-release-keystore в Actions Secrets при первом запуске (`AVEN_ANDROID_KEYSTORE_*`; keytool читает
-пароли по `:env`, add-mask до использования, прямого echo нет, keystorа в репо нет); далее
-стабильная подпись. Guard: сборка без keystore/паролей падает. Верификация до публикации:
+не публикуется — guard). Gradle 8.9/setup-gradle, JDK 17, SDK 34, AGP 8.7.3. Подпись: Secrets
+стабильные (владелец создаёт один раз — готовые команды в android/README; автоматический
+bootstrap из workflow оказался невозможен — GITHUB_TOKEN не имеет scope на запись Actions
+Secrets, 403 «Resource not accessible by integration», проверено на run 36839639562);
+интерн-режим — эфемерный release-key запуска (не debug), add-mask до использования, keytool
+читает пароли по `:env`, прямого echo нет, keystore в репо нет; `signing_mode` фиксируется в
+build-info и примечаниях релиза вместе с предупреждением о поверхустановке. Guard: сборка без
+keystore/паролей падает. Верификация до публикации:
 `file`, `apksigner verify --print-certs` (grep «Verifies»), `aapt dump badging` —
 applicationId/versionCode/versionName/INTERNET/запрет RECORD_AUDIO-CAMERA-LOCATION-CONTACTS;
 sha256sums + build-info. Artifact `android-apk-<run_id>`; release job (только dispatch +
@@ -81,8 +85,12 @@ FEATURES F22, CHANGELOG, README корневой (структура с android/
 - В Android WebView нет Web Speech API: STT/system-TTS недоступны в приложении — задокументировано
   честно в справке, модальном окне и ADR-114; Natural TTS зависит от HTTPS-доступности сервера
   (инцидент TTS НЕ перерасширялся этим stage).
-- Bootstrap подписи в Actions Secrets: при ошибке создания Secrets (403) workflow падает честно;
-  fallback — owner создаёт `AVEN_ANDROID_KEYSTORE_*` вручную (android/README).
+- Подпись интерни — эфемерная на запуск (ЭФ1): поверхустановка между сборками с разными ключами
+  невозможна (Android-правило совпадения подписи); переход ephemeral→stable требует переустановки.
+  Целевая стабильная подпись — Secrets от владельца (5 мин, готовые команды — android/README.md):
+  GITHUB_TOKEN писать Actions Secrets не умеет (403), агент — тоже, поэтому bootstrap невозможен
+  автоматически и значения secrets нам не видны никогда. Ограничение честно показано пользователю
+  (модальное окно, help, примечания релиза; `signing` в app-download.js: ephemeral → stable).
 - APK в git не хранятся (Release-assets only); `assets/www/` — в .gitignore как производное от
   prototype/ (идемпотентный sync).
 

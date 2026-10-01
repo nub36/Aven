@@ -8,11 +8,17 @@
 #     (паттерн tts-workflows — workflow_dispatch недоступен, пока workflow не на main);
 #     marker-запуски НИКОГДА не публикуют релиз.
 #
-# Подпись (§7): keystore/пароли НЕ в git и НЕ в логах. Первый запуск bootstraps release-key
-# в GitHub Actions Secrets (AVEN_ANDROID_KEYSTORE_*): ключ существует только в памят�и runner'а
-# и попадает в Secret через API — отпечаток сертификата (публичная информация) печатается в лог,
-# пароли маскируются (::add-mask::) и нигде не отображаются. Следующие сборки используют тот же
-# Secret → у приложения одна стабильная подпись (иначе поверх не поставить).
+# Подпись (§7 handoff: release-подпись, без debug.keystore, secrets не в git/логах):
+#   1) ПРЕДПОЧТИТЕЛЬНО — стабильный ключ из GitHub Actions Secrets (AVEN_ANDROID_KEYSTORE_*):
+#      секреты создаются владельцем один раз (5 мин, готовые команды — android/README.md);
+#      поверхустановка следующих версий работает.
+#   2) ИНТЕРИМ, если секретов НЕТ — эфемерный release-key конкретного запуска (не debug-ключ;
+#      создаётся в памяти runner'а, никуда не сохраняется). ВАЖНО: меняется между сборками →
+#      поверхустановка APK, подписанного другим ключом, НЕВОЗМОЖНА (Android требует совпадения
+#      подписи): переход ephemeral→stable потребует удалить APK и поставить заново
+#      (локальные данные сотрутся). Режим фиксируется в build-info.txt и примечаниях релиза —
+#      честно и заметно. (GITHUB_TOKEN не умеет писать Actions Secrets — поэтому bootstrap
+#      из воркфлоу невозможен; проверено 2026-10-01: 403 Resource not accessible by integration.)
 #
 # Что НЕ делается: Google Play upload, iOS, auto-update сервер, debug-signing для публикации.
 name: Android APK
@@ -30,8 +36,7 @@ on:
 
 permissions:
   contents: read
-  actions: write   # bootstrap release-keystore в Actions Secrets (ничего не печатается)
-  secrets: write
+  # (Actions Secrets GITHUB_TOKEN не пишет — см. комментарий о подписи выше; лишних scopes нет)
 
 concurrency:
   group: android-apk-${{ github.ref }}
@@ -72,56 +77,41 @@ jobs:
         run: gradle wrapper --gradle-version "$GRADLE_VERSION" --distribution-type bin
         working-directory: android
 
-      - name: Ensure release signing secrets (bootstrap при первом запуске)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Подпись: Secrets (stable) → иначе ephemeral release-key
         run: |
           set -euo pipefail
-          URL="repos/${GITHUB_REPOSITORY}/actions/secrets"
-          HAVE=0
-          if gh api "$URL/AVEN_ANDROID_KEYSTORE_BASE64" >/dev/null 2>&1; then HAVE=1; fi
-          if [ "$HAVE" = "0" ]; then
-            echo "::notice::Создаю новый release-keystore (bootstrap, ключ только в памяти runner'а)"
+          KS_B64='${{ secrets.AVEN_ANDROID_KEYSTORE_BASE64 }}'
+          if [ -n "$KS_B64" ]; then
+            echo "::notice::Подпись: стабильный release-key из Actions Secrets (mode=secrets)"
+            echo -n "$KS_B64" | base64 -d > /tmp/aven.keystore
+            {
+              echo "AVEN_KEYSTORE_FILE=/tmp/aven.keystore"
+              echo "AVEN_KEYSTORE_PASSWORD=${{ secrets.AVEN_ANDROID_KEYSTORE_PASSWORD }}"
+              echo "AVEN_KEYSTORE_ALIAS=${{ secrets.AVEN_ANDROID_KEYSTORE_ALIAS }}"
+              echo "AVEN_KEY_PASSWORD=${{ secrets.AVEN_ANDROID_KEY_PASSWORD }}"
+              echo "AVEN_SIGNING_MODE=secrets"
+            } >> "$GITHUB_ENV"
+          else
+            echo "::notice::Actions Secrets не заданы — эфемерный release-key этого запуска (mode=ephemeral); поверхустановка между сборками НЕ сработает (см. android/README.md)"
             STORE_PASS="$(openssl rand -hex 24)"
             KEY_PASS="$(openssl rand -hex 24)"
             echo "::add-mask::$STORE_PASS"
             echo "::add-mask::$KEY_PASS"
             export STORE_PASS KEY_PASS
-            keytool -genkeypair -v -keystore /tmp/aven-release.keystore \
+            keytool -genkeypair -v -keystore /tmp/aven.keystore \
               -alias aven-release -keyalg RSA -keysize 4096 -sigalg SHA256withRSA \
               -validity 10950 -storetype PKCS12 \
-              -dname "CN=Aven Android Release, OU=prototype, O=Aven, C=FI" \
+              -dname "CN=Aven Android Release (ephemeral), OU=prototype, O=Aven" \
               -storepass:env STORE_PASS -keypass:env KEY_PASS >/dev/null 2>&1
-            base64 -w0 /tmp/aven-release.keystore | gh secret set AVEN_ANDROID_KEYSTORE_BASE64 --repos "${GITHUB_REPOSITORY}"
-            gh secret set AVEN_ANDROID_KEYSTORE_PASSWORD --body "$STORE_PASS" --repos "${GITHUB_REPOSITORY}"
-            gh secret set AVEN_ANDROID_KEYSTORE_ALIAS --body "aven-release" --repos "${GITHUB_REPOSITORY}"
-            gh secret set AVEN_ANDROID_KEY_PASSWORD --body "$KEY_PASS" --repos "${GITHUB_REPOSITORY}"
-            cp /tmp/aven-release.keystore /tmp/aven.keystore
             {
               echo "AVEN_KEYSTORE_FILE=/tmp/aven.keystore"
               echo "AVEN_KEYSTORE_PASSWORD=$STORE_PASS"
               echo "AVEN_KEYSTORE_ALIAS=aven-release"
               echo "AVEN_KEY_PASSWORD=$KEY_PASS"
-              echo "AVEN_KEYSTORE_READY=1"
+              echo "AVEN_SIGNING_MODE=ephemeral"
             } >> "$GITHUB_ENV"
             unset STORE_PASS KEY_PASS
-            echo "::notice::Keystore создан и сохранён в Actions Secrets; пароли не логируются"
-          else
-            echo "::notice::Используется существующий release-keystore из Actions Secrets"
-            echo "AVEN_KEYSTORE_READY=1" >> "$GITHUB_ENV"
           fi
-
-      - name: Подготовить keystore из Secret (не выводить)
-        if: env.AVEN_KEYSTORE_READY != '1'
-        run: |
-          set -euo pipefail
-          echo -n "${{ secrets.AVEN_ANDROID_KEYSTORE_BASE64 }}" | base64 -d > /tmp/aven.keystore
-          {
-            echo "AVEN_KEYSTORE_FILE=/tmp/aven.keystore"
-            echo "AVEN_KEYSTORE_PASSWORD=${{ secrets.AVEN_ANDROID_KEYSTORE_PASSWORD }}"
-            echo "AVEN_KEYSTORE_ALIAS=${{ secrets.AVEN_ANDROID_KEYSTORE_ALIAS }}"
-            echo "AVEN_KEY_PASSWORD=${{ secrets.AVEN_ANDROID_KEY_PASSWORD }}"
-          } >> "$GITHUB_ENV"
 
       - name: Сборка release APK
         run: |
@@ -166,6 +156,7 @@ jobs:
           {
             echo "version=${VN} code=${VC}"
             echo "git_sha=${GITHUB_SHA}"
+            echo "signing_mode=${AVEN_SIGNING_MODE:-unknown}"
             echo "size_bytes=$(stat -c%s android/out/aven-${VN}.apk)"
           } > android/out/build-info.txt
           cat android/out/build-info.txt
@@ -199,11 +190,17 @@ jobs:
           TAG="aven-android-v${VN}"
           test -n "$VN" && test -f "aven-${VN}.apk" && test -f "aven-latest.apk"
           CERT_SHA="$(grep -m1 'certificate SHA-256' apksigner.txt | sed 's/.*: //' || true)"
+          MODE="$(sed -n 's/^signing_mode=//p' build-info.txt)"
+          if [ "$MODE" = "secrets" ]; then
+            SIGN_NOTE="стабильный release-key из Actions Secrets (certificate SHA-256: ${CERT_SHA:-см. apksigner.txt}) — следующие версии ставятся поверх"
+          else
+            SIGN_NOTE="ЭФЕМЕРНЫЙ release-key запуска (certificate SHA-256: ${CERT_SHA:-см. apksigner.txt}). ВНИМАНИЕ: следующий релиз, подписанный другим ключом, не установится поверх — потребуется удалить приложение и поставить заново (локальные данные сотрутся). Стабильная подпись включается созданием Secrets (5 мин — android/README.md)."
+          fi
           NOTES="Aven для Android ${VN} (prototype shell, ADR-114)
-          
+
           - applicationId: io.github.nub36.aven · versionCode $(sed -n 's/^code=//p' build-info.txt)
           - minSdk 24 · targetSdk 34 · только INTERNET permission · cleartext OFF
-          - подпись: release key проекта (certificate SHA-256: ${CERT_SHA:-см. apksigner.txt})
+          - подпись (mode=${MODE:-unknown}): ${SIGN_NOTE}
           - установка: ручная, из APK; разрешение «из этого источника» — один раз для браузера/ФМ
           - данные — локально на устройстве, без облачной синхронизации"
           if gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then

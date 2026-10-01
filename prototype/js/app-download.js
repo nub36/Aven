@@ -15,5 +15,9 @@ window.AvenAppDownload = {
   sizeHint: '≈8 МБ',           // уточняется по факту сборки (WORK_LOG)
   applicationId: 'io.github.nub36.aven',
   minAndroid: 'Android 7.0+',  // minSdk 24
-  channel: 'GitHub Releases'   // ручная установка APK, вне Google Play (осознанно, ADR-114)
+  channel: 'GitHub Releases',  // ручная установка APK, вне Google Play (осознанно, ADR-114)
+  // Подпись релизных APK: 'stable' — ключ в Actions Secrets (создаёт владелец по
+  // android/README.md); 'ephemeral' — временный ключ сборки (интерни, см. ADR-114):
+  // тогда поверхустановка следующего релиза ТРЕБУЕТ удаления старого приложения.
+  signing: 'ephemeral'
 };
