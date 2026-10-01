@@ -1167,6 +1167,6 @@ responsive shell; число compact chips остаётся ровно три. H
 worker/Android system notifications. Закрытый браузер не гарантирует доставку.
 
 Проверка итерации 12: `command-engine-check.js` — **880/880**, `command-session-check.js` —
-**187/187**; полный regression — **17 suites, 2324/2324**, 0 failures. Все 43 JS-файла прошли
+**189/189**; полный regression — **17 suites, 2326/2326**, 0 failures. Все 43 JS-файла прошли
 `node --check`, `git diff --check` чист. Real-browser validation not performed; jsdom не является
 проверкой layout/touch/Android.

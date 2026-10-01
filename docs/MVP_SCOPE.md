@@ -1000,6 +1000,6 @@ jsdom за него не выдаётся.
 
 Вне scope: mark-read текстом, snooze до времени, bulk, Events/Finance next blocks, Stage 3/Voice/TTS и 3D.
 
-Проверка Iteration 12: Command Engine **880/880**, Command Session **187/187**, полный набор
-**17 suites, 2324/2324**, 0 failures; 43 JS-файла прошли `node --check`, `git diff --check` чист.
+Проверка Iteration 12: Command Engine **880/880**, Command Session **189/189**, полный набор
+**17 suites, 2326/2326**, 0 failures; 43 JS-файла прошли `node --check`, `git diff --check` чист.
 Real-browser validation not performed.

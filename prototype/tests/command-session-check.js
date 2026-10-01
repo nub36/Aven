@@ -863,6 +863,28 @@ function isDone(env, id) { return env.C.tasks.isCompleted(env.C.tasks.getTask(id
   }
   {
     const e = sandbox();
+    const r = e.C.reminders.create({ title: 'Оплатить домашний интернет', dateISO: '2026-10-01', note: 'Не менять', link: '#/finance' }, { source: 'fixture' }).entity;
+    clearHistory(e);
+    const ask = e.session.submit('Скрой напоминание интернет');
+    const done = e.session.confirm();
+    ok('S193a неизменные непустые note/link проходят stale guard и позволяют Confirm',
+      ask.status === 'confirmation_required' && done.ok && done.status === 'done' &&
+      e.state.notifState['manual:' + r.id].dismissed === true && e.state.history.length === 1);
+  }
+  {
+    const e = sandbox();
+    const r = e.C.reminders.create({ title: 'Оплатить домашний интернет', dateISO: '2026-10-01', link: '#/old' }, { source: 'fixture' }).entity;
+    clearHistory(e);
+    const ask = e.session.submit('Скрой напоминание интернет');
+    e.C.reminders.update(r.id, { link: '#/new' }, { source: 'ui' });
+    const before = e.state.history.length;
+    const stale = e.session.confirm();
+    ok('S193b изменение link после выбора делает reminder flow stale',
+      ask.status === 'confirmation_required' && stale.status === 'stale' &&
+      !(e.state.notifState || {})['manual:' + r.id] && e.state.history.length === before);
+  }
+  {
+    const e = sandbox();
     const r = e.C.reminders.create({ title: 'Оплатить домашний интернет', dateISO: '2026-10-01' }, { source: 'fixture' }).entity;
     clearHistory(e);
     const ask = e.session.submit('Отложи напоминание интернет до завтра');
