@@ -40,6 +40,13 @@ build-info.txt). publish-директива удалена из marker-файл�
   стабильный CTA-URL `releases/latest/download/aven-latest.apk` → 404 (API GitHub запрещает
   latest для prerelease) — активируется первым ПОЛНЫМ релизом владельца = merge-gate для CTA.
 
+### Финальный regression ветки (HEAD d3cab84, run 36847848599 build-only SUCCESS)
+
+После удаления publish-директивы финальный HEAD даёт чистый build-only прогон
+(release: skipped — guard работает). Полный regression: **18 suites, 2435/2435, 0 провалов**
+(android-apk-check вырос с 59 при восстановлении до 63: +F7/F8 PKCS12, +F9 CI-верификация
+бинарника, +F10 latest-ограничение). `node --check` всех 52 js — OK. `git diff --check` — OK.
+
 ### Честные ограничения сессии (не закрыто и не заявлено как закрытое)
 
 - Real-device прогона НЕТ (эмулятор в песочнице недоступен; device-приёмка — владелец по
